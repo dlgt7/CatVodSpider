@@ -35,7 +35,7 @@ jobs:
         # 复制指定的 spider 类到主项目（如果已存在会被覆盖）
         cp -v extra_project/app/src/main/java/com/github/catvod/spider/Douban.java project/app/src/main/java/com/github/catvod/spider/ || true
         cp -v extra_project/app/src/main/java/com/github/catvod/spider/Duanju2.java project/app/src/main/java/com/github/catvod/spider/ || true
-        # cp -v extra_project/app/src/main/java/com/github/catvod/spider/HMDJ.java project/app/src/main/java/com/github/catvod/spider/ || true  # 你已注释
+        cp -v extra_project/app/src/main/java/com/github/catvod/spider/HMDJ.java project/app/src/main/java/com/github/catvod/spider/ || true  # 你已注释
         cp -v extra_project/app/src/main/java/com/github/catvod/spider/Hanju99.java project/app/src/main/java/com/github/catvod/spider/ || true
         cp -v extra_project/app/src/main/java/com/github/catvod/spider/Qimao.java project/app/src/main/java/com/github/catvod/spider/ || true
         cp -v extra_project/app/src/main/java/com/github/catvod/spider/Rydj.java project/app/src/main/java/com/github/catvod/spider/ || true
