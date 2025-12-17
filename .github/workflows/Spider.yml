@@ -49,14 +49,14 @@ jobs:
          rm -rf app/src/main/java/com/github/catvod/spider/Kanqiu.java
          rm -rf app/src/main/java/com/github/catvod/spider/Miss.java
          rm -rf app/src/main/java/com/github/catvod/spider/Notice.java                  
-         rm -rf app/src/main/java/com/github/catvod/spider/PanSearch.java
-         rm -rf app/src/main/java/com/github/catvod/spider/PanSou.java
+         #rm -rf app/src/main/java/com/github/catvod/spider/PanSearch.java
+         #rm -rf app/src/main/java/com/github/catvod/spider/PanSou.java
          rm -rf app/src/main/java/com/github/catvod/spider/Star.java
-         rm -rf app/src/main/java/com/github/catvod/spider/UpYun.java
+         #rm -rf app/src/main/java/com/github/catvod/spider/UpYun.java
          #rm -rf app/src/main/java/com/github/catvod/spider/Wogg.java
          rm -rf app/src/main/java/com/github/catvod/spider/XiaoZhiTiao.java
          rm -rf app/src/main/java/com/github/catvod/spider/YiSo.java
-         rm -rf app/src/main/java/com/github/catvod/spider/Ysj.java
+         #rm -rf app/src/main/java/com/github/catvod/spider/Ysj.java
          rm -rf app/src/main/java/com/github/catvod/spider/Zhaozy.java
 
          #删除阿里云盘
