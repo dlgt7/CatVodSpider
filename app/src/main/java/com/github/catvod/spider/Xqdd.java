@@ -26,7 +26,11 @@ public class Xqdd extends Spider {
 
     @Override
     public void init(Context context, String extend) {
-        super.init(context, extend);
+        try {
+            super.init(context, extend);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     @Override
@@ -63,7 +67,6 @@ public class Xqdd extends Spider {
     @Override
     public String categoryContent(String tid, String pg, boolean filter, HashMap<String, String> extend) {
         int page = Integer.parseInt(pg);
-        // 原规则起始页码为0，第一页 pg=1 时请求 pg=0
         int realPage = page >= 1 ? page - 1 : 0;
 
         String url = siteUrl + "/bama/service/s.php?type=getcollabellist&collid=" + tid +
@@ -98,8 +101,6 @@ public class Xqdd extends Spider {
                 list.add(vod);
             }
 
-            // 翻页参数：page, pagecount, limit, total
-            // 接口不返回总页数/总数，这里用保守策略：返回满30条就认为还有很多页
             int limit = 30;
             int total = list.size() == limit ? Integer.MAX_VALUE : (page - 1) * limit + list.size();
             int pageCount = list.size() == limit ? Integer.MAX_VALUE : page;
@@ -142,8 +143,10 @@ public class Xqdd extends Spider {
         int page = Integer.parseInt(pg);
         int realPage = page >= 1 ? page - 1 : 0;
 
-        String url = siteUrl + "/bama/service/s.php?type=ddsearch&keyword=" +
-                URLEncoder.encode(key, "UTF-8") + "&pg=" + realPage + "&ps=30&album=true&allbz=true&origin=true";
+        String encodedKey = URLEncoder.encode(key);  // 默认就是 UTF-8，不抛异常
+
+        String url = siteUrl + "/bama/service/s.php?type=ddsearch&keyword=" + encodedKey +
+                "&pg=" + realPage + "&ps=30&album=true&allbz=true&origin=true";
 
         String content = OkHttp.string(url, headers);
         List<Vod> list = new ArrayList<>();
@@ -194,14 +197,12 @@ public class Xqdd extends Spider {
 
     @Override
     public String playerContent(String flag, String id, List<String> vipFlags) {
-        // 直接返回直链播放，带上请求头更稳定
         return Result.get()
                 .url(id)
                 .header(headers)
                 .string();
     }
 
-    // 补全图片URL（防止相对路径加载失败）
     private String fixUrl(String url) {
         if (url == null || url.isEmpty()) return "";
         if (url.startsWith("http")) return url;
@@ -210,7 +211,6 @@ public class Xqdd extends Spider {
         return siteUrl + "/" + url;
     }
 
-    // 友好显示时长（支持纯秒数或 mm:ss 格式）
     private String formatDuration(String duration) {
         if (duration == null || duration.isEmpty()) return "";
         duration = duration.trim();
@@ -220,7 +220,6 @@ public class Xqdd extends Spider {
             int s = seconds % 60;
             return String.format("%d:%02d", m, s);
         } catch (NumberFormatException e) {
-            // 已经是 "03:45" 格式，直接返回
             return duration;
         }
     }
