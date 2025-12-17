@@ -8,107 +8,102 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-
-    - name: Set up JDK
+    - name: set up JDK
       uses: actions/setup-java@v4
       with:
         java-version: '18'
         distribution: 'temurin'
-
-    - name: Delete old workflow runs
+       
+    - name: Delete workflows
       uses: Mattraks/delete-workflow-runs@v2
       with:
         token: ${{ github.token }}
         repository: ${{ github.repository }}
         retain_days: 0
         keep_minimum_runs: 2
-
-    - name: Clone projects and patch Vod.java
+       
+    - name: Clone projects
       run: |
-        # 主项目
+        # 主项目：lushunming/AndroidCatVodSpider
         git clone --recurse-submodules https://github.com/lushunming/AndroidCatVodSpider project
         sed -i 's/mirrors.cloud.tencent.com\gradle/services.gradle.org\/distributions/g' project/gradle/wrapper/gradle-wrapper.properties
         cp -r ./project/json/index.json ./json/index.json
-
-        # 额外爬虫来源项目
+        
+        # 额外项目：dlgt6/CatVodSpider（用于添加指定爬虫）
         git clone https://github.com/dlgt6/CatVodSpider extra_project
-
-        # 复制指定的额外爬虫（覆盖同名文件）
-        cp -v extra_project/app/src/main/java/com/github/catvod/spider/Douban.java project/app/src/main/java/com/github/catvod/spider/ || true
-        cp -v extra_project/app/src/main/java/com/github/catvod/spider/Duanju2.java project/app/src/main/java/com/github/catvod/spider/ || true
-        # cp -v extra_project/app/src/main/java/com/github/catvod/spider/HMDJ.java project/app/src/main/java/com/github/catvod/spider/ || true  # 已注释，不需要
-        cp -v extra_project/app/src/main/java/com/github/catvod/spider/Hanju99.java project/app/src/main/java/com/github/catvod/spider/ || true
-        cp -v extra_project/app/src/main/java/com/github/catvod/spider/Qimao.java project/app/src/main/java/com/github/catvod/spider/ || true
-        cp -v extra_project/app/src/main/java/com/github/catvod/spider/Rydj.java project/app/src/main/java/com/github/catvod/spider/ || true
-        cp -v extra_project/app/src/main/java/com/github/catvod/spider/TianQuan.java project/app/src/main/java/com/github/catvod/spider/ || true
-        cp -v extra_project/app/src/main/java/com/github/catvod/spider/Ting39.java project/app/src/main/java/com/github/catvod/spider/ || true
-        cp -v extra_project/app/src/main/java/com/github/catvod/spider/WuCg.java project/app/src/main/java/com/github/catvod/spider/ || true
-        cp -v extra_project/app/src/main/java/com/github/catvod/spider/Xqdd.java project/app/src/main/java/com/github/catvod/spider/ || true
-
-        # 精准向 Vod.java 类内部（最后一个 } 之前）追加缺失的 getter 方法
-        # 这能彻底修复 WuCg.java 等爬虫因缺少 camelCase getter 导致的编译错误
-        sed -i '/^}$/i \
-// =================================================================\n// START: 自动添加的 GETTER 方法（修复跨仓库爬虫兼容性）\n// =================================================================\n    public String getTypeName() {\n        return typeName;\n    }\n\n    public String getVodId() {\n        return vodId;\n    }\n\n    public String getVodName() {\n        return vodName;\n    }\n\n    public String getVodPic() {\n        return vodPic;\n    }\n\n    public String getVodRemarks() {\n        return vodRemarks;\n    }\n\n    public String getVodYear() {\n        return vodYear;\n    }\n\n    public String getVodArea() {\n        return vodArea;\n    }\n\n    public String getVodActor() {\n        return vodActor;\n    }\n\n    public String getVodDirector() {\n        return vodDirector;\n    }\n\n    public String getVodPlayFrom() {\n        return vodPlayFrom;\n    }\n\n    public String getVodTag() {\n        return vodTag;\n    }\n\n    public String getAction() {\n        return action;\n    }\n\n    public Style getStyle() {\n        return style;\n    }\n// =================================================================\n// END: 自动添加的 GETTER 方法\n// =================================================================' project/app/src/main/java/com/github/catvod/bean/Vod.java
-
-        echo "已成功向 Vod.java 添加缺失的 getter 方法"
-
+        
+        # 复制指定的 spider 类到主项目（如果已存在会被覆盖）
+        cp -v extra_project/app/src/main/java/com/github/catvod/spider/Douban.java project/app/src/main/java/com/github/catvod/spider/ || echo "Douban.java not found or already exists"
+        cp -v extra_project/app/src/main/java/com/github/catvod/spider/Duanju2.java project/app/src/main/java/com/github/catvod/spider/ || echo "Duanju2.java not found"
+        #cp -v extra_project/app/src/main/java/com/github/catvod/spider/HMDJ.java project/app/src/main/java/com/github/catvod/spider/ || echo "HMDJ.java not found"
+        cp -v extra_project/app/src/main/java/com/github/catvod/spider/Hanju99.java project/app/src/main/java/com/github/catvod/spider/ || echo "Hanju99.java not found"
+        cp -v extra_project/app/src/main/java/com/github/catvod/spider/Qimao.java project/app/src/main/java/com/github/catvod/spider/ || echo "Qimao.java not found"
+        cp -v extra_project/app/src/main/java/com/github/catvod/spider/Rydj.java project/app/src/main/java/com/github/catvod/spider/ || echo "Rydj.java not found"
+        cp -v extra_project/app/src/main/java/com/github/catvod/spider/TianQuan.java project/app/src/main/java/com/github/catvod/spider/ || echo "TianQuan.java not found"
+        cp -v extra_project/app/src/main/java/com/github/catvod/spider/Ting39.java project/app/src/main/java/com/github/catvod/spider/ || echo "Ting39.java not found"
+        #cp -v extra_project/app/src/main/java/com/github/catvod/spider/WuCg.java project/app/src/main/java/com/github/catvod/spider/ || echo "WuCg.java not found"
+        cp -v extra_project/app/src/main/java/com/github/catvod/spider/Xqdd.java project/app/src/main/java/com/github/catvod/spider/ || echo "Xqdd.java not found"
+        
+        # 注意：dlgt6 仓库中没有 been 子包和 Vod.java，如果未来有需要可取消下方注释并调整路径
+        # mkdir -p project/app/src/main/java/com/github/catvod/spider/been
+        # cp -v extra_project/app/src/main/java/com/github/catvod/spider/been/Vod.java project/app/src/main/java/com/github/catvod/spider/been/ || echo "Vod.java not found"
+       
     - name: Customize Spider
       working-directory: ./project
       run: |
-        # 删除你不想要的爬虫
-        rm -rf app/src/main/java/com/github/catvod/spider/Dm84.java
-        rm -rf app/src/main/java/com/github/catvod/spider/Doll.java
-        rm -rf app/src/main/java/com/github/catvod/spider/Eighteen.java
-        rm -rf app/src/main/java/com/github/catvod/spider/Hanime.java
-        rm -rf app/src/main/java/com/github/catvod/spider/JSDemo.java
-        rm -rf app/src/main/java/com/github/catvod/spider/Jable.java
-        rm -rf app/src/main/java/com/github/catvod/spider/Jianpian.java
-        rm -rf app/src/main/java/com/github/catvod/spider/Kanqiu.java
-        rm -rf app/src/main/java/com/github/catvod/spider/Miss.java
-        rm -rf app/src/main/java/com/github/catvod/spider/Notice.java
-        rm -rf app/src/main/java/com/github/catvod/spider/Star.java
-        rm -rf app/src/main/java/com/github/catvod/spider/XiaoZhiTiao.java
-        rm -rf app/src/main/java/com/github/catvod/spider/YiSo.java
-        rm -rf app/src/main/java/com/github/catvod/spider/Zhaozy.java
-
-        # 删除 Doll 残留引用
-        sed -i "/Doll/d" app/src/main/java/com/github/catvod/debug/MainActivity.java
-
+         #删除垃圾爬虫（保持你原来的删除列表）
+         #rm -rf app/src/main/java/com/github/catvod/spider/Ali.java
+         rm -rf app/src/main/java/com/github/catvod/spider/Dm84.java
+         rm -rf app/src/main/java/com/github/catvod/spider/Doll.java
+         rm -rf app/src/main/java/com/github/catvod/spider/Eighteen.java
+         rm -rf app/src/main/java/com/github/catvod/spider/Hanime.java
+         rm -rf app/src/main/java/com/github/catvod/spider/JSDemo.java
+         rm -rf app/src/main/java/com/github/catvod/spider/Jable.java
+         rm -rf app/src/main/java/com/github/catvod/spider/Jianpian.java
+         rm -rf app/src/main/java/com/github/catvod/spider/Kanqiu.java
+         rm -rf app/src/main/java/com/github/catvod/spider/Miss.java
+         rm -rf app/src/main/java/com/github/catvod/spider/Notice.java
+         #rm -rf app/src/main/java/com/github/catvod/spider/PanSearch.java
+         #rm -rf app/src/main/java/com/github/catvod/spider/PanSou.java
+         rm -rf app/src/main/java/com/github/catvod/spider/Star.java
+         #rm -rf app/src/main/java/com/github/catvod/spider/UpYun.java
+         #rm -rf app/src/main/java/com/github/catvod/spider/Wogg.java
+         rm -rf app/src/main/java/com/github/catvod/spider/XiaoZhiTiao.java
+         rm -rf app/src/main/java/com/github/catvod/spider/YiSo.java
+         #rm -rf app/src/main/java/com/github/catvod/spider/Ysj.java
+         rm -rf app/src/main/java/com/github/catvod/spider/Zhaozy.java
+         
+         #删除Doll残留
+         sed -i "/Doll/d" app/src/main/java/com/github/catvod/debug/MainActivity.java
+         
+         # 如果添加的新爬虫有冲突或不需要，可以在这里额外删除
+         
     - name: Build the Jar
       working-directory: ./project
       run: |
-        chmod +x gradlew
-        ./gradlew assemblerelease --build-cache --parallel --daemon --warning-mode all
-
+         chmod +x gradlew
+         ./gradlew assemblerelease --build-cache --parallel --daemon --warning-mode all
+        
     - name: Customize Spider Jar
       working-directory: ./project
       run: |
-        rm -rf jar/custom_spider.jar
-        rm -rf jar/spider.jar/original/META-INF
-
-        # 下载必要工具
-        curl -L https://github.com/iBotPeaches/Apktool/releases/download/v2.7.0/apktool_2.7.0.jar > jar/3rd/apktool_2.7.0.jar
-        curl -L https://bitbucket.org/JesusFreke/smali/downloads/baksmali-2.5.2.jar > jar/3rd/baksmali-2.5.2.jar
-
-        # 反汇编 dex 并提取 spider 包
-        java -jar jar/3rd/baksmali-2.5.2.jar d app/build/intermediates/dex/release/minifyReleaseWithR8/classes.dex -o jar/Smali_classes
-        mkdir -p jar/spider.jar/smali/com/github/catvod/
-        mv jar/Smali_classes/com/github/catvod/spider jar/spider.jar/smali/com/github/catvod/
-
-        # 重新打包
-        java -jar jar/3rd/apktool_2.7.0.jar b jar/spider.jar -c
-        mv jar/spider.jar/dist/dex.jar ../jar/custom_spider.jar
-
-        # 计算 MD5
-        echo $(md5sum ../jar/custom_spider.jar | awk '{print $1}') > ../jar/custom_spider.jar.md5
-
+         rm -rf jar/custom_spider.jar
+         rm -rf jar/spider.jar/original/META-INF
+         curl -L https://github.com/iBotPeaches/Apktool/releases/download/v2.7.0/apktool_2.7.0.jar > jar/3rd/apktool_2.7.0.jar
+         java -jar jar/3rd/baksmali-2.5.2.jar d app/build/intermediates/dex/release/minifyReleaseWithR8/classes.dex -o jar/Smali_classes
+         mkdir -p jar/spider.jar/smali/com/github/catvod/
+         mv jar/Smali_classes/com/github/catvod/spider jar/spider.jar/smali/com/github/catvod/
+         java -jar jar/3rd/apktool_2.7.0.jar b jar/spider.jar -c
+         mv jar/spider.jar/dist/dex.jar ../jar/custom_spider.jar
+         echo $(md5sum ../jar/custom_spider.jar | awk '{print $1}') > ../jar/custom_spider.jar.md5
+        
     - name: Update spider jar
       uses: EndBug/add-and-commit@v9.1.3
       with:
         default_author: github_actions
         message: 'update spider'
         add: "['./jar/custom_spider.jar', './jar/custom_spider.jar.md5', './json/index.json']"
-
+       
     - name: Upload Spider
       uses: actions/upload-artifact@main
       with:
