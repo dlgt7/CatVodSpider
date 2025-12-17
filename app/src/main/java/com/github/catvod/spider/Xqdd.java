@@ -62,9 +62,9 @@ public class Xqdd extends Spider {
 
     @Override
     public String categoryContent(String tid, String pg, boolean filter, HashMap<String, String> extend) {
-        // 规则中起始页码为0，所以这里将pg转为int后减1再请求
         int page = Integer.parseInt(pg);
-        int realPage = page > 0 ? page - 1 : 0;  // 第一页 pg=1 → realPage=0
+        // 原规则起始页码为0，第一页 pg=1 时请求 pg=0
+        int realPage = page >= 1 ? page - 1 : 0;
 
         String url = siteUrl + "/bama/service/s.php?type=getcollabellist&collid=" + tid +
                 "&label=默认&pg=" + realPage + "&ps=30";
@@ -75,8 +75,12 @@ public class Xqdd extends Spider {
         try {
             JSONObject json = new JSONObject(content);
             JSONArray array = json.optJSONArray("list");
+
             if (array == null || array.length() == 0) {
-                return Result.get().vod(list).page(1, page, false).string();
+                return Result.get()
+                        .vod(list)
+                        .page(page, page, 30, 0)
+                        .string();
             }
 
             for (int i = 0; i < array.length(); i++) {
@@ -86,32 +90,46 @@ public class Xqdd extends Spider {
                 String pic = fixUrl(item.optString("pic"));
                 String remarks = formatDuration(item.optString("duration"));
 
-                Vod vod = new Vod(vodId, name, pic);
+                Vod vod = new Vod();
+                vod.setVodId(vodId);
+                vod.setVodName(name);
+                vod.setVodPic(pic);
                 vod.setVodRemarks(remarks);
                 list.add(vod);
             }
 
-            // 判断是否有下一页（简单方式：如果当前页返回30条，假设还有下一页）
-            boolean hasMore = list.size() == 30;
+            // 翻页参数：page, pagecount, limit, total
+            // 接口不返回总页数/总数，这里用保守策略：返回满30条就认为还有很多页
+            int limit = 30;
+            int total = list.size() == limit ? Integer.MAX_VALUE : (page - 1) * limit + list.size();
+            int pageCount = list.size() == limit ? Integer.MAX_VALUE : page;
 
-            return Result.get().vod(list).page(page, page + 1, hasMore).string();
+            return Result.get()
+                    .vod(list)
+                    .page(page, pageCount, limit, total)
+                    .string();
 
         } catch (Exception e) {
             e.printStackTrace();
-            return Result.get().vod(list).string();
+            return Result.get()
+                    .vod(list)
+                    .page(page, page, 30, 0)
+                    .string();
         }
     }
 
     @Override
     public String detailContent(List<String> ids) {
         String playUrl = ids.get(0);
+
         Vod vod = new Vod();
         vod.setVodId(playUrl);
         vod.setVodName("正在播放");
         vod.setVodPic("https://img2.baidu.com/it/u=4261893679,2570494742&fm=253&fmt=auto&app=138&f=JPEG?w=750&h=500");
         vod.setVodPlayFrom("戏曲多多");
         vod.setVodPlayUrl("播放$" + playUrl);
-        return Result.string(vod);
+
+        return Result.get().vod(vod).string();
     }
 
     @Override
@@ -122,7 +140,7 @@ public class Xqdd extends Spider {
     @Override
     public String searchContent(String key, boolean quick, String pg) {
         int page = Integer.parseInt(pg);
-        int realPage = page > 0 ? page - 1 : 0;
+        int realPage = page >= 1 ? page - 1 : 0;
 
         String url = siteUrl + "/bama/service/s.php?type=ddsearch&keyword=" +
                 URLEncoder.encode(key, "UTF-8") + "&pg=" + realPage + "&ps=30&album=true&allbz=true&origin=true";
@@ -133,8 +151,12 @@ public class Xqdd extends Spider {
         try {
             JSONObject json = new JSONObject(content);
             JSONArray array = json.optJSONArray("list");
+
             if (array == null || array.length() == 0) {
-                return Result.get().vod(list).page(1, page, false).string();
+                return Result.get()
+                        .vod(list)
+                        .page(page, page, 30, 0)
+                        .string();
             }
 
             for (int i = 0; i < array.length(); i++) {
@@ -144,27 +166,42 @@ public class Xqdd extends Spider {
                 String pic = fixUrl(item.optString("pic"));
                 String remarks = formatDuration(item.optString("duration"));
 
-                Vod vod = new Vod(vodId, name, pic);
+                Vod vod = new Vod();
+                vod.setVodId(vodId);
+                vod.setVodName(name);
+                vod.setVodPic(pic);
                 vod.setVodRemarks(remarks);
                 list.add(vod);
             }
 
-            boolean hasMore = list.size() == 30;
+            int limit = 30;
+            int total = list.size() == limit ? Integer.MAX_VALUE : (page - 1) * limit + list.size();
+            int pageCount = list.size() == limit ? Integer.MAX_VALUE : page;
 
-            return Result.get().vod(list).page(page, page + 1, hasMore).string();
+            return Result.get()
+                    .vod(list)
+                    .page(page, pageCount, limit, total)
+                    .string();
 
         } catch (Exception e) {
             e.printStackTrace();
-            return Result.get().vod(list).string();
+            return Result.get()
+                    .vod(list)
+                    .page(page, page, 30, 0)
+                    .string();
         }
     }
 
     @Override
     public String playerContent(String flag, String id, List<String> vipFlags) {
-        return Result.get().url(id).header(headers).string();
+        // 直接返回直链播放，带上请求头更稳定
+        return Result.get()
+                .url(id)
+                .header(headers)
+                .string();
     }
 
-    // 补全图片URL
+    // 补全图片URL（防止相对路径加载失败）
     private String fixUrl(String url) {
         if (url == null || url.isEmpty()) return "";
         if (url.startsWith("http")) return url;
@@ -173,17 +210,18 @@ public class Xqdd extends Spider {
         return siteUrl + "/" + url;
     }
 
-    // 友好显示时长
+    // 友好显示时长（支持纯秒数或 mm:ss 格式）
     private String formatDuration(String duration) {
         if (duration == null || duration.isEmpty()) return "";
+        duration = duration.trim();
         try {
-            int seconds = Integer.parseInt(duration.trim());
-            int minutes = seconds / 60;
-            int secs = seconds % 60;
-            return minutes + ":" + String.format("%02d", secs);
+            int seconds = Integer.parseInt(duration);
+            int m = seconds / 60;
+            int s = seconds % 60;
+            return String.format("%d:%02d", m, s);
         } catch (NumberFormatException e) {
-            // 可能是 "03:45" 格式
-            return duration.trim();
+            // 已经是 "03:45" 格式，直接返回
+            return duration;
         }
     }
 }
