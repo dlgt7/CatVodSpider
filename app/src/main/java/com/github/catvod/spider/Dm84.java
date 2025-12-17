@@ -21,6 +21,8 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import java.net.URLEncoder;  // ← 这一行是必须的！
+
 public class Dm84 extends Spider {
 
     private String siteUrl = "https://dm84.tv";
