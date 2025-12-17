@@ -95,6 +95,67 @@ public class Vod {
         setVodRemarks(vodRemarks);
         setVodTag(folder ? "folder" : "file");
     }
+    
+    // =================================================================
+    // START: 修复编译错误的 GETTER 方法
+    // =================================================================
+
+    public String getTypeName() {
+        return typeName;
+    }
+    
+    public String getVodId() {
+        return vodId;
+    }
+
+    public String getVodName() {
+        return vodName;
+    }
+
+    public String getVodPic() {
+        return vodPic;
+    }
+
+    public String getVodRemarks() {
+        return vodRemarks;
+    }
+    
+    public String getVodYear() {
+        return vodYear;
+    }
+
+    public String getVodArea() {
+        return vodArea;
+    }
+
+    public String getVodActor() {
+        return vodActor;
+    }
+
+    public String getVodDirector() {
+        return vodDirector;
+    }
+    
+    // **已添加** 修复最新错误
+    public String getVodPlayFrom() {
+        return vodPlayFrom;
+    }
+
+    public String getVodTag() {
+        return vodTag;
+    }
+    
+    public String getAction() {
+        return action;
+    }
+    
+    public Style getStyle() {
+        return style;
+    }
+
+    // =================================================================
+    // END: 修复编译错误的 GETTER 方法
+    // =================================================================
 
     public void setTypeName(String typeName) {
         this.typeName = typeName;
@@ -143,6 +204,8 @@ public class Vod {
     public void setVodPlayFrom(String vodPlayFrom) {
         this.vodPlayFrom = vodPlayFrom;
     }
+    
+    // getVodPlayFrom() 现在已经添加在 GETTER 部分
 
     public void setVodPlayUrl(String vodPlayUrl) {
         this.vodPlayUrl = vodPlayUrl;
