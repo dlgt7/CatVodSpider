@@ -1,0 +1,163 @@
+name: Spider2
+on:
+  # schedule:
+  #   - cron: 0 0 */3 * *
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: set up JDK
+      uses: actions/setup-java@v4
+      with:
+        java-version: '18'
+        distribution: 'temurin'
+      
+    - name: Delete workflows
+      uses: Mattraks/delete-workflow-runs@v2
+      with:
+        token: ${{ github.token }}
+        repository: ${{ github.repository }}
+        retain_days: 0
+        keep_minimum_runs: 2
+      
+    - name: Clone projects and patch Vod
+      run: |
+        # 主项目：lushunming/AndroidCatVodSpider
+        git clone --recurse-submodules https://github.com/lushunming/AndroidCatVodSpider project
+        sed -i 's/mirrors.cloud.tencent.com\gradle/services.gradle.org\/distributions/g' project/gradle/wrapper/gradle-wrapper.properties
+        cp -r ./project/json/index.json ./json/index.json
+       
+        # 额外项目：dlgt6/CatVodSpider（用于添加指定爬虫）
+        git clone https://github.com/dlgt6/CatVodSpider extra_project
+       
+        # 复制指定的 spider 类到主项目（如果已存在会被覆盖）
+        cp -v extra_project/app/src/main/java/com/github/catvod/spider/Douban.java project/app/src/main/java/com/github/catvod/spider/ || true
+        cp -v extra_project/app/src/main/java/com/github/catvod/spider/Duanju2.java project/app/src/main/java/com/github/catvod/spider/ || true
+        # cp -v extra_project/app/src/main/java/com/github/catvod/spider/HMDJ.java project/app/src/main/java/com/github/catvod/spider/ || true  # 你已注释
+        cp -v extra_project/app/src/main/java/com/github/catvod/spider/Hanju99.java project/app/src/main/java/com/github/catvod/spider/ || true
+        cp -v extra_project/app/src/main/java/com/github/catvod/spider/Qimao.java project/app/src/main/java/com/github/catvod/spider/ || true
+        cp -v extra_project/app/src/main/java/com/github/catvod/spider/Rydj.java project/app/src/main/java/com/github/catvod/spider/ || true
+        cp -v extra_project/app/src/main/java/com/github/catvod/spider/TianQuan.java project/app/src/main/java/com/github/catvod/spider/ || true
+        cp -v extra_project/app/src/main/java/com/github/catvod/spider/Ting39.java project/app/src/main/java/com/github/catvod/spider/ || true
+        cp -v extra_project/app/src/main/java/com/github/catvod/spider/WuCg.java project/app/src/main/java/com/github/catvod/spider/ || true
+        cp -v extra_project/app/src/main/java/com/github/catvod/spider/Xqdd.java project/app/src/main/java/com/github/catvod/spider/ || true
+       
+        # === 新增：自动补丁 Vod.java，添加缺失的 getter 方法 ===
+        # 这能修复 WuCg.java 等额外爬虫调用 getVodName()、getVodPlayFrom() 等导致的编译错误
+        cat << 'EOF' >> project/app/src/main/java/com/github/catvod/bean/Vod.java
+
+// =================================================================
+// START: 自动添加的 GETTER 方法（修复跨仓库爬虫兼容性）
+// =================================================================
+    public String getTypeName() {
+        return typeName;
+    }
+
+    public String getVodId() {
+        return vodId;
+    }
+
+    public String getVodName() {
+        return vodName;
+    }
+
+    public String getVodPic() {
+        return vodPic;
+    }
+
+    public String getVodRemarks() {
+        return vodRemarks;
+    }
+
+    public String getVodYear() {
+        return vodYear;
+    }
+
+    public String getVodArea() {
+        return vodArea;
+    }
+
+    public String getVodActor() {
+        return vodActor;
+    }
+
+    public String getVodDirector() {
+        return vodDirector;
+    }
+
+    public String getVodPlayFrom() {
+        return vodPlayFrom;
+    }
+
+    public String getVodTag() {
+        return vodTag;
+    }
+
+    public String getAction() {
+        return action;
+    }
+
+    public Style getStyle() {
+        return style;
+    }
+// =================================================================
+// END: 自动添加的 GETTER 方法
+// =================================================================
+EOF
+        echo "已自动向 Vod.java 添加缺失的 getter 方法"
+      
+    - name: Customize Spider
+      working-directory: ./project
+      run: |
+         # 删除垃圾爬虫（你的原列表）
+         rm -rf app/src/main/java/com/github/catvod/spider/Dm84.java
+         rm -rf app/src/main/java/com/github/catvod/spider/Doll.java
+         rm -rf app/src/main/java/com/github/catvod/spider/Eighteen.java
+         rm -rf app/src/main/java/com/github/catvod/spider/Hanime.java
+         rm -rf app/src/main/java/com/github/catvod/spider/JSDemo.java
+         rm -rf app/src/main/java/com/github/catvod/spider/Jable.java
+         rm -rf app/src/main/java/com/github/catvod/spider/Jianpian.java
+         rm -rf app/src/main/java/com/github/catvod/spider/Kanqiu.java
+         rm -rf app/src/main/java/com/github/catvod/spider/Miss.java
+         rm -rf app/src/main/java/com/github/catvod/spider/Notice.java
+         rm -rf app/src/main/java/com/github/catvod/spider/Star.java
+         rm -rf app/src/main/java/com/github/catvod/spider/XiaoZhiTiao.java
+         rm -rf app/src/main/java/com/github/catvod/spider/YiSo.java
+         rm -rf app/src/main/java/com/github/catvod/spider/Zhaozy.java
+        
+         # 删除Doll残留
+         sed -i "/Doll/d" app/src/main/java/com/github/catvod/debug/MainActivity.java
+      
+    - name: Build the Jar
+      working-directory: ./project
+      run: |
+         chmod +x gradlew
+         ./gradlew assemblerelease --build-cache --parallel --daemon --warning-mode all
+       
+    - name: Customize Spider Jar
+      working-directory: ./project
+      run: |
+         rm -rf jar/custom_spider.jar
+         rm -rf jar/spider.jar/original/META-INF
+         curl -L https://github.com/iBotPeaches/Apktool/releases/download/v2.7.0/apktool_2.7.0.jar > jar/3rd/apktool_2.7.0.jar
+         java -jar jar/3rd/baksmali-2.5.2.jar d app/build/intermediates/dex/release/minifyReleaseWithR8/classes.dex -o jar/Smali_classes
+         mkdir -p jar/spider.jar/smali/com/github/catvod/
+         mv jar/Smali_classes/com/github/catvod/spider jar/spider.jar/smali/com/github/catvod/
+         java -jar jar/3rd/apktool_2.7.0.jar b jar/spider.jar -c
+         mv jar/spider.jar/dist/dex.jar ../jar/custom_spider.jar
+         echo $(md5sum ../jar/custom_spider.jar | awk '{print $1}') > ../jar/custom_spider.jar.md5
+       
+    - name: Update spider jar
+      uses: EndBug/add-and-commit@v9.1.3
+      with:
+        default_author: github_actions
+        message: 'update spider'
+        add: "['./jar/custom_spider.jar', './jar/custom_spider.jar.md5', './json/index.json']"
+      
+    - name: Upload Spider
+      uses: actions/upload-artifact@main
+      with:
+        name: Spider
+        path: ./jar/custom_spider.jar
