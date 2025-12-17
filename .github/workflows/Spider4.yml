@@ -36,13 +36,13 @@ jobs:
         # ========== 复制指定的 spider 类到主项目 ==========
         cp -v extra_project/app/src/main/java/com/github/catvod/spider/Douban.java project/app/src/main/java/com/github/catvod/spider/ || echo "Douban.java not found or already exists"
         cp -v extra_project/app/src/main/java/com/github/catvod/spider/Duanju2.java project/app/src/main/java/com/github/catvod/spider/ || echo "Duanju2.java not found"
-        #cp -v extra_project/app/src/main/java/com/github/catvod/spider/HMDJ.java project/app/src/main/java/com/github/catvod/spider/ || echo "HMDJ.java not found"
+        cp -v extra_project/app/src/main/java/com/github/catvod/spider/HMDJ.java project/app/src/main/java/com/github/catvod/spider/ || echo "HMDJ.java not found"
         cp -v extra_project/app/src/main/java/com/github/catvod/spider/Hanju99.java project/app/src/main/java/com/github/catvod/spider/ || echo "Hanju99.java not found"
         cp -v extra_project/app/src/main/java/com/github/catvod/spider/Qimao.java project/app/src/main/java/com/github/catvod/spider/ || echo "Qimao.java not found"
         cp -v extra_project/app/src/main/java/com/github/catvod/spider/Rydj.java project/app/src/main/java/com/github/catvod/spider/ || echo "Rydj.java not found"
         cp -v extra_project/app/src/main/java/com/github/catvod/spider/TianQuan.java project/app/src/main/java/com/github/catvod/spider/ || echo "TianQuan.java not found"
         cp -v extra_project/app/src/main/java/com/github/catvod/spider/Ting39.java project/app/src/main/java/com/github/catvod/spider/ || echo "Ting39.java not found"
-        #cp -v extra_project/app/src/main/java/com/github/catvod/spider/WuCg.java project/app/src/main/java/com/github/catvod/spider/ || echo "WuCg.java not found"
+        cp -v extra_project/app/src/main/java/com/github/catvod/spider/WuCg.java project/app/src/main/java/com/github/catvod/spider/ || echo "WuCg.java not found"
         cp -v extra_project/app/src/main/java/com/github/catvod/spider/Xqdd.java project/app/src/main/java/com/github/catvod/spider/ || echo "Xqdd.java not found"
        
         # ========== 关键修改：使用 dlgt6 的最新 Vod.java 替换主项目的旧版 ==========
