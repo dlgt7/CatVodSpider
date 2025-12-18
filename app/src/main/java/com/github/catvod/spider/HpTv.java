@@ -23,12 +23,12 @@ import java.util.regex.Pattern;
 
 /**
  * 韩片网(HanPian)爬虫 - 2025年12月适配版本
- * 当前站点域名: https://www.hanpian.pro (原 hanpian.tv 已失效或迁移)
- * 注意: 若站点再次更换域名，可通过 init 的 extend 参数传入新域名
+ * 当前有效域名: https://www.hanpian.pro
+ * 支持通过 extend 参数更换域名
  */
 public class HpTv extends Spider {
 
-    private static String siteUrl = "https://www.hanpian.pro";
+    private String siteUrl = "https://www.hanpian.pro";
 
     private HashMap<String, String> getHeaders() {
         HashMap<String, String> headers = new HashMap<>();
@@ -39,9 +39,13 @@ public class HpTv extends Spider {
 
     @Override
     public void init(Context context, String extend) {
-        super.init(context, extend);
-        if (extend != null && !extend.isEmpty()) {
-            siteUrl = extend.endsWith("/") ? extend.substring(0, extend.length() - 1) : extend;
+        try {
+            super.init(context, extend);
+            if (extend != null && !extend.isEmpty()) {
+                siteUrl = extend.endsWith("/") ? extend.substring(0, extend.length() - 1) : extend;
+            }
+        } catch (Exception e) {
+            // 忽略或记录日志，视项目而定
         }
     }
 
@@ -51,12 +55,10 @@ public class HpTv extends Spider {
             List<Vod> list = new ArrayList<>();
             List<Class> classes = new ArrayList<>();
 
-            // 分类 (与当前站点菜单一致)
             classes.add(new Class("movie", "电影"));
             classes.add(new Class("tv", "电视剧"));
             classes.add(new Class("variety", "综艺"));
             classes.add(new Class("anime", "动漫"));
-
             classes.add(new Class("dz", "动作片"));
             classes.add(new Class("xj", "喜剧片"));
             classes.add(new Class("aq", "爱情片"));
@@ -66,7 +68,6 @@ public class HpTv extends Spider {
             classes.add(new Class("zz", "战争片"));
             classes.add(new Class("jl", "纪录片"));
 
-            // 首页推荐
             String html = OkHttp.string(siteUrl + "/", getHeaders());
             Document doc = Jsoup.parse(html);
 
@@ -104,8 +105,6 @@ public class HpTv extends Spider {
     public String categoryContent(String tid, String pg, boolean filter, HashMap<String, String> extend) {
         try {
             List<Vod> list = new ArrayList<>();
-
-            // 当前站点分类路径: /menu/{tid}/{pg-1}/   (pg从1开始时为0)
             int pageIndex = Integer.parseInt(pg) - 1;
             String url = siteUrl + "/menu/" + tid + "/" + pageIndex + "/";
 
@@ -153,7 +152,6 @@ public class HpTv extends Spider {
             Vod vod = new Vod();
             vod.setVodId(id);
 
-            // 标题 & 海报
             Element titleEl = doc.selectFirst("h1 a");
             if (titleEl != null) vod.setVodName(titleEl.text().trim());
 
@@ -165,7 +163,6 @@ public class HpTv extends Spider {
                 vod.setVodPic(pic);
             }
 
-            // 信息
             Elements infoLis = doc.select(".mo-deta-info ul li");
             for (Element li : infoLis) {
                 String text = li.text();
@@ -181,11 +178,9 @@ public class HpTv extends Spider {
                 }
             }
 
-            // 简介
             Element descEl = doc.selectFirst(".mo-word-info");
             if (descEl != null) vod.setVodContent(descEl.text().trim());
 
-            // 播放源 & 集数 (播放链接为相对路径 play/... )
             StringBuilder from = new StringBuilder();
             StringBuilder playUrl = new StringBuilder();
 
@@ -200,13 +195,12 @@ public class HpTv extends Spider {
                 for (int j = 0; j < eps.size(); j++) {
                     Element ep = eps.get(j);
                     String epName = ep.text().trim();
-                    String epHref = ep.attr("href"); // 如 /play/12345-1-1/
+                    String epHref = ep.attr("href");
                     playUrl.append(epName).append("$").append(epHref);
                     playUrl.append(j < eps.size() - 1 ? "#" : "$$$");
                 }
             }
 
-            // 去除多余的 $$$
             if (from.length() > 3) from.delete(from.length() - 3, from.length());
             if (playUrl.length() > 3) playUrl.delete(playUrl.length() - 3, playUrl.length());
 
@@ -261,16 +255,12 @@ public class HpTv extends Spider {
     @Override
     public String playerContent(String flag, String id, List<String> vipFlags) {
         try {
-            // id 为相对路径，如 /play/12345-1-1/
             String playUrl = id.startsWith("http") ? id : (id.startsWith("/") ? siteUrl + id : siteUrl + "/" + id);
 
-            // 直接返回播放页面 URL + 必要 header，让客户端自行解析或用内置解析接口
-            // 大多数此类站点播放页会自动播放或包含可解析的 m3u8/mp4
             HashMap<String, String> headers = getHeaders();
             headers.put("Referer", siteUrl + "/");
 
-            return Result.get().url(playUrl).header(headers).parse().string();
-            // parse=1 表示交给客户端内置解析器处理（推荐）
+            return Result.get().url(playUrl).header(headers).parse(1).string();
         } catch (Exception e) {
             return Result.error("播放失败: " + e.getMessage());
         }
