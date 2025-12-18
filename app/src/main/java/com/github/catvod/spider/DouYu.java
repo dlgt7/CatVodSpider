@@ -51,7 +51,6 @@ public class DouYu extends Spider {
 
     @Override
     public String playerContent(String flag, String id, List<String> vipFlags) throws Exception {
-        // 可替换为更稳定的代理线路
         String playUrl = "https://live.iill.top/douyu/" + id;
         return Result.get().url(playUrl).header(getHeaders()).string();
     }
@@ -62,7 +61,7 @@ public class DouYu extends Spider {
         postHeaders.put("Content-Type", "application/json");
 
         String postData = "{\"sk\":\"" + key + "\",\"offset\":0,\"limit\":20,\"did\":\"bf1f5579c0b2f6066af0bee200051531\"}";
-        String json = OkHttp.post("https://m.douyu.com/api/search/liveRoom", postData, postHeaders);
+        String json = OkHttp.post("https://m.douyu.com/api/search/liveRoom", postData, postHeaders).getBody();  // 修复：加 .getBody()
 
         JSONObject obj = new JSONObject(json);
         JSONArray list = obj.getJSONObject("data").getJSONArray("list");
