@@ -18,14 +18,15 @@ import java.net.URLEncoder;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * 嗷呜动漫爬虫（修复版）
- * 原网站 https://www.aowu.tv 可能已转向重度推广 APP（moefun），网页端内容可能被反爬或动态加载导致列表为空。
- * 代码保留原逻辑，仅优化选择器鲁棒性，并添加部分容错。
- * 如果仍无数据，建议更换站点或等待网站恢复。
+ * 嗷呜动漫爬虫（2025年修复版）
+ * 网站已大幅转向APP推广（Moefun），网页端结构大变，原选择器失效。
+ * 当前网页仍有部分静态内容可抓，但列表有限，可能不完整。
+ * 已根据最新结构调整选择器，优先抓取新番等列表。
  */
 public class AoWu extends Spider {
 
@@ -34,9 +35,8 @@ public class AoWu extends Spider {
     private Map<String, String> getHeader() {
         Map<String, String> header = new HashMap<>();
         header.put("User-Agent", Util.CHROME);
-        header.put("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8");
-        header.put("Accept-Language", "zh-CN,zh;q=0.8");
-        // 添加Referer，部分站点需要
+        header.put("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8");
+        header.put("Accept-Language", "zh-CN,zh;q=0.9");
         header.put("Referer", siteUrl);
         return header;
     }
@@ -51,120 +51,124 @@ public class AoWu extends Spider {
     @Override
     public String homeContent(boolean filter) throws Exception {
         List<Class> classes = new ArrayList<>();
-        classes.add(new Class("YAAAAK-", "新番"));
+        classes.add(new Class("YAAAAK-", "当季新番"));  // 调整为当前导航文字
         classes.add(new Class("kAAAAK-", "番剧"));
         classes.add(new Class("1AAAAK-", "剧场"));
 
         Document doc = Jsoup.parse(OkHttp.string(siteUrl, getHeader()));
         List<Vod> list = new ArrayList<>();
 
-        // 原选择器可能失效，尝试更宽松的选择器或多个备选
-        Elements itemElements = doc.select(".public-list-box, .bangumi-item, .list-item, .anime-item, .thumb-block, div[class*='list'][class*='box']");
-        if (itemElements.isEmpty()) {
-            // 如果仍为空，尝试从所有a标签中筛选包含番剧链接的
-            itemElements = doc.select("a[href*='/bangumi/'], a[href*='/play/'], a[href*='.html']");
-        }
+        // 当前首页新番列表通常在 <a href="/bangumi/xxx.html"> 或直接标题链接
+        Elements items = doc.select("a[href^=/bangumi/]");
+        for (Element item : items) {
+            String vid = item.attr("href");
+            if (!vid.startsWith("http")) vid = siteUrl + vid;
+            String name = item.text().trim();
+            if (name.isEmpty()) continue;
 
-        for (Element ele : itemElements) {
-            try {
-                // 更灵活地提取
-                Element aTag = ele.selectFirst("a.public-list-exp, a.thumb, a[href], .title a");
-                if (aTag == null) aTag = ele.selectFirst("a");
+            // 图片可能在父元素或兄弟元素
+            String pic = item.selectFirst("img") != null ? item.selectFirst("img").attr("src") : "";
+            if (pic.isEmpty()) pic = item.parent().selectFirst("img") != null ? item.parent().selectFirst("img").attr("src") : "";
+            if (!pic.isEmpty() && !pic.startsWith("http")) pic = siteUrl + pic;
 
-                if (aTag != null) {
-                    String vid = aTag.attr("href");
-                    if (!vid.startsWith("http")) vid = siteUrl + vid.replace(siteUrl, ""); // 防重复
-
-                    String name = aTag.attr("title");
-                    if (name.isEmpty()) name = aTag.text();
-
-                    String pic = ele.selectFirst("img.lazy, img[data-src], img[src], img").attr("data-src");
-                    if (pic.isEmpty()) pic = ele.selectFirst("img").attr("src");
-
-                    String remark = ele.selectFirst(".public-list-prb, .update-info, .remark, .note").text();
-                    if (remark.isEmpty()) remark = ele.selectFirst("span[class*='update'], span[class*='prb']").text();
-
-                    if (!pic.startsWith("http")) {
-                        pic = siteUrl + pic;
-                    }
-
-                    if (!name.isEmpty()) {
-                        list.add(new Vod(vid, name, pic, remark));
+            // 更新备注（如“更新至xx话”）可能在附近span
+            String remark = "";
+            Element parent = item.parent();
+            if (parent != null) {
+                Elements notes = parent.select("span, div, small");
+                for (Element note : notes) {
+                    String text = note.text();
+                    if (text.contains("更新") || text.contains("话") || text.contains("周")) {
+                        remark = text;
+                        break;
                     }
                 }
-            } catch (Exception ignored) {}
+            }
+
+            if (!name.isEmpty()) {
+                list.add(new Vod(vid.replace(siteUrl, ""), name, pic, remark));
+            }
+        }
+
+        // 如果首页抓不到，尝试从分类页补充（可选）
+        if (list.isEmpty()) {
+            // 可添加备用逻辑
         }
 
         return Result.string(classes, list);
     }
 
-    // categoryContent、searchContent 类似优化选择器
     @Override
     public String categoryContent(String tid, String pg, boolean filter, HashMap<String, String> extend) throws Exception {
-        String cateUrl = siteUrl + String.format("/show/%s.html", tid);
+        String cateUrl = siteUrl + "/show/" + tid;
         if (!"1".equals(pg)) {
-            cateUrl = siteUrl + String.format("/show/%s/page/%s.html", tid, pg);
+            cateUrl += "/page/" + pg + ".html";
+        } else {
+            cateUrl += ".html";
         }
 
         Document doc = Jsoup.parse(OkHttp.string(cateUrl, getHeader()));
         List<Vod> list = new ArrayList<>();
 
-        Elements elements = doc.select(".public-list-box, .bangumi-item, .list-item, .anime-item");
-        for (Element ele : elements) {
-            try {
-                Element aTag = ele.selectFirst("a.public-list-exp, a.thumb, a[href]");
-                if (aTag == null) continue;
+        Elements items = doc.select("a[href^=/bangumi/]");
+        for (Element item : items) {
+            String vid = item.attr("href");
+            if (!vid.startsWith("http")) vid = siteUrl + vid;
 
-                String vid = aTag.attr("href");
-                String name = aTag.attr("title");
-                if (name.isEmpty()) name = aTag.text();
+            String name = item.attr("title");
+            if (name.isEmpty()) name = item.text().trim();
 
-                String pic = ele.selectFirst("img.lazy, img").attr("data-src");
-                if (pic.isEmpty()) pic = ele.selectFirst("img").attr("src");
+            String pic = item.selectFirst("img") != null ? item.selectFirst("img").attr("src") : "";
+            if (pic.isEmpty() && item.parent() != null) {
+                pic = item.parent().selectFirst("img") != null ? item.parent().selectFirst("img").attr("src") : "";
+            }
+            if (!pic.isEmpty() && !pic.startsWith("http")) pic = siteUrl + pic;
 
-                String remark = ele.selectFirst(".public-list-prb, .update-info").text();
+            String remark = "";
+            if (item.parent() != null) {
+                remark = item.parent().text();
+                remark = remark.replace(name, "").trim();
+            }
 
-                if (!pic.startsWith("http")) pic = siteUrl + pic;
-
-                list.add(new Vod(vid, name, pic, remark));
-            } catch (Exception ignored) {}
+            if (!name.isEmpty()) {
+                list.add(new Vod(vid.replace(siteUrl, ""), name, pic, remark));
+            }
         }
 
         return Result.string(list);
     }
 
-    // detailContent 和 playerContent 保持原样，如果播放页也变化可能需进一步调整
     @Override
     public String detailContent(List<String> ids) throws Exception {
-        // 原逻辑保留，必要时可类似优化
         String detailUrl = siteUrl + ids.get(0);
         Document doc = Jsoup.parse(OkHttp.string(detailUrl, getHeader()));
 
-        String name = doc.selectFirst("h1, h2, h3").text();
-        String pic = doc.selectFirst(".detail-pic img, .cover img, img[src*='cover']").attr("src");
+        String name = doc.selectFirst("h1, h2, h3, .title") != null ? doc.selectFirst("h1, h2, h3, .title").text() : "";
+        String pic = doc.selectFirst("img.cover, img[src*='cover'], .detail-pic img") != null ? doc.selectFirst("img.cover, img[src*='cover'], .detail-pic img").attr("src") : "";
         if (!pic.startsWith("http")) pic = siteUrl + pic;
 
-        String brief = doc.selectFirst(".detail-info .check, .intro, .summary").text();
+        String brief = doc.selectFirst(".intro, .summary, .desc, .check") != null ? doc.selectFirst(".intro, .summary, .desc, .check").text() : "";
 
-        // 播放源部分保持原样
-        Elements sources = doc.select(".anthology-tab a, .play-source a");
-        Elements playLists = doc.select(".anthology-list-play, .play-list");
-
+        // 播放源和列表
         StringBuilder vod_play_from = new StringBuilder();
         StringBuilder vod_play_url = new StringBuilder();
 
+        Elements sources = doc.select(".play-source a, .anthology-tab a, a[data-source]");
+        Elements playLists = doc.select(".play-list, .anthology-list-play, ul.episodes");
+
         for (int i = 0; i < sources.size() && i < playLists.size(); i++) {
-            String sourceName = sources.get(i).text();
+            String sourceName = sources.get(i).text().trim();
+            if (sourceName.isEmpty()) sourceName = "线路" + (i + 1);
             vod_play_from.append(sourceName).append("$$$");
 
-            Elements aElements = playLists.get(i).select("a");
-            for (int j = 0; j < aElements.size(); j++) {
-                Element a = aElements.get(j);
-                String href = a.attr("href");
-                String text = a.text();
-                vod_play_url.append(text).append("$").append(href);
-                if (j < aElements.size() - 1) vod_play_url.append("#");
-                else vod_play_url.append("$$$");
+            Elements eps = playLists.get(i).select("a, li");
+            for (int j = 0; j < eps.size(); j++) {
+                Element ep = eps.get(j);
+                String epName = ep.text().trim();
+                String epUrl = ep.attr("href");
+                if (!epUrl.startsWith("http")) epUrl = siteUrl + epUrl;
+                vod_play_url.append(epName).append("$").append(epUrl.replace(siteUrl, ""));
+                vod_play_url.append(j < eps.size() - 1 ? "#" : "$$$");
             }
         }
 
@@ -181,30 +185,24 @@ public class AoWu extends Spider {
 
     @Override
     public String searchContent(String key, boolean quick) throws Exception {
-        // 同 category 优化
         String searchUrl = siteUrl + "/search/-------------.html?wd=" + URLEncoder.encode(key, "UTF-8");
         Document doc = Jsoup.parse(OkHttp.string(searchUrl, getHeader()));
 
         List<Vod> list = new ArrayList<>();
-        Elements elements = doc.select(".public-list-box, .search-item, .list-item");
-        for (Element ele : elements) {
-            try {
-                Element aTag = ele.selectFirst("a");
-                if (aTag == null) continue;
+        Elements items = doc.select("a[href^=/bangumi/]");
+        for (Element item : items) {
+            String vid = item.attr("href");
+            if (!vid.startsWith("http")) vid = siteUrl + vid;
 
-                String vid = aTag.attr("href");
-                String name = aTag.attr("title");
-                if (name.isEmpty()) name = aTag.text();
+            String name = item.attr("title");
+            if (name.isEmpty()) name = item.text();
 
-                String pic = ele.selectFirst("img").attr("data-src");
-                if (pic.isEmpty()) pic = ele.selectFirst("img").attr("src");
+            String pic = item.selectFirst("img") != null ? item.selectFirst("img").attr("src") : "";
+            if (!pic.startsWith("http")) pic = siteUrl + pic;
 
-                String remark = ele.selectFirst(".remark, .note").text();
+            String remark = item.nextSibling() != null ? item.nextSibling().toString() : "";
 
-                if (!pic.startsWith("http")) pic = siteUrl + pic;
-
-                list.add(new Vod(vid, name, pic, remark));
-            } catch (Exception ignored) {}
+            list.add(new Vod(vid.replace(siteUrl, ""), name, pic, remark));
         }
 
         return Result.string(list);
@@ -212,25 +210,23 @@ public class AoWu extends Spider {
 
     @Override
     public String playerContent(String flag, String id, List<String> vipFlags) throws Exception {
-        // 原逻辑保留，如果播放解析变化需进一步调试
         String playUrl = siteUrl + id;
         Document doc = Jsoup.parse(OkHttp.string(playUrl, getHeader()));
 
         String videoUrl = "";
         Elements scripts = doc.select("script");
         for (Element script : scripts) {
-            String scriptContent = script.html();
-            if (scriptContent.contains("player_aaaa") || scriptContent.contains("url")) {
-                Pattern pattern = Pattern.compile("\"url\":\"(.*?)\"|url[:=]\\s*[\"'](.*?)[\"']");
-                Matcher matcher = pattern.matcher(scriptContent);
-                if (matcher.find()) {
-                    videoUrl = matcher.group(1) != null ? matcher.group(1) : matcher.group(2);
-                    videoUrl = videoUrl.replace("\\", "");
+            String content = script.html();
+            if (content.contains("player_") || content.contains("url") || content.contains("video")) {
+                Pattern p = Pattern.compile("(?:\"|'|url[:=]\\s*)[\"']?(https?://[^\"']+\\.m3u8|[^\"']+\\.mp4)[\"']?");
+                Matcher m = p.matcher(content);
+                if (m.find()) {
+                    videoUrl = m.group(1).replace("\\", "");
                     break;
                 }
             }
         }
 
-        return videoUrl.isEmpty() ? Result.get().url(playUrl).string() : Result.get().url(videoUrl).string();
+        return videoUrl.isEmpty() ? Result.get().url(playUrl).string() : Result.get().url(videoUrl).header(getHeader()).string();
     }
 }
