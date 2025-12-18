@@ -34,7 +34,7 @@ public class HuYa extends Spider {
             String title = item.optString("sIntroduction", "");
             String pic = item.optString("sScreenshot", "");
             if (pic.startsWith("//")) pic = "https:" + pic;
-            else if (!pic.startsWith("http")) pic = "https:" + pic;
+            else if (!pic.isEmpty() && !pic.startsWith("http")) pic = "https:" + pic;
             String remark = item.optString("sNick", "");
             vods.add(new Vod(rid, title, pic, remark));
         }
@@ -52,7 +52,6 @@ public class HuYa extends Spider {
 
     @Override
     public String playerContent(String flag, String id, List<String> vipFlags) throws Exception {
-        // 可替换为更稳定的代理线路
         String playUrl = "https://www.goodiptv.club/huya/" + id;
         return Result.get().url(playUrl).header(getHeaders()).string();
     }
@@ -62,7 +61,8 @@ public class HuYa extends Spider {
         String url = "https://search.cdn.huya.com/?m=Search&do=getSearchContent&q=" + key + "&typ=-5&rows=40";
         String json = OkHttp.string(url, getHeaders());
         JSONObject obj = new JSONObject(json);
-        JSONArray docs = obj.getJSONObject("response").getJSONArray("3").getJSONObject("docs");
+        JSONObject response3 = obj.getJSONObject("response").getJSONObject("3");
+        JSONArray docs = response3.getJSONArray("docs");  // 修复：直接取 docs 数组
 
         List<Vod> vods = new ArrayList<>();
         for (int i = 0; i < docs.length(); i++) {
