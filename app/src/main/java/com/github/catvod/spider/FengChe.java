@@ -147,6 +147,6 @@ public class FengChe extends Spider {
 
     @Override
     public String playerContent(String flag, String id, List<String> vipFlags) throws Exception {
-        return Result.get().url(siteUrl + id).header(getHeaders()).string(); // 依赖客户端嗅探
+        return Result.get().url(siteUrl + id).header(getHeaders()).string();
     }
 }
