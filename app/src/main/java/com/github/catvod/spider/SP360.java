@@ -1,14 +1,14 @@
-package com.fongmi.android.tv.spider;
+package com.github.catvod.spider;
 
 import com.github.catvod.crawler.Spider;
-import com.github.catvod.utils.OkHttp;
+import com.github.catvod.net.OkHttp;        // ← 正确包路径
+import com.github.catvod.net.OkResult;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.net.URLEncoder;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -27,126 +27,102 @@ public class SP360 extends Spider {
         return headers;
     }
 
-    // 搜索（当前360主要靠搜索）
     @Override
     public String searchContent(String key, boolean quick) throws Exception {
         Map<String, String> headers = getHeaders();
+        String url = SEARCH_URL + "?kw=" + URLEncoder.encode(key, "UTF-8") + "&page=1&pagenum=30";
 
-        String url = SEARCH_URL + "?kw=" + URLEncoder.encode(key, "UTF-8") + "&page=1&pagenum=24";
+        String content = OkHttp.string(url, headers);  // 使用 com.github.catvod.net.OkHttp
 
-        String content = OkHttp.get(url, headers);
-
-        JSONObject data = new JSONObject(content);
+        JSONObject json = new JSONObject(content);
         JSONArray list = new JSONArray();
 
-        JSONArray items = data.optJSONArray("data");
+        JSONArray items = json.optJSONArray("data");
         if (items != null) {
             for (int i = 0; i < items.length(); i++) {
                 JSONObject item = items.getJSONObject(i);
 
                 String title = item.optString("title");
                 String vodId = item.optString("id");
-                String pic = item.optString("cover"); // 或 "pic"
-                String remark = item.optString("desc"); // 年份或更新状态
+                String pic = item.optString("cover");
+                if (!pic.startsWith("http")) pic = "https:" + pic;
+                String remark = item.optString("desc", item.optString("year", ""));
 
                 JSONObject v = new JSONObject();
                 v.put("vod_id", vodId);
                 v.put("vod_name", title);
-                v.put("vod_pic", pic.startsWith("http") ? pic : "https:" + pic);
+                v.put("vod_pic", pic);
                 v.put("vod_remarks", remark);
 
                 list.put(v);
             }
         }
 
-        JSONObject result = new JSONObject();
-        result.put("list", list);
-        return result.toString();
+        return Result.get().vod(list).string();
     }
 
-    // 播放内容（flag + id 格式，如 "m3u8$xxx" 或直接 id + 线路参数）
     @Override
     public String playerContent(String flag, String id, List<String> vipFlags) throws Exception {
         Map<String, String> headers = getHeaders();
 
-        // 先获取详情，拿到 playlinks
+        // 获取详情
         String detailUrl = DETAIL_URL + "?id=" + id;
-        String detailContent = OkHttp.get(detailUrl, headers);
+        String detailContent = OkHttp.string(detailUrl, headers);
         JSONObject detailJson = new JSONObject(detailContent);
-        JSONObject detailData = detailJson.optJSONObject("data");
-
-        if (detailData == null) {
-            return failResult();
+        JSONObject data = detailJson.optJSONObject("data");
+        if (data == null) {
+            return Result.error("无播放数据").string();
         }
 
-        // 解析线路（playlinks 里是各线路的链接列表）
-        JSONObject playlinks = detailData.optJSONObject("playlinks");
-
-        // flag 通常是线路名，如 "hd1"、"hd2"、"m3u8" 等，社区常用默认取第一个可用
-        String playFlag = flag.isEmpty() ? getFirstAvailableFlag(playlinks) : flag;
-
-        JSONArray links = playlinks.optJSONArray(playFlag);
-        if (links == null || links.length() == 0) {
-            return failResult();
+        JSONObject playlinks = data.optJSONObject("playlinks");
+        if (playlinks == null || playlinks.length() == 0) {
+            return Result.error("无播放线路").string();
         }
 
-        // 取第一个播放源（通常是集数索引或直接链接）
-        // 对于剧集，id 会是 "id=xxx&nid=1" 格式，这里简化取默认第一集
-        String playId = "1"; // 默认第一集，可扩展为多集选择
+        // 选择线路，优先 m3u8
+        String playFlag = flag;
+        if (playFlag.isEmpty() || !playlinks.has(playFlag)) {
+            if (playlinks.has("m3u8")) playFlag = "m3u8";
+            else if (playlinks.has("hd1")) playFlag = "hd1";
+            else if (playlinks.has("hd2")) playFlag = "hd2";
+            else playFlag = playlinks.keys().next();
+        }
+
+        // 默认第一集
+        String nid = "1";
         if (id.contains("&nid=")) {
-            playId = id.split("&nid=")[1];
+            nid = id.split("&nid=")[1];
         }
 
-        // 构建播放请求参数
+        // 播放请求
         JSONObject params = new JSONObject();
-        params.put("id", detailData.optString("id"));
+        params.put("id", data.optString("id"));
         params.put("flag", playFlag);
-        params.put("nid", playId);
+        params.put("nid", nid);
 
-        String playContent = OkHttp.post(PLAY_URL, params.toString(), headers);
-        JSONObject playJson = new JSONObject(playContent);
-
-        String url = playJson.optString("url");
-        String realUrl = playJson.optString("real_url"); // 有时有 real_url
-
-        if ((url == null || url.isEmpty()) && (realUrl == null || realUrl.isEmpty())) {
-            return failResult();
+        OkResult playResult = OkHttp.post(PLAY_URL, params.toString(), headers);
+        if (playResult.getCode() != 200) {
+            return Result.error("播放请求失败").string();
         }
 
-        String finalUrl = realUrl != null && !realUrl.isEmpty() ? realUrl : url;
+        JSONObject playJson = new JSONObject(playResult.getBody());
+        String url = playJson.optString("real_url");
+        if (url.isEmpty()) url = playJson.optString("url");
 
-        JSONObject result = new JSONObject();
-        result.put("parse", 0); // 直链，大多是 m3u8/mp4
-        result.put("playUrl", "");
-        result.put("url", finalUrl);
-        result.put("header", new JSONObject(headers).toString()); // 可选加 header
+        if (url.isEmpty()) {
+            return Result.error("获取播放地址失败").string();
+        }
 
-        return result.toString();
+        return Result.get()
+                .url(url)
+                .header(headers)
+                .parse(0)
+                .string();
     }
 
-    private String getFirstAvailableFlag(JSONObject playlinks) {
-        // 默认优先 m3u8 或 hd1 等
-        if (playlinks.has("m3u8")) return "m3u8";
-        if (playlinks.has("hd1")) return "hd1";
-        if (playlinks.has("hd2")) return "hd2";
-        return playlinks.keys().next(); // 第一个
-    }
-
-    private String failResult() {
-        JSONObject result = new JSONObject();
-        result.put("parse", 0);
-        result.put("url", "");
-        result.put("jx", "0");
-        result.put("msg", "暂无播放源或解析失败");
-        return result.toString();
-    }
-
-    // 可选：首页（如果需要）
     @Override
     public String homeContent(boolean filter) throws Exception {
-        // 360 主靠搜索，首页可返回空或固定推荐
-        JSONObject result = new JSONObject();
-        result.put("list", new JSONArray());
-        return result.toString();
+        // 360 主靠搜索，可返回空
+        return Result.get().vod(new JSONArray()).string();
     }
 }
