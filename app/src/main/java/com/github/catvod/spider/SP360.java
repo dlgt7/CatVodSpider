@@ -3,12 +3,14 @@ package com.github.catvod.spider;
 import com.github.catvod.crawler.Spider;
 import com.github.catvod.net.OkHttp;
 import com.github.catvod.net.OkResult;
-import com.github.catvod.bean.Result;  // 添加这个导入
+import com.github.catvod.bean.Result;
+import com.github.catvod.bean.Vod;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.net.URLEncoder;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -24,7 +26,6 @@ public class SP360 extends Spider {
         Map<String, String> headers = new HashMap<>();
         headers.put("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Safari/537.36");
         headers.put("Referer", SITE_URL + "/");
-        headers.put("Origin", SITE_URL);
         return headers;
     }
 
@@ -34,32 +35,28 @@ public class SP360 extends Spider {
         String url = SEARCH_URL + "?kw=" + URLEncoder.encode(key, "UTF-8") + "&page=1&pagenum=30";
 
         String content = OkHttp.string(url, headers);
-
         JSONObject json = new JSONObject(content);
-        JSONArray list = new JSONArray();
 
+        List<Vod> vods = new ArrayList<>();
         JSONArray items = json.optJSONArray("data");
         if (items != null) {
             for (int i = 0; i < items.length(); i++) {
                 JSONObject item = items.getJSONObject(i);
 
-                String title = item.optString("title");
-                String vodId = item.optString("id");
-                String pic = item.optString("cover");
-                if (!pic.startsWith("http")) pic = "https:" + pic;
-                String remark = item.optString("desc", item.optString("year", ""));
+                Vod vod = new Vod();
+                vod.setVodId(item.optString("id"));
+                vod.setVodName(item.optString("title"));
+                vod.setVodPic(item.optString("cover"));
+                if (!vod.getVodPic().startsWith("http")) {
+                    vod.setVodPic("https:" + vod.getVodPic());
+                }
+                vod.setVodRemarks(item.optString("desc", item.optString("year", "")));
 
-                JSONObject v = new JSONObject();
-                v.put("vod_id", vodId);
-                v.put("vod_name", title);
-                v.put("vod_pic", pic);
-                v.put("vod_remarks", remark);
-
-                list.put(v);
+                vods.add(vod);
             }
         }
 
-        return Result.get().vod(list).string();
+        return Result.get().list(vods).string();
     }
 
     @Override
@@ -71,16 +68,17 @@ public class SP360 extends Spider {
         String detailContent = OkHttp.string(detailUrl, headers);
         JSONObject detailJson = new JSONObject(detailContent);
         JSONObject data = detailJson.optJSONObject("data");
-        if (data == null) {
-            return Result.error("无播放数据").string();
+
+        if (data == null || data.length() == 0) {
+            return Result.get().parse(0).url("").msg("无播放数据").string();
         }
 
         JSONObject playlinks = data.optJSONObject("playlinks");
         if (playlinks == null || playlinks.length() == 0) {
-            return Result.error("无播放线路").string();
+            return Result.get().parse(0).url("").msg("无播放线路").string();
         }
 
-        // 选择线路，优先 m3u8
+        // 选择线路
         String playFlag = flag;
         if (playFlag.isEmpty() || !playlinks.has(playFlag)) {
             if (playlinks.has("m3u8")) playFlag = "m3u8";
@@ -89,13 +87,13 @@ public class SP360 extends Spider {
             else playFlag = playlinks.keys().next();
         }
 
-        // 默认第一集
+        // 集数处理
         String nid = "1";
         if (id.contains("&nid=")) {
             nid = id.split("&nid=")[1];
         }
 
-        // 播放请求
+        // 请求播放地址
         JSONObject params = new JSONObject();
         params.put("id", data.optString("id"));
         params.put("flag", playFlag);
@@ -103,7 +101,7 @@ public class SP360 extends Spider {
 
         OkResult playResult = OkHttp.post(PLAY_URL, params.toString(), headers);
         if (playResult.getCode() != 200) {
-            return Result.error("播放请求失败").string();
+            return Result.get().parse(0).url("").msg("播放请求失败").string();
         }
 
         JSONObject playJson = new JSONObject(playResult.getBody());
@@ -111,19 +109,18 @@ public class SP360 extends Spider {
         if (url.isEmpty()) url = playJson.optString("url");
 
         if (url.isEmpty()) {
-            return Result.error("获取播放地址失败").string();
+            return Result.get().parse(0).url("").msg("获取播放地址失败").string();
         }
 
         return Result.get()
-                .url(url)
-                .header(headers)
                 .parse(0)
+                .url(url)
+                .header(new JSONObject(headers).toString())
                 .string();
     }
 
     @Override
     public String homeContent(boolean filter) throws Exception {
-        // 360 主靠搜索，可返回空列表
-        return Result.get().vod(new JSONArray()).string();
+        return Result.get().list(new ArrayList<Vod>()).string();
     }
 }
