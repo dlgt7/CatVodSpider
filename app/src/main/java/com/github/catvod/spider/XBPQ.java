@@ -25,8 +25,8 @@ import java.util.Iterator;
 import java.util.List;
 
 /**
- * XBPQ 终极版（2025.12.19 - 完全兼容当前 CatVodSpider 框架）
- * 已彻底修复所有编译错误
+ * XBPQ 终极版（2025.12.19 - 完全匹配你的 Result.java）
+ * 使用 new Result() + 链式方法构建结果
  */
 public class XBPQ extends Spider {
 
@@ -92,9 +92,9 @@ public class XBPQ extends Spider {
                 classes.add(new Class(siteUrl + "/vodshow/3--------1---.html", "综艺"));
             }
 
-            Result result = new Result();
-            result.classes = classes;  // 直接赋值字段
-            return result.string();
+            return new Result()
+                    .classes(classes)
+                    .string();
         } catch (Exception e) {
             SpiderDebug.log(e);
             return "";
@@ -142,10 +142,11 @@ public class XBPQ extends Spider {
                 list.add(new Vod(vodId, vodName, vodPic, remarks));
             }
 
-            Result result = new Result();
-            result.list = list;  // 直接赋值
-            result.page(Integer.parseInt(pg), 999, 24, list.size());
-            return result.string();
+            int pageNum = Integer.parseInt(pg);
+            return new Result()
+                    .list(list)
+                    .page(pageNum, 999, 24, list.size())
+                    .string();
         } catch (Exception e) {
             SpiderDebug.log(e);
             return "";
@@ -212,9 +213,9 @@ public class XBPQ extends Spider {
             vod.setVodPlayFrom(String.join("$$$", playFrom));
             vod.setVodPlayUrl(String.join("$$$", playUrl));
 
-            Result result = new Result();
-            result.list = List.of(vod);  // 直接赋值
-            return result.string();
+            return new Result()
+                    .list(List.of(vod))
+                    .string();
         } catch (Exception e) {
             SpiderDebug.log(e);
             return "";
@@ -224,18 +225,25 @@ public class XBPQ extends Spider {
     @Override
     public String playerContent(String flag, String id, List<String> vipFlags) {
         try {
-            Result result = new Result();
-            result.url = id;           // 直接赋值字段
-            result.parse = 0;
-            result.header = getHeaders(id);
-            return result.string();
+            HashMap<String, String> headers = getHeaders(id);
+            String headerStr = "";
+            if (!headers.isEmpty()) {
+                try {
+                    headerStr = new JSONObject(headers).toString();
+                } catch (Exception ignored) {}
+            }
+
+            return new Result()
+                    .url(id)
+                    .parse(0)
+                    .header(headerStr)
+                    .string();
         } catch (Exception e) {
             SpiderDebug.log(e);
             return "";
         }
     }
 
-    // 其他方法保持不变（searchContent、manualVideoCheck、isVideoFormat、fetch、btwafBypass）
     @Override
     public String searchContent(String key, boolean quick) {
         try {
