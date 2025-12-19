@@ -111,11 +111,10 @@ public class SP360 extends Spider {
             return Result.get().parse(0).url("").msg("获取播放地址失败").string();
         }
 
-        // 360 的直链大多不需要额外 header，直接不传即可（或传空字符串）
+        // 360 直链不需要额外 header，直接不设置该字段
         return Result.get()
                 .parse(0)
                 .url(url)
-                .header("")
                 .string();
     }
 
