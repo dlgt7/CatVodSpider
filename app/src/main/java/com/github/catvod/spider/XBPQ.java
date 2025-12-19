@@ -25,8 +25,8 @@ import java.util.Iterator;
 import java.util.List;
 
 /**
- * XBPQ 终极优化完善版（2025.12.19 - 兼容最新框架）
- * 已修复 Result.string() 歧义错误 + 正确链式分页
+ * XBPQ 终极优化完善版（2025.12.19 - 完全兼容当前框架）
+ * 已修复所有编译错误：无 ambiguous、无不存在的 list() 方法
  */
 public class XBPQ extends Spider {
 
@@ -92,8 +92,9 @@ public class XBPQ extends Spider {
                 classes.add(new Class(siteUrl + "/vodshow/3--------1---.html", "综艺"));
             }
 
-            // 修复：使用 Result.get() 构建，避免 ambiguous
-            return Result.get().classes(classes).string();
+            Result result = new Result();
+            result.classes = classes;
+            return result.string();
         } catch (Exception e) {
             SpiderDebug.log(e);
             return "";
@@ -141,11 +142,10 @@ public class XBPQ extends Spider {
                 list.add(new Vod(vodId, vodName, vodPic, remarks));
             }
 
-            // 修复：使用 Result.get() 链式构建 + 分页
-            return Result.get()
-                    .list(list)
-                    .page(Integer.parseInt(pg), 999, 24, list.size())
-                    .string();
+            Result result = new Result();
+            result.list = list;
+            result.page(Integer.parseInt(pg), 999, 24, list.size());
+            return result.string();
         } catch (Exception e) {
             SpiderDebug.log(e);
             return "";
@@ -163,7 +163,8 @@ public class XBPQ extends Spider {
 
             Vod vod = new Vod();
             vod.setVodId(ids.get(0));
-            vod.setVodName(doc.selectFirst(rule.optString("片名", ".video-info-header h1")).text().trim());
+            Element nameEl = doc.selectFirst(rule.optString("片名", ".video-info-header h1"));
+            vod.setVodName(nameEl != null ? nameEl.text().trim() : "");
 
             Element picEl = doc.selectFirst(rule.optString("图片", ".video-pic img"));
             if (picEl != null) {
@@ -172,7 +173,8 @@ public class XBPQ extends Spider {
                 vod.setVodPic(proxyPic(pic));
             }
 
-            vod.setVodContent(doc.selectFirst(rule.optString("简介", ".video-info-content")).text().trim());
+            Element contentEl = doc.selectFirst(rule.optString("简介", ".video-info-content"));
+            vod.setVodContent(contentEl != null ? contentEl.text().trim() : "");
 
             List<String> playFrom = new ArrayList<>();
             List<String> playUrl = new ArrayList<>();
@@ -183,7 +185,8 @@ public class XBPQ extends Spider {
                 StringBuilder sb = new StringBuilder();
                 for (Element li : lis) {
                     String name = li.text().trim();
-                    String link = li.selectFirst("a").absUrl("href");
+                    Element a = li.selectFirst("a");
+                    String link = a != null ? a.absUrl("href") : "";
                     sb.append(name).append("$").append(link).append("#");
                 }
                 playFrom.add("默认");
@@ -198,7 +201,8 @@ public class XBPQ extends Spider {
                     StringBuilder sb = new StringBuilder();
                     for (Element li : lis) {
                         String name = li.text().trim();
-                        String link = li.selectFirst("a").absUrl("href");
+                        Element a = li.selectFirst("a");
+                        String link = a != null ? a.absUrl("href") : "";
                         sb.append(name).append("$").append(link).append("#");
                     }
                     playUrl.add(sb.toString());
@@ -208,8 +212,9 @@ public class XBPQ extends Spider {
             vod.setVodPlayFrom(String.join("$$$", playFrom));
             vod.setVodPlayUrl(String.join("$$$", playUrl));
 
-            // 修复：使用 Result.get()
-            return Result.get().list(List.of(vod)).string();
+            Result result = new Result();
+            result.list = List.of(vod);
+            return result.string();
         } catch (Exception e) {
             SpiderDebug.log(e);
             return "";
@@ -219,7 +224,11 @@ public class XBPQ extends Spider {
     @Override
     public String playerContent(String flag, String id, List<String> vipFlags) {
         try {
-            return Result.get().url(id).parse(0).header(getHeaders(id)).string();
+            Result result = new Result();
+            result.url = id;
+            result.parse = 0;
+            result.header = getHeaders(id);
+            return result.string();
         } catch (Exception e) {
             SpiderDebug.log(e);
             return "";
@@ -260,10 +269,13 @@ public class XBPQ extends Spider {
         try {
             int start = html.indexOf("btwaf=");
             if (start != -1) {
-                String btwaf = html.substring(start + 6, html.indexOf("\"", start + 6));
-                String bturl = webUrl + (webUrl.contains("?") ? "&" : "?") + "btwaf=" + btwaf;
-                OkHttp.string(bturl, getHeaders(webUrl));
-                html = OkHttp.string(webUrl, getHeaders(webUrl));
+                int end = html.indexOf("\"", start + 6);
+                if (end != -1) {
+                    String btwaf = html.substring(start + 6, end);
+                    String bturl = webUrl + (webUrl.contains("?") ? "&" : "?") + "btwaf=" + btwaf;
+                    OkHttp.string(bturl, getHeaders(webUrl));
+                    html = OkHttp.string(webUrl, getHeaders(webUrl));
+                }
             }
         } catch (Exception ignored) {}
         return html.trim();
