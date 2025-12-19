@@ -25,10 +25,8 @@ import java.util.Iterator;
 import java.util.List;
 
 /**
- * XBPQ 终极优化完善版（2025.12.19）
- * 融合 XYQBiu 本地图片代理 + XBiu 全规则驱动 + XBiubiu 嗅探修复
- * 已删除所有冗余代码、修复潜在问题、强制 127.0.0.1 图片代理、直播播放、补全搜索
- * 最高稳定性与兼容性，适用于所有 biu 系站点
+ * XBPQ 终极优化完善版（2025.12.19 - 兼容最新框架）
+ * 已修复 Result.string() 歧义错误 + 正确链式分页
  */
 public class XBPQ extends Spider {
 
@@ -64,7 +62,6 @@ public class XBPQ extends Spider {
         return headers;
     }
 
-    /** 强制使用 127.0.0.1，最安全、最兼容所有设备 */
     private String proxyPic(String pic) {
         if (!rule.optBoolean("picProxy", true) || TextUtils.isEmpty(pic) || pic.contains("127.0.0.1")) {
             return pic;
@@ -79,10 +76,9 @@ public class XBPQ extends Spider {
             String cateManual = rule.optString("cateManual", "");
 
             if (!TextUtils.isEmpty(cateManual)) {
-                // 手动分类：格式 "电影+/vodshow/1--------1---.html&剧集+/vodshow/2--------1---.html"
                 String[] items = cateManual.split("&");
                 for (String item : items) {
-                    String[] kv = item.split("\\+");
+                    String[] kv = item.split("\\$");
                     if (kv.length >= 2) {
                         classes.add(new Class(kv[1].trim(), kv[0].trim()));
                     }
@@ -90,14 +86,14 @@ public class XBPQ extends Spider {
             }
 
             if (classes.isEmpty() && !TextUtils.isEmpty(siteUrl)) {
-                // 默认分类兜底
                 classes.add(new Class(siteUrl + "/vodshow/1--------1---.html", "电影"));
                 classes.add(new Class(siteUrl + "/vodshow/2--------1---.html", "剧集"));
                 classes.add(new Class(siteUrl + "/vodshow/4--------1---.html", "动漫"));
                 classes.add(new Class(siteUrl + "/vodshow/3--------1---.html", "综艺"));
             }
 
-            return Result.string(classes, null, null);
+            // 修复：使用 Result.get() 构建，避免 ambiguous
+            return Result.get().classes(classes).string();
         } catch (Exception e) {
             SpiderDebug.log(e);
             return "";
@@ -108,8 +104,6 @@ public class XBPQ extends Spider {
     public String categoryContent(String tid, String pg, boolean filter, HashMap<String, String> extend) {
         try {
             String url = tid.startsWith("http") ? tid : siteUrl + tid;
-
-            // 兼容未拼接完整的情况
             if (!url.contains(".html") && !url.endsWith("/")) {
                 url = url.replaceAll("/+$", "") + "/vodshow/" + tid.replaceAll(".html.*", "") + "--------" + pg + "---.html";
             }
@@ -147,7 +141,9 @@ public class XBPQ extends Spider {
                 list.add(new Vod(vodId, vodName, vodPic, remarks));
             }
 
-            return Result.string(null, list, null)
+            // 修复：使用 Result.get() 链式构建 + 分页
+            return Result.get()
+                    .list(list)
                     .page(Integer.parseInt(pg), 999, 24, list.size())
                     .string();
         } catch (Exception e) {
@@ -178,13 +174,11 @@ public class XBPQ extends Spider {
 
             vod.setVodContent(doc.selectFirst(rule.optString("简介", ".video-info-content")).text().trim());
 
-            // 播放线路解析
             List<String> playFrom = new ArrayList<>();
             List<String> playUrl = new ArrayList<>();
 
             Elements tabs = doc.select(rule.optString("线路tab", ".play-source a"));
             if (tabs.isEmpty()) {
-                // 单线路
                 Elements lis = doc.select(rule.optString("剧集列表", ".playlist ul li, .playlist li"));
                 StringBuilder sb = new StringBuilder();
                 for (Element li : lis) {
@@ -195,7 +189,6 @@ public class XBPQ extends Spider {
                 playFrom.add("默认");
                 playUrl.add(sb.toString());
             } else {
-                // 多线路
                 for (Element tab : tabs) {
                     playFrom.add(tab.text().trim());
                     String id = tab.attr("data-id");
@@ -215,7 +208,8 @@ public class XBPQ extends Spider {
             vod.setVodPlayFrom(String.join("$$$", playFrom));
             vod.setVodPlayUrl(String.join("$$$", playUrl));
 
-            return Result.string(null, List.of(vod), null);
+            // 修复：使用 Result.get()
+            return Result.get().list(List.of(vod)).string();
         } catch (Exception e) {
             SpiderDebug.log(e);
             return "";
@@ -225,7 +219,6 @@ public class XBPQ extends Spider {
     @Override
     public String playerContent(String flag, String id, List<String> vipFlags) {
         try {
-            // biu 系站点绝大多数直链可播，parse=0 更流畅
             return Result.get().url(id).parse(0).header(getHeaders(id)).string();
         } catch (Exception e) {
             SpiderDebug.log(e);
@@ -245,11 +238,8 @@ public class XBPQ extends Spider {
         }
     }
 
-    /** 修复嗅探问题（XBiubiu 核心思想） */
     @Override
-    public boolean manualVideoCheck() {
-        return true;
-    }
+    public boolean manualVideoCheck() { return true; }
 
     @Override
     public boolean isVideoFormat(String url) {
@@ -259,7 +249,6 @@ public class XBPQ extends Spider {
         return url.contains(".m3u8") || url.contains(".mp4") || url.contains(".flv") || url.contains(".m4a");
     }
 
-    /** 网络请求 + 自动 btwaf 绕过 */
     private String fetch(String webUrl) {
         String html = OkHttp.string(webUrl, getHeaders(webUrl));
         return btwafBypass(webUrl, html);
@@ -273,7 +262,7 @@ public class XBPQ extends Spider {
             if (start != -1) {
                 String btwaf = html.substring(start + 6, html.indexOf("\"", start + 6));
                 String bturl = webUrl + (webUrl.contains("?") ? "&" : "?") + "btwaf=" + btwaf;
-                OkHttp.string(bturl, getHeaders(webUrl)); // 触发 cookie 设置
+                OkHttp.string(bturl, getHeaders(webUrl));
                 html = OkHttp.string(webUrl, getHeaders(webUrl));
             }
         } catch (Exception ignored) {}
