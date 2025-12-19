@@ -25,8 +25,8 @@ import java.util.Iterator;
 import java.util.List;
 
 /**
- * XBPQ 终极优化完善版（2025.12.19 - 完全兼容当前框架）
- * 已修复所有编译错误：无 ambiguous、无不存在的 list() 方法
+ * XBPQ 终极版（2025.12.19 - 完全兼容当前 CatVodSpider 框架）
+ * 已彻底修复所有编译错误
  */
 public class XBPQ extends Spider {
 
@@ -93,7 +93,7 @@ public class XBPQ extends Spider {
             }
 
             Result result = new Result();
-            result.classes = classes;
+            result.classes = classes;  // 直接赋值字段
             return result.string();
         } catch (Exception e) {
             SpiderDebug.log(e);
@@ -143,7 +143,7 @@ public class XBPQ extends Spider {
             }
 
             Result result = new Result();
-            result.list = list;
+            result.list = list;  // 直接赋值
             result.page(Integer.parseInt(pg), 999, 24, list.size());
             return result.string();
         } catch (Exception e) {
@@ -213,7 +213,7 @@ public class XBPQ extends Spider {
             vod.setVodPlayUrl(String.join("$$$", playUrl));
 
             Result result = new Result();
-            result.list = List.of(vod);
+            result.list = List.of(vod);  // 直接赋值
             return result.string();
         } catch (Exception e) {
             SpiderDebug.log(e);
@@ -225,7 +225,7 @@ public class XBPQ extends Spider {
     public String playerContent(String flag, String id, List<String> vipFlags) {
         try {
             Result result = new Result();
-            result.url = id;
+            result.url = id;           // 直接赋值字段
             result.parse = 0;
             result.header = getHeaders(id);
             return result.string();
@@ -235,6 +235,7 @@ public class XBPQ extends Spider {
         }
     }
 
+    // 其他方法保持不变（searchContent、manualVideoCheck、isVideoFormat、fetch、btwafBypass）
     @Override
     public String searchContent(String key, boolean quick) {
         try {
