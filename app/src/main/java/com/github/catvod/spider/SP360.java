@@ -46,17 +46,16 @@ public class SP360 extends Spider {
                 Vod vod = new Vod();
                 vod.setVodId(item.optString("id"));
                 vod.setVodName(item.optString("title"));
-                vod.setVodPic(item.optString("cover"));
-                if (!vod.getVodPic().startsWith("http")) {
-                    vod.setVodPic("https:" + vod.getVodPic());
-                }
+                String pic = item.optString("cover");
+                if (!pic.startsWith("http")) pic = "https:" + pic;
+                vod.setVodPic(pic);
                 vod.setVodRemarks(item.optString("desc", item.optString("year", "")));
 
                 vods.add(vod);
             }
         }
 
-        return Result.get().list(vods).string();
+        return Result.get().vod(vods).string();
     }
 
     @Override
@@ -112,15 +111,18 @@ public class SP360 extends Spider {
             return Result.get().parse(0).url("").msg("获取播放地址失败").string();
         }
 
+        // header 字段是 String 类型，直接传 JSON 字符串
+        JSONObject headerJson = new JSONObject(headers);
+
         return Result.get()
                 .parse(0)
                 .url(url)
-                .header(new JSONObject(headers).toString())
+                .header(headerJson.toString())
                 .string();
     }
 
     @Override
     public String homeContent(boolean filter) throws Exception {
-        return Result.get().list(new ArrayList<Vod>()).string();
+        return Result.get().vod(new ArrayList<Vod>()).string();
     }
 }
