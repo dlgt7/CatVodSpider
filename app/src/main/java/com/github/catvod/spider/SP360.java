@@ -111,13 +111,11 @@ public class SP360 extends Spider {
             return Result.get().parse(0).url("").msg("获取播放地址失败").string();
         }
 
-        // header 字段是 String 类型，直接传 JSON 字符串
-        JSONObject headerJson = new JSONObject(headers);
-
+        // 360 的直链大多不需要额外 header，直接不传即可（或传空字符串）
         return Result.get()
                 .parse(0)
                 .url(url)
-                .header(headerJson.toString())
+                .header("")
                 .string();
     }
 
