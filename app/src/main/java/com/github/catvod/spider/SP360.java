@@ -1,8 +1,9 @@
 package com.github.catvod.spider;
 
 import com.github.catvod.crawler.Spider;
-import com.github.catvod.net.OkHttp;        // ← 正确包路径
+import com.github.catvod.net.OkHttp;
 import com.github.catvod.net.OkResult;
+import com.github.catvod.bean.Result;  // 添加这个导入
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -32,7 +33,7 @@ public class SP360 extends Spider {
         Map<String, String> headers = getHeaders();
         String url = SEARCH_URL + "?kw=" + URLEncoder.encode(key, "UTF-8") + "&page=1&pagenum=30";
 
-        String content = OkHttp.string(url, headers);  // 使用 com.github.catvod.net.OkHttp
+        String content = OkHttp.string(url, headers);
 
         JSONObject json = new JSONObject(content);
         JSONArray list = new JSONArray();
@@ -122,7 +123,7 @@ public class SP360 extends Spider {
 
     @Override
     public String homeContent(boolean filter) throws Exception {
-        // 360 主靠搜索，可返回空
+        // 360 主靠搜索，可返回空列表
         return Result.get().vod(new JSONArray()).string();
     }
 }
