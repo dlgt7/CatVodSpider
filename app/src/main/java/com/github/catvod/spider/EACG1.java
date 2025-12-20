@@ -1,6 +1,7 @@
 package com.github.catvod.spider;
 
 import android.content.Context;
+import android.text.TextUtils;
 
 import com.github.catvod.bean.Class;
 import com.github.catvod.bean.Result;
@@ -14,26 +15,23 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 
-import java.net.URLEncoder;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 /**
- * EACG1动漫网站爬虫（2025年12月适配版）
+ * EACG1动漫网站爬虫（2025年12月20日最终修复版）
  * 网址：https://eacg1.com
  * 
- * 当前特点：
- * - 列表：.fed-list-item 等选择器有效
- * - 分类：/vodclassification/XX.html
- * - 详情：voddetails-XXXX.html，有立即播放链接跳转子页
- * - 播放：无 player_aaaa JSON，直接嗅探详情页或播放子页（推荐嗅探详情页，大部分线路可抓）
+ * 修复点：
+ * - categoryContent 参数改为 HashMap<String, String> extend（匹配Spider基类签名）
+ * - 分类URL使用 /vodclassification/{tid}.html
+ * - 播放使用嗅探（实测有效）
  */
 public class EACG1 extends Spider {
 
     private static final String siteUrl = "https://eacg1.com";
-    private static final String searchUrl = siteUrl + "/vodsearch/";
     private static final String detailBase = "/voddetails-";
 
     private Map<String, String> getHeaders() {
@@ -55,7 +53,7 @@ public class EACG1 extends Spider {
 
         Document doc = Jsoup.parse(OkHttp.string(siteUrl, getHeaders()));
 
-        // 分类（从导航或常见分类提取）
+        // 手动添加分类（网站导航稳定）
         classes.add(new Class("21", "日漫"));
         classes.add(new Class("20", "国语动漫"));
         classes.add(new Class("24", "劇場"));
@@ -63,24 +61,25 @@ public class EACG1 extends Spider {
         classes.add(new Class("43", "日韩剧"));
         classes.add(new Class("33", "高清原碟"));
 
-        // 首页推荐列表
-        Elements items = doc.select(".fed-list-info .fed-list-item, .lpic li");
+        // 首页推荐
+        Elements items = doc.select(".fed-list-info .fed-list-item, .lpic li, .module-items .module-item");
         for (Element item : items) {
-            Element a = item.selectFirst("a.fed-list-pics, a");
+            Element a = item.selectFirst("a");
             if (a == null) continue;
+
             String href = a.attr("href");
             if (!href.contains(detailBase)) continue;
 
             String id = href.replace(detailBase, "").replace(".html", "");
             String name = a.attr("title");
-            if (name.isEmpty()) name = a.text().trim();
+            if (TextUtils.isEmpty(name)) name = a.text().trim();
 
             String pic = a.attr("data-original");
-            if (pic.isEmpty()) pic = a.selectFirst("img").attr("src");
+            if (TextUtils.isEmpty(pic)) pic = a.selectFirst("img").attr("src");
             if (!pic.startsWith("http")) pic = siteUrl + pic;
 
             String remark = "";
-            Element remarkEl = item.selectFirst(".fed-list-remarks, .remark");
+            Element remarkEl = item.selectFirst(".fed-list-remarks, .module-item-note");
             if (remarkEl != null) remark = remarkEl.text().trim();
 
             list.add(new Vod(id, name, pic, remark));
@@ -90,29 +89,32 @@ public class EACG1 extends Spider {
     }
 
     @Override
-    public String categoryContent(String tid, String pg, boolean filter, Map<String, String> extend) throws Exception {
+    public String categoryContent(String tid, String pg, boolean filter, HashMap<String, String> extend) throws Exception {
         List<Vod> list = new ArrayList<>();
 
         String url = siteUrl + "/vodclassification/" + tid + ".html";
-        if (!pg.equals("1")) url = url.replace(".html", "-" + pg + ".html");
+        if (!pg.equals("1")) {
+            url = siteUrl + "/vodclassification/" + tid + "-" + pg + ".html";
+        }
 
         Document doc = Jsoup.parse(OkHttp.string(url, getHeaders()));
 
-        Elements items = doc.select(".fed-list-info .fed-list-item");
+        Elements items = doc.select(".fed-list-info .fed-list-item, .module-items .module-item");
         for (Element item : items) {
-            Element a = item.selectFirst("a.fed-list-pics");
+            Element a = item.selectFirst("a.fed-list-pics, a.module-item-cover");
             if (a == null) continue;
 
             String href = a.attr("href");
             String id = href.replace(detailBase, "").replace(".html", "");
             String name = a.attr("title");
-            if (name.isEmpty()) name = item.selectFirst(".fed-list-title").text().trim();
+            if (TextUtils.isEmpty(name)) name = item.selectFirst(".fed-list-title, .module-item-title").text().trim();
 
             String pic = a.attr("data-original");
+            if (TextUtils.isEmpty(pic)) pic = a.selectFirst("img").attr("src");
             if (!pic.startsWith("http")) pic = siteUrl + pic;
 
             String remark = "";
-            Element remarkEl = item.selectFirst(".fed-list-remarks");
+            Element remarkEl = item.selectFirst(".fed-list-remarks, .module-item-note");
             if (remarkEl != null) remark = remarkEl.text().trim();
 
             list.add(new Vod(id, name, pic, remark));
@@ -129,43 +131,23 @@ public class EACG1 extends Spider {
 
         Vod vod = new Vod();
         vod.setVodId(id);
-        vod.setVodName(doc.selectFirst("h1, .fed-part-rows").text().trim());
-        vod.setVodPic(doc.selectFirst(".fed-list-pics, img").attr("data-original"));
-        vod.setVodYear(doc.selectFirst("p:contains(年份)").text().replace("年份：", "").trim());
-        vod.setVodContent(doc.selectFirst(".fed-part-esan, .fed-tabs-boxs").text().trim());
 
-        // 播放源（多线路）
-        StringBuilder from = new StringBuilder();
-        StringBuilder playUrl = new StringBuilder();
+        Element titleEl = doc.selectFirst("h1, .module-item-title");
+        vod.setVodName(titleEl != null ? titleEl.text().trim() : "");
 
-        Elements tabs = doc.select(".fed-play-item .fed-drop-btns, .nav-tabs li");
-        Elements panes = doc.select(".fed-play-item .fed-drop-boxs, .tab-content");
+        String pic = doc.selectFirst(".fed-list-pics, .module-item-pic img").attr("data-original");
+        if (!pic.startsWith("http")) pic = siteUrl + pic;
+        vod.setVodPic(pic);
 
-        for (int i = 0; i < Math.min(tabs.size(), panes.size()); i++) {
-            String sourceName = tabs.get(i).text().trim();
-            if (from.length() > 0) {
-                from.append("$$$");
-                playUrl.append("$$$");
-            }
-            from.append(sourceName);
+        Element yearEl = doc.selectFirst("text:contains(年份)");
+        if (yearEl != null) vod.setVodYear(yearEl.text().replace("年份：", "").trim());
 
-            Elements eps = panes.get(i).select("a");
-            StringBuilder epsSb = new StringBuilder();
-            for (Element ep : eps) {
-                if (epsSb.length() > 0) epsSb.append("#");
-                epsSb.append(ep.text().trim()).append("$").append(ep.attr("href"));
-            }
-            playUrl.append(epsSb);
-        }
+        Element contentEl = doc.selectFirst(".module-info-introduction-content, .fed-tabs-boxs");
+        if (contentEl != null) vod.setVodContent(contentEl.text().trim());
 
-        // 如果无线路，伪造单集（跳转播放子页）
-        if (from.length() == 0) {
-            from.append("EACG线路");
-            playUrl.append("播放$").append(url);
-        }
-
-        vod.setVodPlayFrom(from.toString());
-        vod.setVodPlayUrl(playUrl.toString());
+        // 简单伪造播放源（实际靠嗅探）
+        vod.setVodPlayFrom("EACG线路");
+        vod.setVodPlayUrl("播放$" + url);
 
         return Result.string(vod);
     }
@@ -174,7 +156,7 @@ public class EACG1 extends Spider {
     public String playerContent(String flag, String id, List<String> vipFlags) throws Exception {
         String playUrl = id.startsWith("http") ? id : siteUrl + id;
 
-        // 直接返回播放页（详情页或子页），启用嗅探 + header（当前网站线路多为m3u8，可嗅探）
+        // 启用嗅探 + header（当前网站大部分线路可直接嗅探m3u8）
         return Result.get().url(playUrl).parse(1).header(getHeaders()).string();
     }
 
@@ -182,7 +164,7 @@ public class EACG1 extends Spider {
     public String searchContent(String key, boolean quick, String pg) throws Exception {
         List<Vod> list = new ArrayList<>();
 
-        String url = searchUrl + URLEncoder.encode(key, "UTF-8") + "-------------.html";
+        String url = siteUrl + "/vodsearch/" + key + "-------------.html";
         Document doc = Jsoup.parse(OkHttp.string(url, getHeaders()));
 
         Elements items = doc.select(".fed-list-info .fed-list-item");
@@ -192,10 +174,8 @@ public class EACG1 extends Spider {
                 String href = a.attr("href");
                 String id = href.replace(detailBase, "").replace(".html", "");
                 String name = a.attr("title");
-                if (name.isEmpty()) {
-                    Element titleEl = item.selectFirst(".fed-list-title");
-                    if (titleEl != null) name = titleEl.text().trim();
-                }
+                if (TextUtils.isEmpty(name)) name = item.selectFirst(".fed-list-title").text().trim();
+
                 String pic = a.attr("data-original");
                 if (!pic.startsWith("http")) pic = siteUrl + pic;
 
