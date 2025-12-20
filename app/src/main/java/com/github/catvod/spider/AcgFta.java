@@ -3,6 +3,7 @@ package com.github.catvod.spider;
 import android.content.Context;
 import android.text.TextUtils;
 
+import com.github.catvod.crawler.Spider;  // 关键：正确导入父类
 import com.github.catvod.bean.Class;
 import com.github.catvod.bean.Result;
 import com.github.catvod.bean.Vod;
@@ -21,21 +22,24 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * ACG饭团爬虫（2025年12月最新适配版）
+ * ACG饭团爬虫（2025年12月20日最新适配版）
  * 网站: https://acgfta.com/
  * 
- * 当前网站特点（2025年底）：
- * - 首页：按星期分组的纯文本列表，格式如 [标题](/anime/xxxx.html) 更新至xx集
- * - 分类页（最近更新、榜单等）：纯文本列表，<a href="/anime/xxxx.html">标题</a> 备注
- * - 无图片、无卡片结构
- * - 详情页：结构已变化（旧选择器失效），本版暂不解析详情（直接用playerContent抛播放页）
- * - 播放：直接返回剧集页URL，由TVBox嗅探或解析器处理
+ * 当前网站特点：
+ * - 列表页（首页、分类、搜索）：纯文本格式，如 [标题](/anime/xxxx.html) 更新至xx集
+ * - 无图片、无卡片、无复杂HTML结构
+ * - 详情页：极简，仅标题、年份等元信息，无封面、无播放源tab、无集数按钮
+ * - 播放：实际视频可能嵌入剧集页或需嗅探
  */
 public class AcgFta extends Spider {
 
     private static String siteUrl = "https://acgfta.com";
     private static final String userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36";
-    private static final Pattern LINK_PATTERN = Pattern.compile("\\[(.*?)\\]\\(/anime/(\\d+\\.html)\\)");
+
+    // 正则：匹配 [标题](/anime/xxxx.html)
+    private static final Pattern ITEM_PATTERN = Pattern.compile("\\[(.*?)\\]\\(/anime/(\\d+\\.html)\\)(?:\\s*(.*))?");
+    // 提取备注的备用正则（更新至、全、已完结等）
+    private static final Pattern REMARK_PATTERN = Pattern.compile("(更新至第?\\d+集|全\\d+集|更新第?\\d+集|已完结|.*)");
 
     private HashMap<String, String> getHeaders() {
         HashMap<String, String> headers = new HashMap<>();
@@ -48,8 +52,31 @@ public class AcgFta extends Spider {
     public void init(Context context, String extend) throws Exception {
         super.init(context, extend);
         if (!TextUtils.isEmpty(extend)) {
-            siteUrl = extend;
+            siteUrl = extend.trim();
+            if (!siteUrl.endsWith("/")) siteUrl += "/";
         }
+    }
+
+    private List<Vod> parseTextList(String text) {
+        List<Vod> list = new ArrayList<>();
+        Matcher matcher = ITEM_PATTERN.matcher(text);
+        while (matcher.find()) {
+            String name = matcher.group(1).trim();
+            String vodId = "/anime/" + matcher.group(2);
+            String rawRemark = matcher.group(3);
+            String remark = (rawRemark != null) ? rawRemark.trim() : "";
+
+            if (remark.isEmpty()) {
+                // 备用提取备注
+                Matcher rem = REMARK_PATTERN.matcher(text.substring(matcher.end()));
+                if (rem.find()) remark = rem.group(1).trim();
+            }
+
+            if (!name.isEmpty()) {
+                list.add(new Vod(vodId, name, "", remark)); // 无图片
+            }
+        }
+        return list;
     }
 
     @Override
@@ -62,25 +89,18 @@ public class AcgFta extends Spider {
         classes.add(new Class("ft/top-movie.html", "剧场版"));
         classes.add(new Class("ft/archive.html", "新番归档"));
 
-        // 首页解析：纯文本，按星期分组，使用正则提取 [标题](/anime/xxxx.html)
         String html = OkHttp.string(siteUrl, getHeaders());
         Document doc = Jsoup.parse(html);
+        String text = doc.body().text(); // 纯文本解析
 
-        Matcher matcher = LINK_PATTERN.matcher(doc.text());
-        while (matcher.find()) {
-            String name = matcher.group(1).trim();
-            String vodId = "/anime/" + matcher.group(2);
-            String remark = ""; // 备注在链接后文本中，暂不精确提取（可后续优化）
+        list.addAll(parseTextList(text));
 
-            list.add(new Vod(vodId, name, "", remark)); // 无图片
-        }
-
-        // 如果正则没抓全，fallback 用 a 链接
+        // fallback: 如果正则没抓到，用a标签
         if (list.isEmpty()) {
             Elements links = doc.select("a[href*=/anime/]");
             for (Element a : links) {
                 String name = a.text().trim();
-                if (!name.isEmpty() && !name.equals("饭团动漫")) {
+                if (!name.isEmpty() && !name.contains("饭团动漫")) {
                     list.add(new Vod(a.attr("href"), name, "", ""));
                 }
             }
@@ -93,27 +113,23 @@ public class AcgFta extends Spider {
     public String categoryContent(String tid, String pg, boolean filter, HashMap<String, String> extend) throws Exception {
         List<Vod> list = new ArrayList<>();
 
-        String url = siteUrl + "/" + tid;
+        String url = siteUrl + tid;
         String html = OkHttp.string(url, getHeaders());
         Document doc = Jsoup.parse(html);
+        String text = doc.body().text();
 
-        // 分类页：直接抓所有 /anime/ 开头的 a 链接
-        Elements links = doc.select("a[href*=/anime/]");
-        for (Element a : links) {
-            String name = a.text().trim();
-            String href = a.attr("href");
-            if (!name.isEmpty() && href.startsWith("/anime/")) {
-                // 尝试从父元素或后续文本提取备注
-                String remark = "";
+        list.addAll(parseTextList(text));
+
+        // fallback 同首页
+        if (list.isEmpty()) {
+            Elements links = doc.select("a[href*=/anime/]");
+            for (Element a : links) {
+                String name = a.text().trim();
                 Element parent = a.parent();
-                if (parent != null) {
-                    String nextText = parent.ownText().trim(); // a 标签外的文本
-                    if (nextText.contains("更新") || nextText.contains("集") || nextText.contains("全")) {
-                        remark = nextText;
-                    }
+                String remark = parent != null ? parent.ownText().trim() : "";
+                if (!name.isEmpty()) {
+                    list.add(new Vod(a.attr("href"), name, "", remark));
                 }
-
-                list.add(new Vod(href, name, "", remark));
             }
         }
 
@@ -126,42 +142,59 @@ public class AcgFta extends Spider {
 
         String vodId = ids.get(0);
         String url = vodId.startsWith("http") ? vodId : siteUrl + vodId;
+        String html = OkHttp.string(url, getHeaders());
+        Document doc = Jsoup.parse(html);
 
-        // 由于详情页结构大变，暂不解析标题、图片、简介等
-        // 直接返回空Vod，但保留vodId，以便播放时跳转
         Vod vod = new Vod();
         vod.setVodId(vodId);
-        vod.setVodName("加载中..."); // 客户端会自动加载播放页
-        vod.setVodPic("");
-        vod.setVodPlayFrom("饭团动漫");
-        vod.setVodPlayUrl("播放$/play/" + vodId.substring(vodId.lastIndexOf("/") + 1)); // 伪造，实际playerContent处理
+
+        // 标题（h1 或 title）
+        String name = doc.selectFirst("h1") != null ? doc.selectFirst("h1").text().trim() : doc.title().replace("- 在线观看 - 饭团动漫", "").trim();
+        vod.setVodName(name);
+
+        vod.setVodPic(""); // 无图片
+        vod.setVodContent(""); // 简介极少或无
+
+        // 年份等（从p标签）
+        Elements ps = doc.select("p");
+        for (Element p : ps) {
+            String t = p.text();
+            if (t.startsWith("年份：")) vod.setVodYear(t.replace("年份：", "").trim());
+        }
+
+        // 播放：由于无明确集数，直接设为单集或伪造
+        vod.setVodPlayFrom("饭团播放");
+        vod.setVodPlayUrl("播放$" + url);
 
         return Result.string(vod);
     }
 
     @Override
     public String playerContent(String flag, String id, List<String> vipFlags) throws Exception {
-        // id 在 detail 中伪造，这里还原真实剧集页URL
-        String realId = id.contains("/anime/") ? id : "/anime/" + id.replace(".html", ".html");
-        String url = realId.startsWith("http") ? realId : siteUrl + realId;
+        String url = id.startsWith("http") ? id : siteUrl + id;
 
-        // 直接返回剧集页，由TVBox内置嗅探或webview解析播放
-        return Result.get().url(url).parse(1).string(); // parse(1) 启用嗅探
+        // 直接返回剧集页URL，启用嗅探（TVBox会自动找video/m3u8等）
+        return Result.get().url(url).parse(1).header(getHeaders()).string();
     }
 
     @Override
     public String searchContent(String key, boolean quick, String pg) throws Exception {
         List<Vod> list = new ArrayList<>();
 
-        String url = siteUrl + "/search.html?wd=" + URLEncoder.encode(key, "UTF-8");
+        String url = siteUrl + "search.html?wd=" + URLEncoder.encode(key, "UTF-8");
         String html = OkHttp.string(url, getHeaders());
         Document doc = Jsoup.parse(html);
+        String text = doc.body().text();
 
-        Elements links = doc.select("a[href*=/anime/]");
-        for (Element a : links) {
-            String name = a.text().trim();
-            if (name.contains(key)) {
-                list.add(new Vod(a.attr("href"), name, "", ""));
+        list.addAll(parseTextList(text));
+
+        if (list.isEmpty()) {
+            Elements links = doc.select("a[href*=/anime/]");
+            for (Element a : links) {
+                String name = a.text().trim();
+                if (name.contains(key)) {
+                    list.add(new Vod(a.attr("href"), name, "", ""));
+                }
             }
         }
 
