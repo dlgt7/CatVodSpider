@@ -194,9 +194,9 @@ public class Xiaohys extends Spider {
                 String jsonStr = script.split("player_aaaa=")[1].split(";</script>")[0].trim();
                 String realUrl = jsonStr.split("\"url\":\"")[1].split("\"")[0].replace("\\/", "/");
                 if (realUrl.contains("m3u8") || realUrl.contains("mp4")) {
-                    return Result.get().url(realUrl).header(OkHttp.chrome()).string();
+                    return Result.get().url(realUrl).chrome().string();
                 }
-                return Result.get().url(realUrl).parse(1).header(OkHttp.chrome()).string();
+                return Result.get().url(realUrl).parse(1).chrome().string();
             } catch (Exception ignored) {}
         }
 
