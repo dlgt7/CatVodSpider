@@ -22,7 +22,7 @@ import java.util.List;
 
 public class Auete extends Spider {
 
-    private static final String SITE_URL = "https://auete.top";  // 2025年12月最新主域名（au1080.com仍可用但部分地区可能不稳）
+    private static final String SITE_URL = "https://auete.top";  // 当前最新稳定域名（2025年12月）
 
     private final List<Class> classes = Arrays.asList(
             new Class("1", "电影"),
@@ -33,7 +33,7 @@ public class Auete extends Spider {
 
     @Override
     public void init(Context context, String extend) throws Exception {
-        super.init(context, extend);
+        // 无需额外初始化，直接留空即可（移除 super 调用以兼容旧版）
     }
 
     private HashMap<String, String> headers() {
@@ -49,7 +49,6 @@ public class Auete extends Spider {
         String html = OkHttp.string(url, headers());
         Document doc = Jsoup.parse(html);
 
-        // 首页推荐模块（覆盖多个热播区域）
         Elements items = doc.select("div.stui-vodlist__box, div.stui-vodlist li a.stui-vodlist__thumb");
         for (Element item : items) {
             Element a = item.selectFirst("a");
@@ -95,7 +94,6 @@ public class Auete extends Spider {
             list.add(new Vod(id, name, pic, remarks));
         }
 
-        // 分页信息（简单处理，实际可解析尾页）
         int page = Integer.parseInt(pg);
         int limit = 24;
         int total = page * limit + (list.size() > 0 ? limit : 0);
@@ -131,7 +129,6 @@ public class Auete extends Spider {
         vod.setVodDirector(doc.selectFirst("div.stui-content__detail p:contains(导演)").text().replace("导演：", "").trim());
         vod.setVodContent(doc.selectFirst("div.stui-content__desc span.detail-content").text().trim());
 
-        // 播放线路与剧集
         StringBuilder fromBuilder = new StringBuilder();
         StringBuilder urlBuilder = new StringBuilder();
 
@@ -163,26 +160,22 @@ public class Auete extends Spider {
 
     @Override
     public String playerContent(String flag, String id, List<String> vipFlags) throws Exception {
-        // id 为播放页相对路径，如 /Tv/.../play-0-0.html
         String playUrl = id.startsWith("http") ? id : SITE_URL + id;
 
-        // Auete 播放页多为第三方解析或 m3u8，开启内置解析 + 嗅探更稳定
-        return Result.get().parse(1).jx(1).url(playUrl).string();
+        // 兼容项目中 Result 的 jx() 无参数版本（开启内置解析）
+        return Result.get().parse(1).jx().url(playUrl).string();
     }
 
     @Override
     public String searchContent(String key, boolean quick) throws Exception {
         List<Vod> list = new ArrayList<>();
-        // 当前站点搜索可能不稳定或需 POST，暂用首页+分类模拟或直接返回空（实际使用中可跳过搜索）
-        // 或者尝试其他路径，若 404 则返回空列表
         try {
             String encodedKey = URLEncoder.encode(key, "UTF-8");
             String url = SITE_URL + "/search.php?searchword=" + encodedKey;
             String html = OkHttp.string(url, headers());
-            if (html.contains("404")) return Result.string(list);  // 避免错误
+            if (html.contains("404") || html.isEmpty()) return Result.string(list);
 
             Document doc = Jsoup.parse(html);
-            // 搜索结果选择器同分类
             Elements items = doc.select("div.stui-vodlist__box");
             for (Element item : items) {
                 Element a = item.selectFirst("a.stui-vodlist__thumb");
