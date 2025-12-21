@@ -15,7 +15,6 @@ import org.jsoup.nodes.Document;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
@@ -32,8 +31,8 @@ public class Bbibi extends Spider {
             new Class("4", "动漫")
     );
 
-    // 站点无过滤器，这里用空LinkedHashMap即可，不涉及Filter类
-    private final LinkedHashMap<String, List<String>> FILTERS = new LinkedHashMap<>();
+    // 站点无过滤器，使用 null 表示无过滤器（Result 支持 null）
+    private static final LinkedHashMap<String, List<Object>> NO_FILTERS = null;
 
     private Map<String, String> getHeader(String referer) {
         Map<String, String> headers = new HashMap<>();
@@ -77,7 +76,8 @@ public class Bbibi extends Spider {
             list.add(new Vod(vodId, vodName, vodPic, remark));
         }
 
-        return Result.string(CLASSES, list, FILTERS);
+        // 无过滤器时传 null
+        return Result.string(CLASSES, list, NO_FILTERS);
     }
 
     @Override
@@ -101,7 +101,8 @@ public class Bbibi extends Spider {
             list.add(new Vod(vodId, vodName, vodPic, remark));
         }
 
-        return Result.get().vod(list).filters(FILTERS).page(1, 1, list.size(), list.size()).string();
+        // 无过滤器、无分页
+        return Result.get().vod(list).page(1, 1, list.size(), list.size()).string();
     }
 
     @Override
@@ -169,8 +170,7 @@ public class Bbibi extends Spider {
         // 预加载播放页，带正确Referer
         fetch(playUrl, detailUrl);
 
-        // 播放器是外部 /js/player/dytt.html 加载的iframe，视频URL在其中动态生成
-        // 必须用 parse(1) 让App WebView嗅探
+        // 返回播放页URL + parse(1) + chrome，让App嗅探捕获视频流
         return Result.get().url(playUrl).parse(1).chrome().string();
     }
 
