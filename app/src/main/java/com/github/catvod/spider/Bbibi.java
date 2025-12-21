@@ -9,9 +9,6 @@ import com.github.catvod.crawler.Spider;
 import com.github.catvod.net.OkHttp;
 import com.github.catvod.utils.Util;
 
-import org.jsoup.Jsoup;
-import org.jsoup.nodes.Document;
-
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -58,11 +55,12 @@ public class Bbibi extends Spider {
         List<Vod> list = new ArrayList<>();
         String content = fetch(SITE_URL);
 
-        Pattern itemPattern = Pattern.compile("\\[([^\\]]+)\\]\\(/detail/\\?(\\d+)\\.html\\)\\s*####\\s*\\[([^\\]]+)\\](?:\\s*主演[:：]\\s*(.+))?");
+        // 改进正则：匹配 [remarks](/detail/?ID.html) #### [title](/detail/?ID.html) 主演：actors
+        Pattern itemPattern = Pattern.compile("\\[([^\\]]+)\\]\\(/detail/\\?(\\d+)\\.html\\)\\s*####\\s*\\[([^\\]]+)\\]\\(/detail/\\?\\d+\\.html\\)(?:\\s*主演[:：]\\s*([^\\r\\n]+))?");
 
         Matcher matcher = itemPattern.matcher(content);
         while (matcher.find()) {
-            String remarks = matcher.group(1).trim();
+            String remarks = matcher.group(1).trim(); // 评分/更新
             String vodId = matcher.group(2);
             String vodName = matcher.group(3).trim();
             String actors = matcher.group(4) != null ? matcher.group(4).trim() : "";
@@ -73,7 +71,6 @@ public class Bbibi extends Spider {
             list.add(new Vod(vodId, vodName, vodPic, remark));
         }
 
-        // 无过滤器时直接用 classes 和 list，不传第三个参数
         return Result.string(CLASSES, list);
     }
 
@@ -83,7 +80,7 @@ public class Bbibi extends Spider {
         String content = fetch(url);
         List<Vod> list = new ArrayList<>();
 
-        Pattern itemPattern = Pattern.compile("\\[([^\\]]+)\\]\\(/detail/\\?(\\d+)\\.html\\)\\s*####\\s*\\[([^\\]]+)\\](?:\\s*主演[:：]\\s*(.+))?");
+        Pattern itemPattern = Pattern.compile("\\[([^\\]]+)\\]\\(/detail/\\?(\\d+)\\.html\\)\\s*####\\s*\\[([^\\]]+)\\]\\(/detail/\\?\\d+\\.html\\)(?:\\s*主演[:：]\\s*([^\\r\\n]+))?");
 
         Matcher matcher = itemPattern.matcher(content);
         while (matcher.find()) {
@@ -98,7 +95,6 @@ public class Bbibi extends Spider {
             list.add(new Vod(vodId, vodName, vodPic, remark));
         }
 
-        // 无过滤器、无分页，直接返回list
         return Result.string(list);
     }
 
@@ -111,8 +107,15 @@ public class Bbibi extends Spider {
         Vod vod = new Vod();
         vod.setVodId(vodId);
 
-        Document doc = Jsoup.parse(content);
-        String title = doc.selectFirst("h1") != null ? doc.selectFirst("h1").text().trim() : doc.title().replace(" - 4K在线", "").trim();
+        // 标题从页面内容提取（通常在<h1>或文本）
+        Pattern titlePattern = Pattern.compile("<h1[^>]*>([^<]+)</h1>");
+        Matcher titleMatcher = titlePattern.matcher(content);
+        String title = titleMatcher.find() ? titleMatcher.group(1).trim() : "";
+        if (title.isEmpty()) {
+            titlePattern = Pattern.compile("<title>([^<]+)</title>");
+            titleMatcher = titlePattern.matcher(content);
+            title = titleMatcher.find() ? titleMatcher.group(1).replace(" - 4K在线", "").trim() : "";
+        }
         vod.setVodName(title);
 
         vod.setVodPic("https://via.placeholder.com/300x400?text=" + title.substring(0, Math.min(title.length(), 10)));
@@ -120,9 +123,10 @@ public class Bbibi extends Spider {
         vod.setVodYear(extract(content, "年份[:：]\\s*([\\d]{4})"));
         vod.setVodArea(extract(content, "地区[:：]\\s*([\\u4e00-\\u9fa5]+)"));
         vod.setVodDirector(extract(content, "导演[:：]\\s*([^\\r\\n主演]+)"));
-        vod.setVodActor(extract(content, "主演[:：]\\s*([^\\r\\n导演]+)"));
-        vod.setVodContent(doc.selectFirst("p") != null ? doc.selectFirst("p").text().trim() : "");
+        vod.setVodActor(extract(content, "主演[:：]\\s*([^\\r\\n]+)"));
+        vod.setVodContent(extract(content, "剧情[:：]\\s*([\\s\\S]*?)(?:</span>|<a|</div>)"));
 
+        // 播放源
         Vod.VodPlayBuilder builder = new Vod.VodPlayBuilder();
         List<Vod.VodPlayBuilder.PlayUrl> urls = new ArrayList<>();
 
@@ -164,10 +168,8 @@ public class Bbibi extends Spider {
         String detailUrl = SITE_URL + "/detail/?" + id.split("-")[0] + ".html";
         String playUrl = SITE_URL + "/video/?" + id + ".html";
 
-        // 预加载播放页，带正确Referer
-        fetch(playUrl, detailUrl);
+        fetch(playUrl, detailUrl); // 预加载 + Referer
 
-        // 返回播放页URL + parse(1) + chrome，让App嗅探捕获视频流
         return Result.get().url(playUrl).parse(1).chrome().string();
     }
 
