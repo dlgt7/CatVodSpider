@@ -31,9 +31,6 @@ public class Bbibi extends Spider {
             new Class("4", "动漫")
     );
 
-    // 站点无过滤器，使用 null 表示无过滤器（Result 支持 null）
-    private static final LinkedHashMap<String, List<Object>> NO_FILTERS = null;
-
     private Map<String, String> getHeader(String referer) {
         Map<String, String> headers = new HashMap<>();
         headers.put("User-Agent", Util.CHROME);
@@ -76,8 +73,8 @@ public class Bbibi extends Spider {
             list.add(new Vod(vodId, vodName, vodPic, remark));
         }
 
-        // 无过滤器时传 null
-        return Result.string(CLASSES, list, NO_FILTERS);
+        // 无过滤器时直接用 classes 和 list，不传第三个参数
+        return Result.string(CLASSES, list);
     }
 
     @Override
@@ -101,8 +98,8 @@ public class Bbibi extends Spider {
             list.add(new Vod(vodId, vodName, vodPic, remark));
         }
 
-        // 无过滤器、无分页
-        return Result.get().vod(list).page(1, 1, list.size(), list.size()).string();
+        // 无过滤器、无分页，直接返回list
+        return Result.string(list);
     }
 
     @Override
