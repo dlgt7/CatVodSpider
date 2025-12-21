@@ -22,7 +22,7 @@ import java.util.List;
 
 public class Auete extends Spider {
 
-    private static final String SITE_URL = "https://auete.top";  // 当前最新稳定域名（2025年12月）
+    private static final String SITE_URL = "https://auete.top";  // 2025年12月最新主域名
 
     private final List<Class> classes = Arrays.asList(
             new Class("1", "电影"),
@@ -33,7 +33,7 @@ public class Auete extends Spider {
 
     @Override
     public void init(Context context, String extend) throws Exception {
-        // 无需额外初始化，直接留空即可（移除 super 调用以兼容旧版）
+        // 空实现即可，无需 super 调用
     }
 
     private HashMap<String, String> headers() {
@@ -63,7 +63,9 @@ public class Auete extends Spider {
             String href = a.attr("href");
             String id = href.replace("/detail/index.php?", "").replace(".html", "");
 
-            String remarks = item.selectFirst("span.pic-tag, span.pic-text") != null ? item.selectFirst("span.pic-tag, span.pic-text").text() : "";
+            String remarks = "";
+            Element remarkEl = item.selectFirst("span.pic-tag, span.pic-text");
+            if (remarkEl != null) remarks = remarkEl.text();
 
             list.add(new Vod(id, name, pic, remarks));
         }
@@ -81,6 +83,7 @@ public class Auete extends Spider {
         Elements items = doc.select("div.stui-vodlist__box");
         for (Element item : items) {
             Element a = item.selectFirst("a.stui-vodlist__thumb");
+            if (a == null) continue;
             String pic = a.selectFirst("img").attr("data-original");
             if (pic.isEmpty()) pic = a.selectFirst("img").attr("src");
             if (!pic.startsWith("http")) pic = SITE_URL + pic;
@@ -89,7 +92,9 @@ public class Auete extends Spider {
             String href = a.attr("href");
             String id = href.replace("/detail/index.php?", "").replace(".html", "");
 
-            String remarks = item.selectFirst("span.pic-tag, span.pic-text") != null ? item.selectFirst("span.pic-tag, span.pic-text").text() : "";
+            String remarks = "";
+            Element remarkEl = item.selectFirst("span.pic-tag, span.pic-text");
+            if (remarkEl != null) remarks = remarkEl.text();
 
             list.add(new Vod(id, name, pic, remarks));
         }
@@ -98,11 +103,7 @@ public class Auete extends Spider {
         int limit = 24;
         int total = page * limit + (list.size() > 0 ? limit : 0);
 
-        return Result.get()
-                .classes(classes)
-                .vod(list)
-                .page(page, page + 1, limit, total)
-                .string();
+        return Result.get().classes(classes).vod(list).page(page, page + 1, limit, total).string();
     }
 
     @Override
@@ -114,20 +115,22 @@ public class Auete extends Spider {
 
         Vod vod = new Vod();
         vod.setVodId(id);
-        vod.setVodName(doc.selectFirst("h1.title").ownText().trim());
-        
+        Element titleEl = doc.selectFirst("h1.title");
+        vod.setVodName(titleEl != null ? titleEl.ownText().trim() : "");
+
         Element thumb = doc.selectFirst("div.stui-content__thumb img");
-        String pic = thumb.attr("data-original");
-        if (pic.isEmpty()) pic = thumb.attr("src");
+        String pic = thumb != null ? thumb.attr("data-original") : "";
+        if (pic.isEmpty() && thumb != null) pic = thumb.attr("src");
         if (!pic.startsWith("http")) pic = SITE_URL + pic;
         vod.setVodPic(pic);
 
-        vod.setTypeName(doc.selectFirst("div.stui-content__detail p:contains(类型)").text().replace("类型：", "").trim());
-        vod.setVodYear(doc.selectFirst("div.stui-content__detail p:contains(年份)").text().replace("年份：", "").trim());
-        vod.setVodArea(doc.selectFirst("div.stui-content__detail p:contains(地区)").text().replace("地区：", "").trim());
-        vod.setVodActor(doc.selectFirst("div.stui-content__detail p:contains(主演)").text().replace("主演：", "").trim());
-        vod.setVodDirector(doc.selectFirst("div.stui-content__detail p:contains(导演)").text().replace("导演：", "").trim());
-        vod.setVodContent(doc.selectFirst("div.stui-content__desc span.detail-content").text().trim());
+        vod.setTypeName(getDetailText(doc, "类型"));
+        vod.setVodYear(getDetailText(doc, "年份"));
+        vod.setVodArea(getDetailText(doc, "地区"));
+        vod.setVodActor(getDetailText(doc, "主演"));
+        vod.setVodDirector(getDetailText(doc, "导演"));
+        Element descEl = doc.selectFirst("div.stui-content__desc span.detail-content");
+        vod.setVodContent(descEl != null ? descEl.text().trim() : "");
 
         StringBuilder fromBuilder = new StringBuilder();
         StringBuilder urlBuilder = new StringBuilder();
@@ -158,12 +161,15 @@ public class Auete extends Spider {
         return Result.string(vod);
     }
 
+    private String getDetailText(Document doc, String key) {
+        Element el = doc.selectFirst("div.stui-content__detail p:contains(" + key + ")");
+        return el != null ? el.text().replace(key + "：", "").trim() : "";
+    }
+
     @Override
     public String playerContent(String flag, String id, List<String> vipFlags) throws Exception {
         String playUrl = id.startsWith("http") ? id : SITE_URL + id;
-
-        // 兼容项目中 Result 的 jx() 无参数版本（开启内置解析）
-        return Result.get().parse(1).jx().url(playUrl).string();
+        return Result.get().parse(1).jx().url(playUrl).string();  // 无参数 jx() 开启内置解析
     }
 
     @Override
@@ -179,6 +185,7 @@ public class Auete extends Spider {
             Elements items = doc.select("div.stui-vodlist__box");
             for (Element item : items) {
                 Element a = item.selectFirst("a.stui-vodlist__thumb");
+                if (a == null) continue;
                 String pic = a.selectFirst("img").attr("data-original");
                 if (pic.isEmpty()) pic = a.selectFirst("img").attr("src");
                 if (!pic.startsWith("http")) pic = SITE_URL + pic;
@@ -187,7 +194,9 @@ public class Auete extends Spider {
                 String href = a.attr("href");
                 String id = href.replace("/detail/index.php?", "").replace(".html", "");
 
-                String remarks = item.selectFirst("span.pic-tag, span.pic-text") != null ? item.selectFirst("span.pic-tag, span.pic-text").text() : "";
+                String remarks = "";
+                Element remarkEl = item.selectFirst("span.pic-tag, span.pic-text");
+                if (remarkEl != null) remarks = remarkEl.text();
 
                 list.add(new Vod(id, name, pic, remarks));
             }
