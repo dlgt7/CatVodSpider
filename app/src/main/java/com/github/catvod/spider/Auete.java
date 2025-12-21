@@ -5,6 +5,7 @@ import android.content.Context;
 import com.github.catvod.bean.Class;
 import com.github.catvod.bean.Result;
 import com.github.catvod.bean.Vod;
+import com.github.catvod.crawler.Spider;  // 正确导入 crawler 包下的 Spider
 import com.github.catvod.net.OkHttp;
 import com.github.catvod.utils.Util;
 
@@ -22,7 +23,7 @@ import java.util.List;
 
 public class Auete extends Spider {
 
-    private static final String SITE_URL = "https://auete.top";  // 2025年12月最新主域名
+    private static final String SITE_URL = "https://auete.top";  // 2025年12月21日最新稳定域名（官方公告指向此域名）
 
     private final List<Class> classes = Arrays.asList(
             new Class("1", "电影"),
@@ -33,7 +34,7 @@ public class Auete extends Spider {
 
     @Override
     public void init(Context context, String extend) throws Exception {
-        // 空实现即可，无需 super 调用
+        // 兼容不同版本的 init 签名，空实现即可
     }
 
     private HashMap<String, String> headers() {
@@ -169,7 +170,7 @@ public class Auete extends Spider {
     @Override
     public String playerContent(String flag, String id, List<String> vipFlags) throws Exception {
         String playUrl = id.startsWith("http") ? id : SITE_URL + id;
-        return Result.get().parse(1).jx().url(playUrl).string();  // 无参数 jx() 开启内置解析
+        return Result.get().parse(1).jx().url(playUrl).string();  // 开启内置解析，确保播放稳定
     }
 
     @Override
