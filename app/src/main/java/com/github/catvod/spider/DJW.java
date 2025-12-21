@@ -13,7 +13,6 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 
-import java.net.URLEncoder;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -24,7 +23,8 @@ import java.util.regex.Pattern;
 public class DJW extends Spider {
 
     private static final String siteUrl = "https://www.djw123.com";
-    private static final Pattern VOD_PATTERN = Pattern.compile("<a[^>]+href=\"(/vod/(\\d+)\\.html)\"[^>]*>([^<]+)</a>");
+    private static final Pattern VOD_PATTERN = Pattern.compile("\\[([^\\]]+)\\]\\((/vod/(\\d+)\\.html)\\)");
+    private static final Pattern REMARK_PATTERN = Pattern.compile("(更新至全集|全集完结|全\\d+集|已完结|全集|\\d+集)");
 
     @Override
     public void init(Context context, String extend) throws Exception {
@@ -42,25 +42,16 @@ public class DJW extends Spider {
         List<Vod> vods = new ArrayList<>();
         Matcher matcher = VOD_PATTERN.matcher(html);
         while (matcher.find()) {
-            String href = matcher.group(1); // /vod/xxx.html
-            String vodId = matcher.group(2); // ID
-            String title = matcher.group(3).trim().replace("**", "");
-
-            // 备注：从前文提取 更新至全集 / 全XX集 / 已完结 等
+            String title = matcher.group(1).trim();
+            String vodId = matcher.group(3);
             String remark = "全集";
-            int start = Math.max(0, matcher.start() - 100);
-            String pre = html.substring(start, matcher.start());
-            if (pre.contains("更新至")) {
-                remark = pre.split("更新至")[1].trim();
-            } else if (pre.contains("全集")) {
-                remark = "全集";
-            } else if (pre.contains("已完结")) {
-                remark = "已完结";
-            } else if (pre.contains("全") && pre.matches(".*全\\d+集.*")) {
-                try {
-                    String num = pre.replaceAll(".*全(\\d+)集.*", "$1");
-                    remark = "全" + num + "集";
-                } catch (Exception ignored) {}
+
+            // 从 matcher.end() 后提取备注
+            int end = matcher.end();
+            String postText = html.substring(end, Math.min(end + 100, html.length()));
+            Matcher rMatcher = REMARK_PATTERN.matcher(postText);
+            if (rMatcher.find()) {
+                remark = rMatcher.group(0).trim();
             }
 
             vods.add(new Vod(vodId, title, "", remark)); // 无图片
@@ -75,23 +66,8 @@ public class DJW extends Spider {
 
         Document doc = Jsoup.parse(OkHttp.string(siteUrl + "/", getHeaders()));
 
-        // 分类：提取 /show/ 或 /type/ 链接（站点有 /show/26---类别--------.html）
-        Elements cateLinks = doc.select("a[href*=/show/]");
-        for (Element link : cateLinks) {
-            String href = link.attr("href");
-            if (!href.contains("---")) continue;
-            String name = link.text().trim();
-            if (name.isEmpty() || name.contains("更多")) continue;
-            // tid 使用 href 去掉 siteUrl 和前缀
-            String tid = href.replace("/show/", "");
-            classes.add(new Class(tid, name));
-        }
-
-        // 如果没提取到，硬编码常见分类
-        if (classes.isEmpty()) {
-            classes.add(new Class("duanju-----------", "短剧"));
-            // 可添加更多
-        }
+        // 分类（从导航或硬编码，主要一个短剧库）
+        classes.add(new Class("duanju", "短剧库"));
 
         List<Vod> vods = parseVods(doc.html());
 
@@ -100,16 +76,15 @@ public class DJW extends Spider {
 
     @Override
     public String categoryContent(String tid, String pg, boolean filter, HashMap<String, String> extend) throws Exception {
-        // 分类页如 /show/duanju-----------.html 或带分页
-        String cateUrl = siteUrl + "/show/" + tid;
-        if (!pg.equals("1")) {
-            cateUrl = cateUrl.replace("--------", pg); // 假设分页格式，实际可能不同
-        }
+        String cateUrl = siteUrl + "/type/" + tid + ".html";
         Document doc = Jsoup.parse(OkHttp.string(cateUrl, getHeaders()));
 
         List<Vod> vods = parseVods(doc.html());
 
-        return Result.get().vod(vods).page(Integer.parseInt(pg), Integer.parseInt(pg) + 1, 30, vods.size() + 30).string();
+        int page = Integer.parseInt(pg);
+        int pageCount = page + 1; // 假设有下一页，无明确分页
+
+        return Result.get().vod(vods).page(page, pageCount, 50, vods.size() + 50).string();
     }
 
     @Override
@@ -118,35 +93,47 @@ public class DJW extends Spider {
         String detailUrl = siteUrl + "/vod/" + id + ".html";
         Document doc = Jsoup.parse(OkHttp.string(detailUrl, getHeaders()));
 
-        String title = doc.selectFirst("h1") != null ? doc.selectFirst("h1").text() : "";
+        Element h1 = doc.selectFirst("h1");
+        String title = h1 != null ? h1.text().trim() : "";
+
         Vod vod = new Vod(id, title, "");
 
-        // 播放源
+        // 剧集列表（从 .jisu 或类似）
         Vod.VodPlayBuilder builder = new Vod.VodPlayBuilder();
-
-        // 线路和剧集：查找播放列表 <a href="/play/...">
-        Elements playLinks = doc.select("a[href^=/play/]");
-        if (!playLinks.isEmpty()) {
-            // 假设只有一个线路
-            String playFrom = "默认线路";
-            List<Vod.VodPlayBuilder.PlayUrl> pus = new ArrayList<>();
-            for (Element a : playLinks) {
-                String epName = a.text().trim();
-                if (epName.isEmpty() || epName.contains("线路")) continue;
-                String epHref = a.attr("href");
-
-                Vod.VodPlayBuilder.PlayUrl pu = new Vod.VodPlayBuilder.PlayUrl();
-                pu.name = epName;
-                pu.url = siteUrl + epHref;
-                pus.add(pu);
-            }
-            builder.append(playFrom, pus);
-        } else {
-            // 无剧集，直接播放详情页
+        Elements eps = doc.select(".jisu a");
+        if (eps.isEmpty()) {
+            // 兜底单个全集
             Vod.VodPlayBuilder.PlayUrl pu = new Vod.VodPlayBuilder.PlayUrl();
             pu.name = "全集";
             pu.url = detailUrl;
-            builder.append("默认", java.util.Collections.singletonList(pu));
+            builder.append("默认线路", java.util.Collections.singletonList(pu));
+        } else {
+            List<Vod.VodPlayBuilder.PlayUrl> pus = new ArrayList<>();
+            for (Element ep : eps) {
+                String epName = ep.text().trim();
+                String epHref = ep.attr("href");
+                if (epHref.startsWith("/play/")) {
+                    Vod.VodPlayBuilder.PlayUrl pu = new Vod.VodPlayBuilder.PlayUrl();
+                    pu.name = epName;
+                    pu.url = siteUrl + epHref;
+                    pus.add(pu);
+                }
+            }
+            builder.append("迅雷", pus); // 默认线路名
+        }
+
+        // 额外线路
+        Elements xianlu = doc.select(".xianlu a");
+        for (int i = 1; i < xianlu.size(); i++) { // 跳过第一个 active
+            Element line = xianlu.get(i);
+            String from = line.text().trim();
+            String href = line.attr("href");
+            if (href.startsWith("/play/")) {
+                Vod.VodPlayBuilder.PlayUrl pu = new Vod.VodPlayBuilder.PlayUrl();
+                pu.name = "全集";
+                pu.url = siteUrl + href;
+                builder.append(from, java.util.Collections.singletonList(pu));
+            }
         }
 
         Vod.VodPlayBuilder.BuildResult br = builder.build();
@@ -161,19 +148,18 @@ public class DJW extends Spider {
         String playUrl = id.startsWith("http") ? id : siteUrl + id;
         Document doc = Jsoup.parse(OkHttp.string(playUrl, getHeaders()));
 
-        // 提取 player_ script
         Elements scripts = doc.select("script");
         for (Element script : scripts) {
             String content = script.html();
-            if (content.contains("player_") && content.contains("url")) {
+            if (content.contains("player_") && content.contains("\"url\"")) {
                 try {
                     int start = content.indexOf("{");
                     int end = content.lastIndexOf("}") + 1;
                     String json = content.substring(start, end);
                     String urlPart = json.split("\"url\":\"")[1];
-                    String playUrlFinal = urlPart.split("\"")[0].replace("\\/", "/");
-                    if (playUrlFinal.startsWith("http")) {
-                        return Result.get().url(playUrlFinal).m3u8().string();
+                    String realUrl = urlPart.split("\"")[0].replace("\\/", "/");
+                    if (realUrl.startsWith("http")) {
+                        return Result.get().url(realUrl).header(getHeaders()).string(); // 移除 .m3u8() 以防 malformed
                     }
                 } catch (Exception ignored) {}
             }
@@ -185,12 +171,11 @@ public class DJW extends Spider {
 
     @Override
     public String searchContent(String key, boolean quick) throws Exception {
-        return searchContent(key, quick, "1");
+        return Result.string(new ArrayList<>()); // 站点无搜索
     }
 
     @Override
     public String searchContent(String key, boolean quick, String pg) throws Exception {
-        // 站点搜索可能不支持，或路径未知，返回空或尝试
-        return Result.string(new ArrayList<>());
+        return searchContent(key, quick);
     }
 }
