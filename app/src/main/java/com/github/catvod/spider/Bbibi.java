@@ -32,7 +32,8 @@ public class Bbibi extends Spider {
             new Class("4", "动漫")
     );
 
-    private final LinkedHashMap<String, List<Filter>> FILTERS = new LinkedHashMap<>(); // 无过滤器
+    // 站点无过滤器，这里用空LinkedHashMap即可，不涉及Filter类
+    private final LinkedHashMap<String, List<String>> FILTERS = new LinkedHashMap<>();
 
     private Map<String, String> getHeader(String referer) {
         Map<String, String> headers = new HashMap<>();
@@ -60,7 +61,6 @@ public class Bbibi extends Spider {
     public String homeContent(boolean filter) throws Exception {
         List<Vod> list = new ArrayList<>();
         String content = fetch(SITE_URL);
-        Document doc = Jsoup.parse(content);
 
         Pattern itemPattern = Pattern.compile("\\[([^\\]]+)\\]\\(/detail/\\?(\\d+)\\.html\\)\\s*####\\s*\\[([^\\]]+)\\](?:\\s*主演[:：]\\s*(.+))?");
 
@@ -101,7 +101,7 @@ public class Bbibi extends Spider {
             list.add(new Vod(vodId, vodName, vodPic, remark));
         }
 
-        return Result.get().vod(list).page(1, 1, list.size(), list.size()).string();
+        return Result.get().vod(list).filters(FILTERS).page(1, 1, list.size(), list.size()).string();
     }
 
     @Override
@@ -166,12 +166,11 @@ public class Bbibi extends Spider {
         String detailUrl = SITE_URL + "/detail/?" + id.split("-")[0] + ".html";
         String playUrl = SITE_URL + "/video/?" + id + ".html";
 
-        // 预请求播放页，带详情页Referer
+        // 预加载播放页，带正确Referer
         fetch(playUrl, detailUrl);
 
-        // 源码显示播放器通过外部 /js/player/{pn}.html 加载（pn 来自 script var pn="dytt"）
-        // 但静态无法提取真实URL，且无直链
-        // 最佳方式：返回播放页URL + parse(1)，让Fongmi App嗅探捕获视频流
+        // 播放器是外部 /js/player/dytt.html 加载的iframe，视频URL在其中动态生成
+        // 必须用 parse(1) 让App WebView嗅探
         return Result.get().url(playUrl).parse(1).chrome().string();
     }
 
