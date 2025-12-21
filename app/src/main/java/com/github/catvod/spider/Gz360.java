@@ -32,40 +32,43 @@ public class Gz360 extends Spider {
         classes.add(new Class("2", "电视剧"));
         classes.add(new Class("3", "综艺"));
         classes.add(new Class("4", "动漫"));
-        // 可以添加更多分类，如果有 filter 需求可构建 LinkedHashMap<String, List<Filter>>
-        return Result.get().classes(classes).string();
+        // 可根据实际接口补充更多分类
+
+        Result result = Result.get();
+        result.lazyList(() -> classes); // 使用 lazyList 避免立即序列化
+        return result.string();
     }
 
     @Override
     public String categoryContent(String tid, String pg, boolean filter, HashMap<String, String> extend) throws Exception {
         String url = API_LIST + "?ac=detail&t=" + tid + "&pg=" + pg;
         String content = OkHttp.string(url, getHeaders());
+        JSONObject json = new JSONObject(content);
 
-        JSONObject data = new JSONObject(content).getJSONObject("data");
+        JSONObject data = json.optJSONObject("data");
+        if (data == null) return Result.get().string();
+
         JSONArray list = data.getJSONArray("list");
-
         List<Vod> vods = new ArrayList<>();
+
         for (int i = 0; i < list.length(); i++) {
             JSONObject item = list.getJSONObject(i);
-            String vodId = item.getString("vod_id");
-            String vodName = item.getString("vod_name");
-            String vodPic = item.getString("vod_pic");
-            String vodRemarks = item.optString("vod_remarks", "");
-
             Vod vod = new Vod();
-            vod.setVodId(vodId);
-            vod.setVodName(vodName);
-            vod.setVodPic(vodPic);
-            vod.setVodRemarks(vodRemarks);
+            vod.setVodId(item.getString("vod_id"));
+            vod.setVodName(item.getString("vod_name"));
+            vod.setVodPic(item.getString("vod_pic"));
+            vod.setVodRemarks(item.optString("vod_remarks", ""));
             vods.add(vod);
         }
 
-        int limit = data.getInt("limit");
-        int page = data.getInt("page");
-        int pagecount = data.getInt("pagecount");
-        int total = data.getInt("total");
+        Result result = Result.get();
+        result.lazyList(() -> vods);
+        result.limit(data.getInt("limit"));
+        result.page(data.getInt("page"));
+        result.pagecount(data.getInt("pagecount"));
+        result.total(data.getInt("total"));
 
-        return Result.get().list(vods).limit(limit).page(page).pagecount(pagecount).total(total).string();
+        return result.string();
     }
 
     @Override
@@ -73,11 +76,14 @@ public class Gz360 extends Spider {
         String id = ids.get(0);
         String url = API_DETAIL + "&ids=" + id;
         String content = OkHttp.string(url, getHeaders());
+        JSONObject json = new JSONObject(content);
 
-        JSONObject data = new JSONObject(content).getJSONObject("data");
-        JSONArray list = data.getJSONArray("list");
-        JSONObject item = list.getJSONObject(0);
+        JSONObject data = json.optJSONObject("data");
+        if (data == null || data.getJSONArray("list").length() == 0) {
+            return Result.get().string();
+        }
 
+        JSONObject item = data.getJSONArray("list").getJSONObject(0);
         Vod vod = new Vod();
         vod.setVodId(item.getString("vod_id"));
         vod.setVodName(item.getString("vod_name"));
@@ -88,62 +94,68 @@ public class Gz360 extends Spider {
         vod.setVodRemarks(item.optString("vod_remarks", ""));
         vod.setVodActor(item.optString("vod_actor", ""));
         vod.setVodDirector(item.optString("vod_director", ""));
-        vod.setVodContent(item.optString("vod_content", ""));
+        vod.setVodContent(item.optString("vod_content", "").replaceAll("<[^>]+>", "").trim());
 
-        // 播放列表
-        HashMap<String, String> playFrom = new HashMap<>();
-        HashMap<String, String> playUrl = new HashMap<>();
+        // 处理播放线路
+        String[] fromArray = item.getString("vod_play_from").split("\\$\\$\\$");
+        String[] urlArray = item.getString("vod_play_url").split("\\$\\$\\$");
 
-        String playListStr = item.getString("vod_play_url");
-        String[] fromList = item.getString("vod_play_from").split("\\$\\$\\$");
-        String[] urlList = playListStr.split("\\$\\$\\$");
+        StringBuilder playFrom = new StringBuilder();
+        StringBuilder playUrl = new StringBuilder();
 
-        for (int i = 0; i < fromList.length && i < urlList.length; i++) {
-            String from = fromList[i];
-            String urls = urlList[i].replace("#", "$"); // 统一为 $ 分隔
-            playFrom.put(from, from);
-            playUrl.put(from, urls);
+        for (int i = 0; i < fromArray.length && i < urlArray.length; i++) {
+            if (i > 0) {
+                playFrom.append("$$$");
+                playUrl.append("$$$");
+            }
+            playFrom.append(fromArray[i]);
+            playUrl.append(urlArray[i].replace("#", "$")); // 统一用 $ 分隔集数
         }
 
-        vod.setVodPlayFrom(String.join("$$$", playFrom.values()));
-        vod.setVodPlayUrl(String.join("$$$", playUrl.values()));
+        vod.setVodPlayFrom(playFrom.toString());
+        vod.setVodPlayUrl(playUrl.toString());
 
         List<Vod> vodList = new ArrayList<>();
         vodList.add(vod);
 
-        return Result.get().list(vodList).string();
+        Result result = Result.get();
+        result.lazyList(() -> vodList);
+        return result.string();
     }
 
     @Override
     public String playerContent(String flag, String id, List<String> vipFlags) throws Exception {
-        // 此源直接返回播放链接，无需解析
-        return Result.get().parse(false).url(id).string();
+        // 360zyapi 播放链接是直链，不需要二次解析
+        Result result = Result.get();
+        result.parse(0);  // 0 = 直链播放，1 = 强制解析
+        result.url(id);
+        return result.string();
     }
 
     @Override
     public String searchContent(String key, boolean quick) throws Exception {
         String url = API_LIST + "?wd=" + key + "&pg=1";
         String content = OkHttp.string(url, getHeaders());
+        JSONObject json = new JSONObject(content);
 
-        JSONObject data = new JSONObject(content).getJSONObject("data");
+        JSONObject data = json.optJSONObject("data");
+        if (data == null) return Result.get().string();
+
         JSONArray list = data.getJSONArray("list");
-
         List<Vod> vods = new ArrayList<>();
+
         for (int i = 0; i < list.length(); i++) {
             JSONObject item = list.getJSONObject(i);
-            String vodId = item.getString("vod_id");
-            String vodName = item.getString("vod_name");
-            String vodPic = item.getString("vod_pic");
-            String vodRemarks = item.optString("vod_remarks", "");
-
             Vod vod = new Vod();
-            vod.setVodId(vodId);
-            vod.setVodName(vodName);
-            vod.setVodPic(vodPic);
-            vod.setVodRemarks(vodRemarks);
+            vod.setVodId(item.getString("vod_id"));
+            vod.setVodName(item.getString("vod_name"));
+            vod.setVodPic(item.getString("vod_pic"));
+            vod.setVodRemarks(item.optString("vod_remarks", ""));
             vods.add(vod);
         }
 
-        return Result.get().list(vods).string();
+        Result result = Result.get();
+        result.lazyList(() -> vods);
+        return result.string();
     }
 }
