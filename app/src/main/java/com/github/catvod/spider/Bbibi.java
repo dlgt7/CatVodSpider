@@ -37,7 +37,7 @@ public class Bbibi extends Spider {
     private Map<String, String> getHeader(String referer) {
         Map<String, String> headers = new HashMap<>();
         headers.put("User-Agent", Util.CHROME);
-        if (referer != null) {
+        if (referer != null && !referer.isEmpty()) {
             headers.put("Referer", referer);
         }
         return headers;
@@ -59,21 +59,21 @@ public class Bbibi extends Spider {
     @Override
     public String homeContent(boolean filter) throws Exception {
         List<Vod> list = new ArrayList<>();
-        Document doc = Jsoup.parse(fetch(SITE_URL));
+        String content = fetch(SITE_URL);
+        Document doc = Jsoup.parse(content);
 
-        // 使用正则匹配纯文本列表格式
-        Pattern itemPattern = Pattern.compile("\\[([^\\]]*)\\]\\s*\\(/detail/\\?(\\d+)\\.html\\)\\s*####\\s*\\[([^\\]]+)\\](?:\\s*主演[:：](.*))?");
-        Matcher matcher = itemPattern.matcher(doc.text());
+        Pattern itemPattern = Pattern.compile("\\[([^\\]]+)\\]\\(/detail/\\?(\\d+)\\.html\\)\\s*####\\s*\\[([^\\]]+)\\](?:\\s*主演[:：]\\s*(.+))?");
 
+        Matcher matcher = itemPattern.matcher(content);
         while (matcher.find()) {
-            String remarks = matcher.group(1).trim(); // 如 "9.5 正片" 或更新状态
+            String remarks = matcher.group(1).trim();
             String vodId = matcher.group(2);
             String vodName = matcher.group(3).trim();
             String actors = matcher.group(4) != null ? matcher.group(4).trim() : "";
 
-            String vodPic = "https://via.placeholder.com/300x400?text=" + vodName.substring(0, Math.min(10, vodName.length()));
+            String vodPic = "https://via.placeholder.com/300x400?text=" + vodName.substring(0, Math.min(vodName.length(), 10));
 
-            String remark = remarks + (actors.isEmpty() ? "" : " 主演：" + actors);
+            String remark = remarks + (actors.isEmpty() ? "" : " | 主演: " + actors);
             list.add(new Vod(vodId, vodName, vodPic, remark));
         }
 
@@ -82,70 +82,66 @@ public class Bbibi extends Spider {
 
     @Override
     public String categoryContent(String tid, String pg, boolean filter, HashMap<String, String> extend) throws Exception {
-        // 站点无明显分页，分类页固定
         String url = SITE_URL + "/list/?" + tid + ".html";
+        String content = fetch(url);
         List<Vod> list = new ArrayList<>();
-        Document doc = Jsoup.parse(fetch(url));
 
-        Pattern itemPattern = Pattern.compile("\\[([^\\]]*)\\]\\s*\\(/detail/\\?(\\d+)\\.html\\)\\s*####\\s*\\[([^\\]]+)\\](?:\\s*主演[:：](.*))?");
-        Matcher matcher = itemPattern.matcher(doc.text());
+        Pattern itemPattern = Pattern.compile("\\[([^\\]]+)\\]\\(/detail/\\?(\\d+)\\.html\\)\\s*####\\s*\\[([^\\]]+)\\](?:\\s*主演[:：]\\s*(.+))?");
 
+        Matcher matcher = itemPattern.matcher(content);
         while (matcher.find()) {
             String remarks = matcher.group(1).trim();
             String vodId = matcher.group(2);
             String vodName = matcher.group(3).trim();
             String actors = matcher.group(4) != null ? matcher.group(4).trim() : "";
 
-            String vodPic = "https://via.placeholder.com/300x400?text=" + vodName.substring(0, Math.min(10, vodName.length()));
+            String vodPic = "https://via.placeholder.com/300x400?text=" + vodName.substring(0, Math.min(vodName.length(), 10));
 
-            String remark = remarks + (actors.isEmpty() ? "" : " 主演：" + actors);
+            String remark = remarks + (actors.isEmpty() ? "" : " | 主演: " + actors);
             list.add(new Vod(vodId, vodName, vodPic, remark));
         }
 
-        return Result.get().vod(list).page(1, 1, list.size(), list.size()).string(); // 无分页
+        return Result.get().vod(list).page(1, 1, list.size(), list.size()).string();
     }
 
     @Override
     public String detailContent(List<String> ids) throws Exception {
         String vodId = ids.get(0);
         String detailUrl = SITE_URL + "/detail/?" + vodId + ".html";
-        Document doc = Jsoup.parse(fetch(detailUrl));
+        String content = fetch(detailUrl);
 
         Vod vod = new Vod();
         vod.setVodId(vodId);
 
-        // 标题从文本或h1提取
+        Document doc = Jsoup.parse(content);
         String title = doc.selectFirst("h1") != null ? doc.selectFirst("h1").text().trim() : doc.title().replace(" - 4K在线", "").trim();
         vod.setVodName(title);
 
-        vod.setVodPic("https://via.placeholder.com/300x400?text=" + title.substring(0, Math.min(10, title.length())));
+        vod.setVodPic("https://via.placeholder.com/300x400?text=" + title.substring(0, Math.min(title.length(), 10)));
 
-        String text = doc.text();
+        vod.setVodYear(extract(content, "年份[:：]\\s*([\\d]{4})"));
+        vod.setVodArea(extract(content, "地区[:：]\\s*([\\u4e00-\\u9fa5]+)"));
+        vod.setVodDirector(extract(content, "导演[:：]\\s*([^\\r\\n主演]+)"));
+        vod.setVodActor(extract(content, "主演[:：]\\s*([^\\r\\n导演]+)"));
+        vod.setVodContent(doc.selectFirst("p") != null ? doc.selectFirst("p").text().trim() : "");
 
-        vod.setVodYear(extract(text, "年份[:：]\\s*([\\d]{4})"));
-        vod.setVodArea(extract(text, "地区[:：]\\s*([^\\s主演导演]+)"));
-        vod.setVodDirector(extract(text, "导演[:：]\\s*([^主演]+)"));
-        vod.setVodActor(extract(text, "主演[:：]\\s*([^导演]+)"));
-        vod.setVodContent(doc.selectFirst("p, .desc") != null ? doc.selectFirst("p, .desc").text().trim() : "");
-
-        // 播放列表：提取 /video/?{id}-{sid}-{nid}.html 链接
         Vod.VodPlayBuilder builder = new Vod.VodPlayBuilder();
         List<Vod.VodPlayBuilder.PlayUrl> urls = new ArrayList<>();
 
-        Pattern playPattern = Pattern.compile("\\[/video/\\?(" + vodId + "-\\d+-\\d+)\\.html\\]");
-        Matcher playMatcher = playPattern.matcher(text);
-        int epIndex = 1;
+        Pattern playPattern = Pattern.compile("\\[([^\\]]+)\\]\\(/video/\\?(" + vodId + "-\\d+-\\d+)\\.html\\)");
+        Matcher playMatcher = playPattern.matcher(content);
+        int index = 1;
         while (playMatcher.find()) {
-            String playId = playMatcher.group(1);
+            String name = playMatcher.group(1).trim();
+            String playId = playMatcher.group(2);
             Vod.VodPlayBuilder.PlayUrl pu = new Vod.VodPlayBuilder.PlayUrl();
-            pu.name = "第" + epIndex + "集";
+            pu.name = name.isEmpty() ? "第" + index + "集" : name;
             pu.url = playId;
             urls.add(pu);
-            epIndex++;
+            index++;
         }
 
         if (urls.isEmpty()) {
-            // 默认单集
             Vod.VodPlayBuilder.PlayUrl pu = new Vod.VodPlayBuilder.PlayUrl();
             pu.name = "正片";
             pu.url = vodId + "-0-0";
@@ -170,16 +166,22 @@ public class Bbibi extends Spider {
         String detailUrl = SITE_URL + "/detail/?" + id.split("-")[0] + ".html";
         String playUrl = SITE_URL + "/video/?" + id + ".html";
 
-        // 使用详情页作为Referer请求播放页
-        fetch(playUrl, detailUrl); // 预请求，模拟跳转（可能设置Cookie或触发）
+        // 预请求播放页，带详情页Referer
+        fetch(playUrl, detailUrl);
 
-        // 返回播放页URL + parse(1) + chrome，让App嗅探/内置解析器处理
+        // 源码显示播放器通过外部 /js/player/{pn}.html 加载（pn 来自 script var pn="dytt"）
+        // 但静态无法提取真实URL，且无直链
+        // 最佳方式：返回播放页URL + parse(1)，让Fongmi App嗅探捕获视频流
         return Result.get().url(playUrl).parse(1).chrome().string();
     }
 
     @Override
     public String searchContent(String key, boolean quick, String pg) throws Exception {
-        // 站点无搜索功能，暂返回空
         return Result.string(new ArrayList<Vod>());
+    }
+
+    @Override
+    public String searchContent(String key, boolean quick) throws Exception {
+        return searchContent(key, quick, "1");
     }
 }
