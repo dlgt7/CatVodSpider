@@ -3,12 +3,10 @@ package com.github.catvod.spider;
 import android.content.Context;
 
 import com.github.catvod.bean.Class;
-import com.github.catvod.bean.Filter;
 import com.github.catvod.bean.Result;
 import com.github.catvod.bean.Vod;
 import com.github.catvod.crawler.Spider;
 import com.github.catvod.net.OkHttp;
-import com.github.catvod.utils.Util;
 
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
@@ -17,14 +15,16 @@ import org.jsoup.select.Elements;
 
 import java.net.URLEncoder;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class DuanJuTJ extends Spider {
 
     private static final String siteUrl = "https://www.duanjutj.com";
+    private static final Pattern VIDEO_LINK = Pattern.compile("<a href=\"(/video/(\\d+)\\.html)\">([^<]+)</a>");
 
     @Override
     public void init(Context context, String extend) throws Exception {
@@ -33,7 +33,7 @@ public class DuanJuTJ extends Spider {
 
     private HashMap<String, String> getHeaders() {
         HashMap<String, String> headers = new HashMap<>();
-        headers.put("User-Agent", Util.CHROME);
+        headers.put("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36");
         headers.put("Referer", siteUrl + "/");
         return headers;
     }
@@ -41,110 +41,82 @@ public class DuanJuTJ extends Spider {
     @Override
     public String homeContent(boolean filter) throws Exception {
         List<Class> classes = new ArrayList<>();
-        LinkedHashMap<String, List<Filter>> filters = new LinkedHashMap<>();
+        LinkedHashMap<String, List<com.github.catvod.bean.Filter>> filters = new LinkedHashMap<>();
 
         Document doc = Jsoup.parse(OkHttp.string(siteUrl + "/", getHeaders()));
 
-        // 分类（导航栏）
-        Elements navItems = doc.select("ul.type-slide a");
-        for (Element item : navItems) {
-            String href = item.attr("href");
-            if (!href.startsWith("/type/") || href.endsWith("/type/1.html")) continue;
-            String typeId = href.split("/type/")[1].replace(".html", "");
-            String typeName = item.text().trim();
-            if (typeName.isEmpty()) continue;
-            classes.add(new Class(typeId, typeName));
-
-            // 简单添加一个伪筛选（站点无真实筛选，可去掉）
-            List<Filter.Value> values = new ArrayList<>();
-            values.add(new Filter.Value("全部", ""));
-            List<Filter> filterList = Arrays.asList(new Filter("order", "排序", values));
-            filters.put(typeId, filterList);
+        // 提取分类（从 Markdown 风格的 ## [分类名](/type/tid.html)）
+        Elements typeLinks = doc.select("a[href^=/type/]");
+        for (Element link : typeLinks) {
+            String href = link.attr("href"); // /type/duanju.html
+            String tid = href.substring(6, href.length() - 5); // duanju 等
+            String name = link.text().trim();
+            if (!name.isEmpty() && !tid.isEmpty()) {
+                classes.add(new Class(tid, name));
+            }
         }
 
-        // 首页推荐
-        List<Vod> vodList = new ArrayList<>();
-        Elements items = doc.select("div.module-items div.module-item");
-        for (Element item : items) {
-            Element img = item.selectFirst("img");
-            String pic = img.attr("data-src");
-            if (pic.isEmpty()) pic = img.attr("src");
-            if (!pic.startsWith("http")) pic = siteUrl + pic;
+        // 首页推荐：解析所有视频链接（纯文本中隐藏的 <a> 标签）
+        List<Vod> vods = parseVideoLinks(doc.html());
 
-            Element a = item.selectFirst("a.module-item-cover");
-            if (a == null) continue;
-            String title = a.attr("title");
-            String vodId = a.attr("href").replace("/vod/", "").replace(".html", "");
-            String remark = item.selectFirst("div.module-item-note").text();
-
-            vodList.add(new Vod(vodId, title, pic, remark));
-        }
-
-        return Result.string(classes, vodList, filters);
+        return Result.string(classes, vods, filters);
     }
 
     @Override
     public String categoryContent(String tid, String pg, boolean filter, HashMap<String, String> extend) throws Exception {
-        String url = siteUrl + "/type/" + tid + (pg.equals("1") ? ".html" : "-" + pg + ".html");
-        Document doc = Jsoup.parse(OkHttp.string(url, getHeaders()));
+        String cateUrl = siteUrl + "/type/" + tid + ".html";
+        Document doc = Jsoup.parse(OkHttp.string(cateUrl, getHeaders()));
 
-        List<Vod> list = new ArrayList<>();
-        Elements items = doc.select("div.module-items div.module-item");
-        for (Element item : items) {
-            Element img = item.selectFirst("img");
-            String pic = img.attr("data-src");
-            if (pic.isEmpty()) pic = img.attr("src");
-            if (!pic.startsWith("http")) pic = siteUrl + pic;
+        List<Vod> vods = parseVideoLinks(doc.html());
 
-            Element a = item.selectFirst("a.module-item-cover");
-            if (a == null) continue;
-            String title = a.attr("title");
-            String vodId = a.attr("href").replace("/vod/", "").replace(".html", "");
-            String remark = item.selectFirst("div.module-item-note").text();
+        // 该站无分页，固定一页
+        return Result.get().vod(vods).page(1, 1, 24, vods.size()).string();
+    }
 
-            list.add(new Vod(vodId, title, pic, remark));
+    private List<Vod> parseVideoLinks(String html) {
+        List<Vod> vods = new ArrayList<>();
+        Matcher matcher = VIDEO_LINK.matcher(html);
+        while (matcher.find()) {
+            String fullHref = matcher.group(1); // /video/123.html
+            String vodId = matcher.group(2);    // 123
+            String title = matcher.group(3).trim();
+
+            // 备注：从前面的文本提取 "全XX集" 或 "已完结"
+            String remark = "全集"; // 默认
+            int start = Math.max(0, matcher.start() - 50);
+            String preText = html.substring(start, matcher.start());
+            if (preText.contains("全")) {
+                int idx = preText.lastIndexOf("全");
+                if (idx > -1) {
+                    remark = preText.substring(idx).split("\n")[0].trim();
+                }
+            } else if (preText.contains("更新至")) {
+                remark = preText.split("更新至")[1].trim().split("\n")[0];
+            }
+
+            // 无图片，用默认占位图（框架有默认）
+            vods.add(new Vod(vodId, title, "", remark));
         }
-
-        int page = Integer.parseInt(pg);
-        int pageCount = page + 1; // 默认下一页
-        // 分页逻辑可进一步完善
-
-        return Result.get().vod(list).page(page, pageCount, 24, 9999).string();
+        return vods;
     }
 
     @Override
     public String detailContent(List<String> ids) throws Exception {
         String id = ids.get(0);
-        String url = siteUrl + "/vod/" + id + ".html";
-        Document doc = Jsoup.parse(OkHttp.string(url, getHeaders()));
+        String detailUrl = siteUrl + "/video/" + id + ".html";
+        Document doc = Jsoup.parse(OkHttp.string(detailUrl, getHeaders()));
 
-        String title = doc.selectFirst("h1").text();
-        String pic = doc.selectFirst("img.lazy").attr("data-src");
-        if (!pic.startsWith("http")) pic = siteUrl + pic;
+        String title = doc.selectFirst("h1") != null ? doc.selectFirst("h1").text() : "";
+        String pic = ""; // 无图
 
         Vod vod = new Vod(id, title, pic);
 
-        // 播放源
+        // 播放源：站点一般只有一个播放源
         Vod.VodPlayBuilder builder = new Vod.VodPlayBuilder();
-        Elements tabs = doc.select("div.module-tab div.module-tab-item");
-        Elements playLists = doc.select("div.module-blocklist");
-
-        for (int i = 0; i < tabs.size() && i < playLists.size(); i++) {
-            String playFrom = tabs.get(i).text().trim();
-            Elements eps = playLists.get(i).select("a");
-
-            List<Vod.VodPlayBuilder.PlayUrl> playUrls = new ArrayList<>();
-            for (Element ep : eps) {
-                String epName = ep.text().trim();
-                String epHref = ep.attr("href");
-
-                Vod.VodPlayBuilder.PlayUrl pu = new Vod.VodPlayBuilder.PlayUrl();
-                pu.name = epName;
-                pu.url = siteUrl + epHref;
-                playUrls.add(pu);
-            }
-            builder.append(playFrom, playUrls);
-        }
+        Vod.VodPlayBuilder.PlayUrl pu = new Vod.VodPlayBuilder.PlayUrl();
+        pu.name = "播放";
+        pu.url = detailUrl; // 直接传详情页，让 playerContent 处理
+        builder.append("默认线路", java.util.Collections.singletonList(pu));
 
         Vod.VodPlayBuilder.BuildResult br = builder.build();
         vod.setVodPlayFrom(br.vodPlayFrom);
@@ -155,27 +127,34 @@ public class DuanJuTJ extends Spider {
 
     @Override
     public String playerContent(String flag, String id, List<String> vipFlags) throws Exception {
-        String url = siteUrl + id;
-        Document doc = Jsoup.parse(OkHttp.string(url, getHeaders()));
+        // id 是 /video/xxx.html
+        Document doc = Jsoup.parse(OkHttp.string(id, getHeaders()));
 
-        String script = doc.select("script").toString();
-        if (script.contains("player_")) {
-            // 提取 player_xxx = {...}
-            // 简单正则或字符串处理，框架常见方式
-            try {
-                int start = script.indexOf("{", script.indexOf("player_"));
-                int end = script.indexOf("}", start) + 1;
-                String json = script.substring(start, end);
-                // 这里用简单字符串提取 url（实际可更精确）
-                String playUrl = json.split("\"url\":\"")[1].split("\"")[0].replace("\\/", "/");
+        // 提取播放 script 中的 url
+        Elements scripts = doc.select("script");
+        for (Element script : scripts) {
+            String content = script.html();
+            if (content.contains("player_") || content.contains("url")) {
+                try {
+                    // 常见 player_aaa = {"url":"xxx","link":"..."}
+                    int start = content.indexOf("{");
+                    int end = content.lastIndexOf("}") + 1;
+                    String jsonPart = content.substring(start, end);
 
-                if (playUrl.startsWith("http")) {
-                    return Result.get().url(playUrl).m3u8().string();
-                }
-            } catch (Exception ignored) {}
+                    // 简单提取 url
+                    String[] parts = jsonPart.split("\"url\":\"");
+                    if (parts.length > 1) {
+                        String playUrl = parts[1].split("\"")[0].replace("\\/", "/");
+                        if (playUrl.startsWith("http")) {
+                            return Result.get().url(playUrl).m3u8().string();
+                        }
+                    }
+                } catch (Exception ignored) {}
+            }
         }
 
-        return Result.get().parse(1).url(url).header(getHeaders()).string();
+        // 兜底解析
+        return Result.get().parse(1).url(id).header(getHeaders()).string();
     }
 
     @Override
@@ -185,23 +164,11 @@ public class DuanJuTJ extends Spider {
 
     @Override
     public String searchContent(String key, boolean quick, String pg) throws Exception {
-        String searchUrl = siteUrl + "/search.php?searchword=" + URLEncoder.encode(key, "UTF-8");
+        String searchUrl = siteUrl + "/search/" + URLEncoder.encode(key, "UTF-8") + ".html";
+        // 注意：实际搜索路径可能不同，若无结果可尝试其他路径或直接返回空
         Document doc = Jsoup.parse(OkHttp.string(searchUrl, getHeaders()));
 
-        List<Vod> list = new ArrayList<>();
-        Elements items = doc.select("div.module-items div.module-item");
-        for (Element item : items) {
-            Element a = item.selectFirst("a.module-item-cover");
-            if (a == null) continue;
-            String title = a.attr("title");
-            String vodId = a.attr("href").replace("/vod/", "").replace(".html", "");
-            String pic = item.selectFirst("img").attr("data-src");
-            if (!pic.startsWith("http")) pic = siteUrl + pic;
-            String remark = item.selectFirst("div.module-item-note").text();
-
-            list.add(new Vod(vodId, title, pic, remark));
-        }
-
-        return Result.string(list);
+        List<Vod> vods = parseVideoLinks(doc.html());
+        return Result.string(vods);
     }
 }
