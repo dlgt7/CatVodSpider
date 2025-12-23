@@ -9,7 +9,6 @@ import org.json.JSONObject;
 
 import java.net.URLEncoder;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -45,7 +44,7 @@ public class Bpz extends Spider {
 
             return result.toString();
         } catch (Exception e) {
-            SpiderDebug.log(e);
+            e.printStackTrace();  // 改为标准异常打印
             return "{\"class\":[]}";
         }
     }
@@ -67,7 +66,7 @@ public class Bpz extends Spider {
             String content = OkHttp.string(url.toString(), getHeaders());
             return parseListResponse(content);
         } catch (Exception e) {
-            SpiderDebug.log(e);
+            e.printStackTrace();
             return "{\"list\":[],\"page\":1,\"pagecount\":1,\"limit\":20,\"total\":0}";
         }
     }
@@ -97,7 +96,6 @@ public class Bpz extends Spider {
             v.put("vod_director", vod.optString("vod_director"));
             v.put("vod_content", vod.optString("vod_content").replaceAll("<[^>]*>", "").trim());
 
-            // 保留原始 $$$ 分隔符，播放器必须识别
             v.put("vod_play_from", vod.getString("vod_play_from"));
             v.put("vod_play_url", vod.getString("vod_play_url"));
 
@@ -109,7 +107,7 @@ public class Bpz extends Spider {
             return result.toString();
 
         } catch (Exception e) {
-            SpiderDebug.log(e);
+            e.printStackTrace();
             return "{\"list\":[]}";
         }
     }
@@ -128,7 +126,7 @@ public class Bpz extends Spider {
             String content = OkHttp.string(url, getHeaders());
             return parseListResponse(content);
         } catch (Exception e) {
-            SpiderDebug.log(e);
+            e.printStackTrace();
             return "{\"list\":[]}";
         }
     }
@@ -138,8 +136,6 @@ public class Bpz extends Spider {
         try {
             JSONObject result = new JSONObject();
 
-            // 优先使用本地代理（防盗链更彻底）
-            // 如果是视频直链，播放器会自动嗅探，这里我们也提供 header 备用
             result.put("parse", 0);
             result.put("playUrl", "");
             result.put("url", id);
@@ -152,14 +148,11 @@ public class Bpz extends Spider {
 
             return result.toString();
         } catch (Exception e) {
-            SpiderDebug.log(e);
+            e.printStackTrace();
             return "{\"parse\":0,\"url\":\"" + id + "\"}";
         }
     }
 
-    /**
-     * 【新增】嗅探支持：识别常见视频格式
-     */
     @Override
     public boolean isVideoFormat(String url) throws Exception {
         if (url == null) return false;
@@ -171,19 +164,14 @@ public class Bpz extends Spider {
 
     @Override
     public boolean manualVideoCheck() throws Exception {
-        return true; // 开启手动嗅探检查（配合 isVideoFormat 使用）
+        return true;
     }
 
-    /**
-     * 【新增】本地代理播放（解决防盗链）
-     * 支持 mp4 / m3u8 / flv
-     */
     @Override
     public Object[] proxy(Map<String, String> params) throws Exception {
         String type = params.get("type");
         if (type == null || type.isEmpty()) type = "video";
 
-        // 只代理视频类型
         if ("video".equals(type)) {
             String url = params.get("url");
             if (url == null || url.isEmpty()) return null;
@@ -193,20 +181,16 @@ public class Bpz extends Spider {
 
                 Map<String, String> headers = getHeaders();
 
-                // 返回格式：{ 代理后的本地路径, 原始类型, headers }
                 return new Object[]{
-                        url,                    // 原始链接（代理服务器会转发）
-                        "video/*",              // MIME 类型
-                        headers                 // 必要请求头
+                        url,
+                        "video/*",
+                        headers
                 };
             }
         }
-        return null; // 不支持的类型不代理
+        return null;
     }
 
-    /**
-     * 统一解析列表（分类、搜索、首页）
-     */
     private String parseListResponse(String content) throws JSONException {
         JSONObject data = new JSONObject(content);
         JSONArray list = data.getJSONArray("list");
@@ -233,9 +217,6 @@ public class Bpz extends Spider {
         return result.toString();
     }
 
-    /**
-     * 补全图片/链接路径
-     */
     private String fixUrl(String url) {
         if (url == null || url.trim().isEmpty()) return "";
         url = url.trim();
