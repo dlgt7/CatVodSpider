@@ -21,9 +21,9 @@ import java.util.List;
  * 作者 丢丢喵推荐 🚓 内容均从互联网收集而来 仅供交流学习使用 版权归原创者所有 如侵犯了您的权益 请通知作者 将及时删除侵权内容
  * ====================Diudiumiao====================
  * <p>
- * 完整移植自原Python版JWDJ.py，已修复所有编译错误。
- * 网络请求使用 com.github.catvod.net.OkHttp (静态工具类，与多数CatVodSpider fork一致)。
- * 修复了 detailContent 中 vod_name 获取逻辑。
+ * 完整移植自原Python版JWDJ.py，已修复所有已知编译错误。
+ * 网络请求使用 com.github.catvod.net.OkHttp
+ * init 方法无需调用 super.init()（多数 fork 项目中 init 为空或不调用 super）
  */
 public class JWDJ extends Spider {
 
@@ -37,7 +37,8 @@ public class JWDJ extends Spider {
 
     @Override
     public void init(Context context, String extend) {
-        super.init(context, extend);
+        // 大多数 CatVodSpider fork 项目中 init 方法为空，或仅处理 extend 参数，不调用 super
+        // 移除 super.init() 以避免可能的 checked Exception 问题
     }
 
     @Override
@@ -193,7 +194,7 @@ public class JWDJ extends Spider {
 
             String url = extractMiddleText(content, "\"wwm3u8\":\"", "\"", 0).replace("\\", "");
             if (TextUtils.isEmpty(url)) {
-                url = id; // 兜底返回详情页
+                url = id;
             }
 
             JSONObject result = new JSONObject();
