@@ -18,9 +18,9 @@ import java.util.Base64;
 
 /**
  * 星芽短剧 (XYDJ) - 完整移植原Python版XYDJ.py
- * 已修复编译错误：在dlgt6/CatVodSpider项目中，OkHttp.post返回OkResult，使用 .body() 获取响应字符串
+ * 已修复编译错误：在dlgt6/CatVodSpider项目中，OkHttp.post/get 返回 OkResult，使用 .resp() 获取响应字符串
+ * (根据常见fork项目如FongMi等，resp() 是自定义方法返回 body.string())
  * 实现动态AES-ECB登录获取 token
- * 若登录失败返回空列表，避免崩溃
  */
 public class XYDJ extends Spider {
 
@@ -71,8 +71,8 @@ public class XYDJ extends Spider {
             loginHeaders.put("user_agent", "Mozilla/5.0 (Linux; Android 9; V1938T Build/PQ3A.190705.08211809; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/91.0.4472.114 Safari/537.36");
             loginHeaders.put("content-type", "application/json; charset=utf-8");
 
-            // 修复：使用 .body() 获取响应体字符串
-            String resp = OkHttp.post(loginUrl, encrypted, loginHeaders).body();
+            // 修复：使用 .resp() 获取响应字符串（dlgt6项目自定义方法）
+            String resp = OkHttp.post(loginUrl, encrypted, loginHeaders).resp();
 
             JSONObject json = new JSONObject(resp);
             if (json.has("data") && json.getJSONObject("data").has("token")) {
@@ -233,8 +233,8 @@ public class XYDJ extends Spider {
             payload.put("text", key);
 
             String url = siteUrl + "/v3/search";
-            // 修复：使用 .body() 获取响应体
-            String content = OkHttp.post(url, payload.toString(), headerx).body();
+            // 修复：使用 .resp() 获取响应字符串
+            String content = OkHttp.post(url, payload.toString(), headerx).resp();
             JSONObject json = new JSONObject(content);
 
             JSONArray list = new JSONArray();
