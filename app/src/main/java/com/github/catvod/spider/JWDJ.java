@@ -21,9 +21,9 @@ import java.util.List;
  * 作者 丢丢喵推荐 🚓 内容均从互联网收集而来 仅供交流学习使用 版权归原创者所有 如侵犯了您的权益 请通知作者 将及时删除侵权内容
  * ====================Diudiumiao====================
  * <p>
- * 完整移植自原Python版JWDJ.py，已修复所有已知编译错误。
- * 网络请求使用 com.github.catvod.net.OkHttp
- * init 方法无需调用 super.init()（多数 fork 项目中 init 为空或不调用 super）
+ * 修复分类空白问题（2025-12-29 当前站点结构变化）。
+ * https://djw1.com/all/ 分类现在是纯 <a> 标签列表，无 <ul><li> 包裹。
+ * 调整选择器直接抓取所有 <a> 链接，并清理名称（去除（数字））。
  */
 public class JWDJ extends Spider {
 
@@ -37,8 +37,7 @@ public class JWDJ extends Spider {
 
     @Override
     public void init(Context context, String extend) {
-        // 大多数 CatVodSpider fork 项目中 init 方法为空，或仅处理 extend 参数，不调用 super
-        // 移除 super.init() 以避免可能的 checked Exception 问题
+        // 多数 fork 项目 init 为空，不调用 super
     }
 
     @Override
@@ -51,22 +50,28 @@ public class JWDJ extends Spider {
             String content = OkHttp.string(url, headers);
             Document doc = Jsoup.parse(content);
 
-            Elements items = doc.select("section.container.items li");
-            if (items.isEmpty()) {
-                items = doc.select("ul li"); // 兼容当前/all/页面结构
-            }
-
-            for (Element item : items) {
-                Element a = item.selectFirst("a");
-                if (a == null) continue;
+            // 当前 /all/ 页面分类是直接的 <a href="/tag/.../">名称（数字）</a> ，无容器
+            Elements catLinks = doc.select("a[href^=/tag/]");
+            // 备选：如果有其他链接，可进一步过滤
+            for (Element a : catLinks) {
                 String typeId = a.attr("href");
-                String typeName = item.text().trim()
-                        .replaceAll("\\[|\\]|（.*）|\\(.*\\)", "")
-                        .trim();
-                if (!TextUtils.isEmpty(typeName) && typeId.startsWith("/")) {
+                String typeName = a.text().trim().replaceAll("\\（\\d+\\）|\\(\\d+\\)$", "").trim();
+                if (!TextUtils.isEmpty(typeName) && typeId.startsWith("/tag/")) {
                     JSONObject cls = new JSONObject();
                     cls.put("type_id", typeId);
                     cls.put("type_name", typeName);
+                    classes.put(cls);
+                }
+            }
+
+            // 如果仍为空，可添加常见分类硬编码兜底（可选）
+            if (classes.length() == 0) {
+                String[] commonCats = {"女频", "男频", "逆袭", "重生", "战神", "豪门", "古装", "现代言情"};
+                String[] paths = {"/tag/%e5%a5%b3%e9%a2%91/", "/tag/%e7%94%b7%e9%a2%91/", "/tag/%e9%80%86%e8%a2%ad/", "/tag/%e9%87%8d%e7%94%9f/", "/tag/%e6%88%98%e7%a5%9e/", "/tag/%e8%b1%aa%e9%97%a8/", "/tag/%e5%8f%a4%e8%a3%85/", "/tag/%e7%8e%b0%e4%bb%a3%e8%a8%80%e6%83%85/"};
+                for (int i = 0; i < commonCats.length; i++) {
+                    JSONObject cls = new JSONObject();
+                    cls.put("type_id", paths[i]);
+                    cls.put("type_name", commonCats[i]);
                     classes.put(cls);
                 }
             }
@@ -79,6 +84,7 @@ public class JWDJ extends Spider {
         return "";
     }
 
+    // 以下方法保持不变（列表、详情、播放、搜索）
     @Override
     public String categoryContent(String tid, String pg, boolean filter, HashMap<String, String> extend) {
         try {
@@ -93,12 +99,15 @@ public class JWDJ extends Spider {
             String content = OkHttp.string(url, headers);
             Document doc = Jsoup.parse(content);
 
-            Elements sections = doc.select("section.container.items");
-            Elements items = sections.isEmpty() ? doc.select("li") : sections.first().select("li");
+            // 当前列表结构可能为 section 或直接 ul/li
+            Elements items = doc.select("section.container.items li");
+            if (items.isEmpty()) {
+                items = doc.select("ul li"); // 兼容
+            }
 
             for (Element item : items) {
                 Element img = item.selectFirst("img");
-                Element link = item.selectFirst("a.image-line");
+                Element link = item.selectFirst("a");
                 if (img == null || link == null) continue;
 
                 String name = img.attr("alt").trim();
@@ -225,12 +234,14 @@ public class JWDJ extends Spider {
             String content = OkHttp.string(url, headers);
             Document doc = Jsoup.parse(content);
 
-            Elements sections = doc.select("section.container.items");
-            Elements items = sections.isEmpty() ? doc.select("li") : sections.first().select("li");
+            Elements items = doc.select("section.container.items li");
+            if (items.isEmpty()) {
+                items = doc.select("ul li");
+            }
 
             for (Element item : items) {
                 Element img = item.selectFirst("img");
-                Element link = item.selectFirst("a.image-line");
+                Element link = item.selectFirst("a");
                 if (img == null || link == null) continue;
 
                 String name = img.attr("alt").trim();
