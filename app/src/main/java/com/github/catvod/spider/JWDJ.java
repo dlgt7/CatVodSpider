@@ -21,9 +21,9 @@ import java.util.List;
  * 作者 丢丢喵推荐 🚓 内容均从互联网收集而来 仅供交流学习使用 版权归原创者所有 如侵犯了您的权益 请通知作者 将及时删除侵权内容
  * ====================Diudiumiao====================
  * <p>
- * 完整移植自原Python版JWDJ.py，已修复编译错误。
- * dlgt6/CatVodSpider 项目使用 com.github.catvod.net.OkHttp (静态工具类)。
- * 站点结构兼容 + 简单 extractMiddleText 实现。
+ * 完整移植自原Python版JWDJ.py，已修复所有编译错误。
+ * 网络请求使用 com.github.catvod.net.OkHttp (静态工具类，与多数CatVodSpider fork一致)。
+ * 修复了 detailContent 中 vod_name 获取逻辑。
  */
 public class JWDJ extends Spider {
 
@@ -138,7 +138,6 @@ public class JWDJ extends Spider {
             String content = OkHttp.string(vodId, headers);
             Document doc = Jsoup.parse(content);
 
-            // 远程配置失效，保留逻辑但兜底使用正常线路
             String plot = extractMiddleText(content, "class=\"info-detail\">", "<", 0);
             String remark = extractMiddleText(content, "class=\"info-mark\">", "<", 0);
             String year = extractMiddleText(content, "class=\"info-addtime\">", "<", 0);
@@ -155,13 +154,16 @@ public class JWDJ extends Spider {
             if (sb.length() > 0) sb.deleteCharAt(sb.length() - 1);
             String playUrl = sb.toString();
             if (TextUtils.isEmpty(playUrl)) {
-                playUrl = "暂无播放源$"; // 防止空
+                playUrl = "暂无播放源$";
             }
 
             JSONObject vod = new JSONObject();
             vod.put("vod_id", ids.get(0));
-            String title = doc.selectFirst("title");
-            vod.put("vod_name", title != null ? title.text().replace("-短剧王", "").trim() : "未知");
+
+            Element titleElement = doc.selectFirst("title");
+            String vodName = (titleElement != null) ? titleElement.text().replace("-短剧王", "").trim() : "未知标题";
+            vod.put("vod_name", vodName);
+
             vod.put("vod_remarks", remark);
             vod.put("vod_year", year);
             vod.put("vod_content", plot);
@@ -191,7 +193,7 @@ public class JWDJ extends Spider {
 
             String url = extractMiddleText(content, "\"wwm3u8\":\"", "\"", 0).replace("\\", "");
             if (TextUtils.isEmpty(url)) {
-                url = id; // 兜底返回详情页，让APP自行解析
+                url = id; // 兜底返回详情页
             }
 
             JSONObject result = new JSONObject();
