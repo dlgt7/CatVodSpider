@@ -18,7 +18,7 @@ import java.util.Base64;
 
 /**
  * 星芽短剧 (XYDJ) - 完整移植原Python版XYDJ.py
- * 已修复编译错误：OkHttp.post 返回 OkResult，使用 .string() 获取响应体
+ * 已修复编译错误：在dlgt6/CatVodSpider项目中，OkHttp.post返回OkResult，使用 .body() 获取响应字符串
  * 实现动态AES-ECB登录获取 token
  * 若登录失败返回空列表，避免崩溃
  */
@@ -37,7 +37,6 @@ public class XYDJ extends Spider {
         headerx = new HashMap<>();
         headerx.put("platform", "1");
         headerx.put("version_name", "3.8.3.1");
-        // authorization 将动态填充
     }
 
     private boolean getToken() {
@@ -72,8 +71,8 @@ public class XYDJ extends Spider {
             loginHeaders.put("user_agent", "Mozilla/5.0 (Linux; Android 9; V1938T Build/PQ3A.190705.08211809; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/91.0.4472.114 Safari/537.36");
             loginHeaders.put("content-type", "application/json; charset=utf-8");
 
-            // 修复：OkHttp.post 返回 OkResult，使用 .string() 获取字符串
-            String resp = OkHttp.post(loginUrl, encrypted, loginHeaders).string();
+            // 修复：使用 .body() 获取响应体字符串
+            String resp = OkHttp.post(loginUrl, encrypted, loginHeaders).body();
 
             JSONObject json = new JSONObject(resp);
             if (json.has("data") && json.getJSONObject("data").has("token")) {
@@ -90,7 +89,7 @@ public class XYDJ extends Spider {
     @Override
     public void init(Context context, String extend) {
         initHeaders();
-        getToken(); // 初始化时尝试登录
+        getToken();
     }
 
     @Override
@@ -117,7 +116,7 @@ public class XYDJ extends Spider {
     public String categoryContent(String tid, String pg, boolean filter, HashMap<String, String> extend) {
         try {
             if (headerx.get("authorization") == null || headerx.get("authorization").isEmpty()) {
-                getToken(); // token 失效时重试
+                getToken();
             }
 
             JSONObject result = new JSONObject();
@@ -234,7 +233,8 @@ public class XYDJ extends Spider {
             payload.put("text", key);
 
             String url = siteUrl + "/v3/search";
-            String content = OkHttp.post(url, payload.toString(), headerx).string();
+            // 修复：使用 .body() 获取响应体
+            String content = OkHttp.post(url, payload.toString(), headerx).body();
             JSONObject json = new JSONObject(content);
 
             JSONArray list = new JSONArray();
