@@ -20,16 +20,12 @@ import java.util.LinkedHashMap;
 import java.util.List;
 
 /**
- * 黑料网 Spider - 2025年12月30日最新适配
+ * 黑料网 Spider - 2025年12月30日最新稳定版
  * <p>
- * 站点域名极不稳定：
- * - 海外永久域：https://heiliao.com (常作为发布页)
- * - 当前最新主入口：https://heiliao43.com (多个来源确认，2025年底活跃)
- * - 其他备用：heiliao44.com / heiliao45.com 等可能轮换
+ * 当前主域（2025年底活跃）：https://heiliao43.com 或 https://heiliao44.com 等
+ * 强烈建议通过 "ext" 参数传入最新可用域名，避免域名失效。
  * <p>
- * 强烈建议在使用规则时通过 "ext" 参数传入当前可用域名，例如 "https://heiliao43.com"
- * <p>
- * 站点结构：文字爆料为主，少量直链视频或iframe外站播放，无加密图片。
+ * 站点特点：文字爆料为主，少量直链视频或iframe外站，无加密图片。
  */
 public class Heiliao extends com.github.catvod.crawler.Spider {
 
@@ -58,9 +54,9 @@ public class Heiliao extends com.github.catvod.crawler.Spider {
     @Override
     public String homeContent(boolean filter) {
         List<Class> classes = new ArrayList<>();
-        // 2025年底实测常见固定分类（即使域名变，路径基本一致）
+        // 当前站点常见分类（路径稳定，即使换域也基本一致）
         String[][] nav = {
-                {"", "首页/最新黑料"},
+                {"", "最新黑料"},
                 {"hlcg", "最新黑料"},
                 {"jrrs", "今日热瓜"},
                 {"rmhl", "热门黑料"},
@@ -71,8 +67,9 @@ public class Heiliao extends com.github.catvod.crawler.Spider {
                 {"xycg", "校园黑料"},
                 {"whhl", "网红黑料"},
                 {"mxl", "明星丑闻"},
-                {"qyhl", "反差专区"}
-                // 可根据需要继续补充
+                {"qyhl", "反差专区"},
+                {"original", "原创社区"},
+                {"world", "全球奇闻"}
         };
         for (String[] item : nav) {
             String tid = item[0].isEmpty() ? "/" : "/" + item[0] + "/";
@@ -88,35 +85,64 @@ public class Heiliao extends com.github.catvod.crawler.Spider {
         if (pg == null || pg.isEmpty()) pg = "1";
         String url = siteUrl + tid;
         if (!tid.endsWith("/")) url += "/";
-        if (!pg.equals("1")) url += "page/" + pg + "/";  // 常见分页格式 page/2/
+        if (!"1".equals(pg)) {
+            // 当前站点常见分页格式：page/2/ 或 /2.html
+            if (url.contains("page/")) {
+                url = url.replaceAll("page/\\d+/", "page/" + pg + "/");
+            } else {
+                url += "page/" + pg + "/";
+            }
+        }
 
         try {
             Document doc = Jsoup.parse(OkHttp.string(url, getHeaders()));
             List<Vod> list = new ArrayList<>();
 
-            // 通配多种可能结构（article, .post, .archive-item 等）
-            Elements items = doc.select("article, .post-item, .archive-item, .list-item, a[href*=/archives/]");
+            // 通配当前常见文章列表结构
+            Elements items = doc.select("article, .post-item, .archive-item, .list-item, .entry");
             for (Element item : items) {
-                Element link = item.tagName().equals("a") ? item : item.selectFirst("a[href*=/archives/]");
+                Element link = item.selectFirst("a[href*=/archives/], a[href*=/post/]");
                 if (link == null) continue;
 
                 String vodId = link.attr("href");
-                if (!vodId.contains("/archives/")) continue;
+                if (!vodId.startsWith("http")) {
+                    vodId = vodId.startsWith("/") ? vodId : "/" + vodId;
+                }
 
-                String titleEl = link.selectFirst("h2, h3, .title, img[alt]");
-                String vodName = titleEl != null ? titleEl.attr("alt").trim() : link.text().trim();
+                // 标题提取：优先 h2/h3/title 类，其次 img alt，最后 fallback
+                Element titleElement = item.selectFirst("h2, h3, .title, img[alt]");
+                String vodName = "";
+                if (titleElement != null) {
+                    if (titleElement.tagName().equals("img")) {
+                        vodName = titleElement.attr("alt").trim();
+                    } else {
+                        vodName = titleElement.text().trim();
+                    }
+                }
+                if (vodName.isEmpty()) vodName = link.text().trim();
                 if (vodName.isEmpty()) continue;
 
+                // 图片
                 String pic = "";
-                Element img = link.selectFirst("img");
-                if (img != null) pic = img.absUrl("src");
+                Element img = item.selectFirst("img");
+                if (img != null) {
+                    pic = img.absUrl("src");
+                }
+                if (pic.isEmpty()) pic = "https://via.placeholder.com/300x400?text=HL";
 
-                String remark = item.selectFirst(".date, .time, .meta") != null ? item.selectFirst(".date, .time, .meta").text().trim() : "";
+                // 备注（如日期）
+                String remark = "";
+                Element meta = item.selectFirst(".date, .time, .meta, .post-date");
+                if (meta != null) remark = meta.text().trim();
 
-                list.add(new Vod(vodId, vodName, pic.isEmpty() ? "https://via.placeholder.com/300x400?text=HL" : pic, remark));
+                list.add(new Vod(vodId, vodName, pic, remark));
             }
 
-            return Result.get().vod(list).page(Integer.parseInt(pg), Integer.parseInt(pg) + 1, 30, list.size() + 500).string();
+            int currentPage = Integer.parseInt(pg);
+            return Result.get()
+                    .vod(list)
+                    .page(currentPage, currentPage + 1, 30, list.size() + 1000)
+                    .string();
         } catch (Exception e) {
             SpiderDebug.log(e);
             return Result.get().vod(new ArrayList<>()).string();
@@ -126,7 +152,7 @@ public class Heiliao extends com.github.catvod.crawler.Spider {
     @Override
     public String detailContent(List<String> ids) {
         String id = ids.get(0);
-        String url = siteUrl + id;
+        String url = siteUrl + (id.startsWith("http") ? "" : "") + id;
 
         try {
             Document doc = Jsoup.parse(OkHttp.string(url, getHeaders()));
@@ -134,22 +160,28 @@ public class Heiliao extends com.github.catvod.crawler.Spider {
             Vod vod = new Vod();
             vod.setVodId(id);
 
-            Element titleEl = doc.selectFirst("h1.title, h1.entry-title, h1");
+            Element titleEl = doc.selectFirst("h1.title, h1.entry-title, h1.post-title, h1");
             vod.setVodName(titleEl != null ? titleEl.text().trim() : "未知标题");
 
-            String pic = doc.selectFirst("meta[property=og:image]") != null ? doc.selectFirst("meta[property=og:image]").attr("content") : "";
+            String pic = "";
+            Element ogImage = doc.selectFirst("meta[property=og:image]");
+            if (ogImage != null) pic = ogImage.attr("content");
+            if (pic.isEmpty()) {
+                Element firstImg = doc.selectFirst("article img");
+                if (firstImg != null) pic = firstImg.absUrl("src");
+            }
             vod.setVodPic(pic.isEmpty() ? "https://via.placeholder.com/300x400?text=HL" : pic);
 
-            String content = doc.selectFirst(".content, .entry-content, .post-content") != null ?
-                    doc.selectFirst(".content, .entry-content, .post-content").text() : "";
+            Element contentEl = doc.selectFirst(".content, .entry-content, .post-content, article");
+            String content = contentEl != null ? contentEl.text() : "";
             vod.setVodContent(content.length() > 300 ? content.substring(0, 300) + "..." : content);
 
-            // 播放源提取
+            // 播放源
             List<String> playFrom = new ArrayList<>();
             List<String> playUrl = new ArrayList<>();
+            int idx = 1;
 
             Elements videos = doc.select("video source, video");
-            int idx = 1;
             for (Element v : videos) {
                 String src = v.attr("src");
                 if (!src.isEmpty() && src.startsWith("http")) {
