@@ -1,5 +1,7 @@
 package com.github.catvod.spider;
 
+import android.content.Context;
+
 import com.github.catvod.crawler.Spider;
 import com.github.catvod.crawler.SpiderDebug;
 import com.github.catvod.net.OkHttp;
@@ -30,9 +32,9 @@ public class ChangZhang extends Spider {
     private final Map<String, String> headers = new HashMap<>();
 
     @Override
-    public void init(Context context, String extend) {
+    public void init(Context context, String extend) throws Exception {
         super.init(context, extend);
-        if (!extend.isEmpty()) {
+        if (extend != null && !extend.isEmpty()) {
             siteUrl = extend.trim();
             if (siteUrl.endsWith("/")) siteUrl = siteUrl.substring(0, siteUrl.length() - 1);
         }
@@ -40,11 +42,11 @@ public class ChangZhang extends Spider {
         headers.put("Referer", siteUrl + "/");
     }
 
-    private String fetch(String url) {
+    private String fetch(String url) throws Exception {
         return OkHttp.string(url, headers);
     }
 
-    private String post(String url, Map<String, String> data) {
+    private String post(String url, Map<String, String> data) throws Exception {
         return OkHttp.post(url, data, headers).getBody();
     }
 
@@ -57,18 +59,23 @@ public class ChangZhang extends Spider {
             classes.add(new Class(typeIds[i], typeNames[i]));
         }
         List<Vod> list = getVideos(siteUrl + "/");
-        return Result.get().classes(classes).list(list).string();
+        Result result = new Result();
+        result.setClasses(classes);
+        result.setList(list);
+        return result.string();
     }
 
     @Override
-    public String categoryContent(String tid, String pg, boolean filter, Map<String, String> extend) throws Exception {
+    public String categoryContent(String tid, String pg, boolean filter, HashMap<String, String> extend) throws Exception {
         int page = pg.isEmpty() ? 1 : Integer.parseInt(pg);
         String url = siteUrl + "/" + tid + (page > 1 ? "/page/" + page : "");
         List<Vod> list = getVideos(url);
-        return Result.get().list(list).string();
+        Result result = new Result();
+        result.setList(list);
+        return result.string();
     }
 
-    private List<Vod> getVideos(String url) {
+    private List<Vod> getVideos(String url) throws Exception {
         String html = fetch(url);
         Document doc = Jsoup.parse(html);
         Elements items = doc.select("div.bt_img.mi_ne_kd ul li a");
@@ -83,7 +90,13 @@ public class ChangZhang extends Spider {
             String remark = "";
             Element rem = item.selectFirst("div.jidi span");
             if (rem != null) remark = rem.text().trim();
-            videos.add(new Vod().setVodId(id).setVodName(name).setVodPic(pic).setVodRemarks(remark));
+
+            Vod vod = new Vod();
+            vod.setVodId(id);
+            vod.setVodName(name);
+            vod.setVodPic(pic);
+            vod.setVodRemarks(remark);
+            videos.add(vod);
         }
         return videos;
     }
@@ -134,7 +147,11 @@ public class ChangZhang extends Spider {
         vod.setVodPlayFrom("厂长");
         vod.setVodPlayUrl(playUrlSb.toString());
 
-        return Result.get().list(vod).string();
+        List<Vod> list = new ArrayList<>();
+        list.add(vod);
+        Result result = new Result();
+        result.setList(list);
+        return result.string();
     }
 
     @Override
@@ -142,7 +159,6 @@ public class ChangZhang extends Spider {
         String url = siteUrl + "/xssearch?q=" + key;
         String html = fetch(url);
 
-        // 处理人机验证（加法验证码）
         if (html.contains("人机验证")) {
             Matcher m = Pattern.compile("(\\d+)\\s*\\+\\s*(\\d+)").matcher(html);
             if (m.find()) {
@@ -155,10 +171,12 @@ public class ChangZhang extends Spider {
         }
 
         List<Vod> list = getVideosFromHtml(html);
-        return Result.get().list(list).string();
+        Result result = new Result();
+        result.setList(list);
+        return result.string();
     }
 
-    private List<Vod> getVideosFromHtml(String html) {
+    private List<Vod> getVideosFromHtml(String html) throws Exception {
         Document doc = Jsoup.parse(html);
         Elements items = doc.select("div.bt_img.mi_ne_kd ul li a");
         List<Vod> videos = new ArrayList<>();
@@ -172,7 +190,13 @@ public class ChangZhang extends Spider {
             String remark = "";
             Element rem = item.selectFirst("div.jidi span");
             if (rem != null) remark = rem.text().trim();
-            videos.add(new Vod().setVodId(id).setVodName(name).setVodPic(pic).setVodRemarks(remark));
+
+            Vod vod = new Vod();
+            vod.setVodId(id);
+            vod.setVodName(name);
+            vod.setVodPic(pic);
+            vod.setVodRemarks(remark);
+            videos.add(vod);
         }
         return videos;
     }
@@ -182,7 +206,7 @@ public class ChangZhang extends Spider {
         String html = fetch(id);
         Document doc = Jsoup.parse(html);
 
-        // 优先 AES 加密（当前主流）
+        // 优先 AES 加密
         for (Element script : doc.select("script")) {
             String scriptText = script.html();
             if (scriptText.contains("md5.enc.Utf8")) {
@@ -196,7 +220,10 @@ public class ChangZhang extends Spider {
 
                         String decrypted = aesDecrypt(encrypted, keyStr, ivStr);
                         String playUrl = decrypted.split("url:\"")[1].split("\"")[0];
-                        return Result.get().url(playUrl).string();
+                        Result result = new Result();
+                        result.setUrl(playUrl);
+                        result.setParse(0);
+                        return result.string();
                     }
                 } catch (Exception e) {
                     SpiderDebug.log(e);
@@ -204,7 +231,7 @@ public class ChangZhang extends Spider {
             }
         }
 
-        // 备用：iframe 逆序十六进制
+        // 备用 iframe 逆序十六进制
         Element iframe = doc.selectFirst("div.videoplay iframe");
         if (iframe != null) {
             String src = iframe.attr("src");
@@ -220,12 +247,18 @@ public class ChangZhang extends Spider {
                 String decoded = temp.toString();
                 int len = decoded.length();
                 String playUrl = decoded.substring(0, (len - 7) / 2) + decoded.substring((len - 7) / 2 + 7);
-                return Result.get().url(playUrl).string();
+                Result result = new Result();
+                result.setUrl(playUrl);
+                result.setParse(0);
+                return result.string();
             } catch (Exception ignored) {}
         }
 
-        // 兜底直接解析
-        return Result.get().url(id).parse(1).string();
+        // 兜底
+        Result result = new Result();
+        result.setUrl(id);
+        result.setParse(1);
+        return result.string();
     }
 
     private String aesDecrypt(String encryptedBase64, String keyStr, String ivStr) {
