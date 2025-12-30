@@ -21,56 +21,47 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * 黑料网爬虫 (Heiliao)
- * 文件名必须为 Heiliao.java
+ * 适配 111.txt(首页) 和 222.txt(详情页) 源码
  */
 public class Heiliao extends Spider {
 
     private String siteUrl = "https://9dcw7.qkkzpxw.com/";
     private Map<String, String> headers;
-    private Map<String, String> imgObj;
 
     @Override
     public void init(Context context, String extend) throws Exception {
         super.init(context, extend);
         headers = new HashMap<>();
-        headers.put("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36");
-        imgObj = new HashMap<>();
-
+        // 使用移动端UA，因为源码中有很多针对Android/iOS的判断
+        headers.put("User-Agent", "Mozilla/5.0 (Linux; Android 12; Pixel 6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36");
         if (!TextUtils.isEmpty(extend)) {
             siteUrl = extend;
-        }
-    }
-
-    private String request(String reqUrl) {
-        try {
-            return OkHttp.string(reqUrl, headers);
-        } catch (Exception e) {
-            return "";
         }
     }
 
     @Override
     public String homeContent(boolean filter) {
         try {
-            String html = request(siteUrl);
+            String html = OkHttp.string(siteUrl, headers);
             Document doc = Jsoup.parse(html);
-
             List<Class> classes = new ArrayList<>();
-            Elements sliderItems = doc.select("a.slider-item");
-            for (Element item : sliderItems) {
-                String typeId = item.attr("href").replace(".html", "");
-                if ("/".equals(typeId)) {
-                    typeId = "/category/0";
-                }
-                String typeName = item.select("span").text();
-                if (!TextUtils.isEmpty(typeName)) {
-                    classes.add(new Class(typeId, typeName));
+
+            // 对应111.txt源码中的滑块导航
+            Elements items = doc.select("a.slider-item");
+            for (Element item : items) {
+                String href = item.attr("href");
+                String name = item.text().trim();
+                // 过滤掉首页和其他非分类链接
+                if (href.contains("/category/")) {
+                    String id = href.replace(siteUrl, "").replaceAll("^/+", "");
+                    classes.add(new Class(id, name));
                 }
             }
-            // 使用 Result.string(classes) 避免 null 导致的歧义报错
             return Result.string(classes);
         } catch (Exception e) {
             return "";
@@ -80,46 +71,74 @@ public class Heiliao extends Spider {
     @Override
     public String categoryContent(String tid, String pg, boolean filter, HashMap<String, String> extend) {
         try {
-            int page = (TextUtils.isEmpty(pg) || Integer.parseInt(pg) <= 0) ? 1 : Integer.parseInt(pg);
-            String url = siteUrl + (tid.startsWith("/") ? "" : "/") + tid + "/" + page + ".html";
+            int page = Integer.parseInt(pg);
+            // 构造分页：如 category/1/2.html
+            String url = siteUrl + tid.replace(".html", "") + "/" + page + ".html";
             List<Vod> videos = getVideos(url);
-            // 使用 Builder 模式确保类型安全
             return Result.get().vod(videos).string();
         } catch (Exception e) {
             return "";
         }
     }
 
+    private List<Vod> getVideos(String url) {
+        List<Vod> videos = new ArrayList<>();
+        try {
+            String html = OkHttp.string(url, headers);
+            Document doc = Jsoup.parse(html);
+            // 匹配源码中的视频列表项
+            Elements items = doc.select("a.cursor-pointer");
+            for (Element item : items) {
+                String href = item.attr("href").replaceAll("^/+", "");
+                String title = item.select("div.title").text().trim();
+                
+                // 重点：源码中图片是在 onload 的 loadImg 函数里
+                // <img ... onload="loadImg(this,'https://pic.xxx.cn/...')">
+                String pic = "";
+                String onload = item.select("img").attr("onload");
+                Pattern p = Pattern.compile("loadImg\\(this,'(.*?)'\\)");
+                Matcher m = p.matcher(onload);
+                if (m.find()) {
+                    pic = m.group(1);
+                } else {
+                    pic = item.select("img").attr("src");
+                }
+
+                if (!href.isEmpty() && !title.isEmpty()) {
+                    videos.add(new Vod(href, title, pic, ""));
+                }
+            }
+        } catch (Exception ignored) {}
+        return videos;
+    }
+
     @Override
     public String detailContent(List<String> ids) {
         try {
             String id = ids.get(0);
-            String url = siteUrl + (id.startsWith("/") ? "" : "/") + id;
-            String html = request(url);
+            String url = siteUrl + id;
+            String html = OkHttp.string(url, headers);
             Document doc = Jsoup.parse(html);
 
-            String content = "";
-            Elements pTags = doc.select("div.detail-page p");
-            if (pTags.size() >= 3) content = pTags.get(2).text();
+            String name = doc.select("h1").text().trim();
+            String pic = doc.select("div.detail-content img").attr("src");
+            String content = doc.select("div.detail-content").text().trim();
 
-            StringBuilder playUrls = new StringBuilder();
-            Elements dplayer = doc.select("div.dplayer");
-            for (int i = 0; i < dplayer.size(); i++) {
-                String configText = dplayer.get(i).attr("config");
-                if (!TextUtils.isEmpty(configText)) {
-                    JSONObject config = new JSONObject(configText);
-                    String videoUrl = config.getJSONObject("video").getString("url");
-                    if (playUrls.length() > 0) playUrls.append("#");
-                    playUrls.append("播放列表").append(i + 1).append("$").append(videoUrl);
-                }
+            // 对应222.txt源码：提取 DPlayer 配置中的 url
+            String playUrl = "";
+            Pattern p = Pattern.compile("url: ['\"](https?.*?\\.m3u8.*?)['\"]");
+            Matcher m = p.matcher(html);
+            if (m.find()) {
+                playUrl = m.group(1);
             }
 
-            // 使用 Vod 的 Builder 或 构造函数
             Vod vod = new Vod();
             vod.setVodId(id);
+            vod.setVodName(name);
+            vod.setVodPic(pic);
             vod.setVodContent(content);
             vod.setVodPlayFrom("黑料直连");
-            vod.setVodPlayUrl(playUrls.toString());
+            vod.setVodPlayUrl("立即播放$" + playUrl);
 
             return Result.string(vod);
         } catch (Exception e) {
@@ -131,20 +150,18 @@ public class Heiliao extends Spider {
     public String searchContent(String key, boolean quick) {
         try {
             String url = siteUrl + "/index/search_article";
-            Map<String, String> postData = new HashMap<>();
-            postData.put("word", key);
-
-            // 通过 OkHttp 获取搜索结果
-            String response = OkHttp.post(url, postData, headers).getBody();
+            Map<String, String> params = new HashMap<>();
+            params.put("word", key);
+            // 使用 OkHttp.post 发送搜索请求
+            String response = OkHttp.post(url, params, headers).getBody();
             JSONObject json = new JSONObject(response);
             JSONArray list = json.getJSONObject("data").getJSONArray("list");
 
             List<Vod> videos = new ArrayList<>();
             for (int i = 0; i < list.length(); i++) {
                 JSONObject item = list.getJSONObject(i);
-                // 使用 Vod(id, name, pic, remarks) 构造函数
                 videos.add(new Vod(
-                    "/archives/" + item.getString("id") + ".html",
+                    "archives/" + item.getString("id") + ".html",
                     item.getString("title"),
                     item.getString("thumb"),
                     item.optString("created_date", "")
@@ -158,56 +175,7 @@ public class Heiliao extends Spider {
 
     @Override
     public String playerContent(String flag, String id, List<String> vipFlags) {
-        // 直接返回播放地址
+        // id 就是解析出来的 m3u8 地址
         return Result.get().url(id).header(headers).string();
-    }
-
-    private List<Vod> getVideos(String url) {
-        List<Vod> videos = new ArrayList<>();
-        try {
-            String html = request(url);
-            Document doc = Jsoup.parse(html);
-            Elements items = doc.select("a.cursor-pointer");
-            for (Element item : items) {
-                String href = item.attr("href");
-                String title = item.select("div.title").text();
-                String pic = item.select("img").attr("src");
-                if (href.contains("/archives") && !TextUtils.isEmpty(title)) {
-                    imgObj.put(href, pic);
-                    // 封面通过 proxy 转换
-                    videos.add(new Vod(href, title, getProxyUrl() + base64Encode(href), ""));
-                }
-            }
-        } catch (Exception ignored) {}
-        return videos;
-    }
-
-    @Override
-    public Object[] proxy(Map<String, String> params) throws Exception {
-        String url = params.get("url");
-        if (!TextUtils.isEmpty(url)) {
-            String decodedId = base64Decode(url);
-            if (imgObj.containsKey(decodedId)) {
-                String imgData = imgObj.get(decodedId);
-                if (imgData.contains("base64,")) {
-                    String base64Img = imgData.split("base64,")[1];
-                    byte[] content = Base64.decode(base64Img, Base64.DEFAULT);
-                    return new Object[]{200, "image/jpeg", content};
-                }
-            }
-        }
-        return null;
-    }
-
-    private String getProxyUrl() {
-        return "proxy://do=img&url=";
-    }
-
-    private String base64Encode(String text) {
-        return Base64.encodeToString(text.getBytes(), Base64.NO_WRAP);
-    }
-
-    private String base64Decode(String text) {
-        return new String(Base64.decode(text, Base64.NO_WRAP));
     }
 }
