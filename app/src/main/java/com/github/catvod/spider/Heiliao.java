@@ -20,17 +20,17 @@ import java.util.LinkedHashMap;
 import java.util.List;
 
 /**
- * 黑料网 Spider - 2025年12月30日最终稳定版
+ * 黑料网 Spider - 2025年12月30日最终版
  * <p>
- * 当前最新主入口（全网一致确认）：https://heiliao43.com
- * 海外发布页/镜像：https://heiliao.com
- * 强烈建议在规则JSON中使用 "ext": "https://heiliao43.com" 传入最新域名
+ * 当前最新入口：https://heiliao43.com (全网确认)
+ * 备用：https://heiliao.com (发布页)
+ * 请在规则 ext 参数传入当前可用域名。
  * <p>
- * 站点为成人敏感爆料类，请严格遵守当地法律法规。
+ * 基于历史 HTML 示例和搜索结果适配结构。
  */
 public class Heiliao extends com.github.catvod.crawler.Spider {
 
-    private String siteUrl = "https://heiliao43.com";  // 默认最新主域
+    private String siteUrl = "https://heiliao43.com";
     private HashMap<String, String> headers;
 
     private HashMap<String, String> getHeaders() {
@@ -43,37 +43,47 @@ public class Heiliao extends com.github.catvod.crawler.Spider {
     }
 
     @Override
-    public void init(Context context, String extend) {
-        // 父类 init 不抛异常，无需 throws
+    public void init(Context context, String extend) throws Exception {
         super.init(context, extend);
         if (extend != null && !extend.isEmpty()) {
             siteUrl = extend.trim();
-            if (!siteUrl.startsWith("http")) {
-                siteUrl = "https://" + siteUrl;
-            }
-            if (siteUrl.endsWith("/")) {
-                siteUrl = siteUrl.substring(0, siteUrl.length() - 1);
-            }
+            if (!siteUrl.startsWith("http")) siteUrl = "https://" + siteUrl;
+            if (siteUrl.endsWith("/")) siteUrl = siteUrl.substring(0, siteUrl.length() - 1);
         }
     }
 
     @Override
     public String homeContent(boolean filter) {
         List<Class> classes = new ArrayList<>();
-        // 当前站点常见分类（2025年底实测稳定路径）
+        // 从历史示例和搜索推断分类
         String[][] nav = {
-                {"", "首页/最新"},
+                {"", "最新黑料"},
                 {"hlcg", "最新黑料"},
                 {"jrrs", "今日热瓜"},
                 {"rmhl", "热门黑料"},
                 {"jdh", "经典黑料"},
-                {"day", "日榜"},
-                {"week", "周榜"},
-                {"month", "月榜"},
-                {"xycg", "校园黑料"},
-                {"whhl", "网红黑料"},
-                {"mxl", "明星丑闻"},
-                {"qyhl", "反差专区"}
+                {"day", "日榜黑料"},
+                {"week", "周榜精选"},
+                {"month", "月榜热瓜"},
+                {"original", "原创社区"},
+                {"world", "全球奇闻"},
+                {"fan", "反差专区"},
+                {"select", "黑料选妃"},
+                {"school", "校园黑料"},
+                {"netred", "网红黑料"},
+                {"drama", "影视短剧"},
+                {"daily", "每日大赛"},
+                {"star", "明星丑闻"},
+                {"night", "深夜综艺"},
+                {"twitter", "推特社区"},
+                {"exclusive", "独家爆料"},
+                {"photo", "桃图杂志"},
+                {"class", "黑料课堂"},
+                {"help", "有求必应"},
+                {"novel", "黑料小说"},
+                {"news", "社会新闻"},
+                {"neihan", "内涵黑料"},
+                {"gov", "官场爆料"}
         };
         for (String[] item : nav) {
             String tid = item[0].isEmpty() ? "/" : "/" + item[0] + "/";
@@ -89,52 +99,26 @@ public class Heiliao extends com.github.catvod.crawler.Spider {
         if (pg == null || pg.isEmpty()) pg = "1";
         String url = siteUrl + tid;
         if (!tid.endsWith("/")) url += "/";
-        if (!"1".equals(pg)) {
-            url += "page/" + pg + "/";
-        }
+        if (!pg.equals("1")) url += "page/" + pg + "/";
 
         try {
             Document doc = Jsoup.parse(OkHttp.string(url, getHeaders()));
             List<Vod> list = new ArrayList<>();
 
-            Elements items = doc.select("article, .post, .archive-item, .entry");
+            Elements items = doc.select("div.archive-item, article");
             for (Element item : items) {
-                Element link = item.selectFirst("a[href*=/archives/]");
+                Element link = item.selectFirst("a");
                 if (link == null) continue;
 
                 String vodId = link.attr("href");
-                if (!vodId.startsWith("http")) {
-                    vodId = vodId.startsWith("/") ? vodId : "/" + vodId;
-                }
+                String vodName = item.selectFirst("h2").text().trim();
+                String vodPic = item.selectFirst("img").absUrl("src");
+                String vodRemarks = item.selectFirst(".date").text().trim();
 
-                Element titleEl = item.selectFirst("h2, h3, .title, img[alt]");
-                String vodName = "";
-                if (titleEl != null) {
-                    if ("img".equals(titleEl.tagName())) {
-                        vodName = titleEl.attr("alt").trim();
-                    } else {
-                        vodName = titleEl.text().trim();
-                    }
-                }
-                if (vodName.isEmpty()) vodName = link.text().trim();
-                if (vodName.isEmpty()) continue;
-
-                String pic = "";
-                Element img = item.selectFirst("img");
-                if (img != null) pic = img.absUrl("src");
-
-                String remark = "";
-                Element dateEl = item.selectFirst(".date, .time, .meta, .post-date");
-                if (dateEl != null) remark = dateEl.text().trim();
-
-                list.add(new Vod(vodId, vodName, pic.isEmpty() ? "https://via.placeholder.com/300x400?text=HL" : pic, remark));
+                list.add(new Vod(vodId, vodName, vodPic, vodRemarks));
             }
 
-            int currentPage = Integer.parseInt(pg);
-            return Result.get()
-                    .vod(list)
-                    .page(currentPage, currentPage + 1, 30, list.size() + 1000)
-                    .string();
+            return Result.get().vod(list).page(Integer.parseInt(pg), Integer.parseInt(pg) + 1, 20, list.size() + 1000).string();
         } catch (Exception e) {
             SpiderDebug.log(e);
             return Result.get().vod(new ArrayList<>()).string();
@@ -144,50 +128,38 @@ public class Heiliao extends com.github.catvod.crawler.Spider {
     @Override
     public String detailContent(List<String> ids) {
         String id = ids.get(0);
-        String url = siteUrl + (id.startsWith("http") ? "" : "") + id;
+        String url = siteUrl + id;
 
         try {
             Document doc = Jsoup.parse(OkHttp.string(url, getHeaders()));
 
             Vod vod = new Vod();
             vod.setVodId(id);
-
-            Element titleEl = doc.selectFirst("h1.title, h1.entry-title, h1.post-title, h1");
-            vod.setVodName(titleEl != null ? titleEl.text().trim() : "未知标题");
-
-            String pic = "";
-            Element ogImg = doc.selectFirst("meta[property=og:image]");
-            if (ogImg != null) pic = ogImg.attr("content");
-            if (pic.isEmpty()) {
-                Element firstImg = doc.selectFirst("article img, .content img");
-                if (firstImg != null) pic = firstImg.absUrl("src");
-            }
-            vod.setVodPic(pic.isEmpty() ? "https://via.placeholder.com/300x400?text=HL" : pic);
-
-            Element contentEl = doc.selectFirst(".content, .entry-content, .post-content, article");
-            String content = contentEl != null ? contentEl.text() : "";
-            vod.setVodContent(content.length() > 300 ? content.substring(0, 300) + "..." : content);
+            vod.setVodName(doc.selectFirst("h1.title").text().trim());
+            vod.setVodPic(doc.selectFirst("meta[property=og:image]").attr("content"));
+            vod.setVodContent(doc.selectFirst("div.content > p:nth-child(3)").text().trim());
 
             List<String> playFrom = new ArrayList<>();
             List<String> playUrl = new ArrayList<>();
+            Elements videos = doc.select("video");
             int idx = 1;
-
-            Elements videos = doc.select("video source, video");
             for (Element v : videos) {
                 String src = v.attr("src");
-                if (!src.isEmpty() && src.startsWith("http")) {
+                if (!src.isEmpty()) {
                     playFrom.add("直链" + idx);
                     playUrl.add("第" + idx + "段$" + src);
                     idx++;
                 }
             }
 
-            Elements iframes = doc.select("iframe[src^=http]");
+            Elements iframes = doc.select("iframe");
             for (Element iframe : iframes) {
                 String src = iframe.attr("src");
-                playFrom.add("外站" + idx);
-                playUrl.add("第" + idx + "段$" + src);
-                idx++;
+                if (!src.isEmpty()) {
+                    playFrom.add("外站" + idx);
+                    playUrl.add("第" + idx + "段$" + src);
+                    idx++;
+                }
             }
 
             if (!playFrom.isEmpty()) {
@@ -211,7 +183,7 @@ public class Heiliao extends com.github.catvod.crawler.Spider {
 
     @Override
     public String searchContent(String key, boolean quick) {
-        String url = siteUrl + "/?s=" + URLEncoder.encode(key);
-        return categoryContent("/?s=" + URLEncoder.encode(key), "1", false, new HashMap<>());
+        String url = siteUrl + "/index/search?keyword=" + URLEncoder.encode(key);
+        return categoryContent("/index/search?keyword=" + URLEncoder.encode(key), "1", false, new HashMap<>());
     }
 }
