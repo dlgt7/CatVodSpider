@@ -27,7 +27,8 @@ import java.util.Map;
 import okhttp3.Response;
 
 /**
- * 黑料网 Spider - 最终修复版 (适配现有 OkHttp.java)
+ * 黑料网 Spider - 2025最终修复版
+ * 适配 OkHttp (private client), Crypto.CBC
  */
 public class Heiliao extends com.github.catvod.crawler.Spider {
 
@@ -56,13 +57,13 @@ public class Heiliao extends com.github.catvod.crawler.Spider {
     @Override
     public String homeContent(boolean filter) throws Exception {
         List<Class> classes = new ArrayList<>();
+        // 对应 JS 里的分类逻辑
         String[][] nav = {
-                {"", "最新黑料"}, {"hlcg", "吃瓜视频"}, {"whhl", "网红事件"}, {"rmhl", "热门黑料"},
-                {"jdh", "经典黑料"}, {"day", "日榜黑料"}, {"week", "周榜精选"}, {"month", "月榜热瓜"}
+                {"/", "最新黑料"}, {"/category/hlcg/", "吃瓜视频"}, {"/category/whhl/", "网红事件"}, 
+                {"/category/rmhl/", "热门黑料"}, {"/category/jdh/", "经典黑料"}
         };
         for (String[] item : nav) {
-            String tid = item[0].isEmpty() ? "/" : "/" + item[0] + "/";
-            classes.add(new Class(tid, item[1]));
+            classes.add(new Class(item[0], item[1]));
         }
         return Result.string(classes, new ArrayList<>(), new LinkedHashMap<>());
     }
@@ -77,30 +78,30 @@ public class Heiliao extends com.github.catvod.crawler.Spider {
         try {
             Document doc = Jsoup.parse(OkHttp.string(url, getHeaders()));
             List<Vod> list = new ArrayList<>();
-            Elements items = doc.select("div.archive-item, article, .post-item");
+            // 匹配 JS 里的 a.slider-item
+            Elements items = doc.select("div.archive-item, article, a.slider-item");
 
             for (Element item : items) {
-                Element link = item.selectFirst("a");
-                if (link == null) continue;
+                String vodId = item.attr("href");
+                if (vodId.isEmpty()) vodId = item.select("a").attr("href");
+                if (vodId.isEmpty()) continue;
 
-                String vodId = link.attr("href");
-                String vodName = item.select("h2, .title").text().trim();
-                if (vodName.isEmpty()) continue;
-
+                String vodName = item.select("h2, .title, span").first().text().trim();
+                
                 Element img = item.selectFirst("img");
                 String vodPic = img != null ? img.absUrl("src") : "";
                 
-                // 如果是占位图或空图，通过 proxy 代理并进行 AES 解密
+                // 重点：处理加密占位图
                 if (vodPic.contains("base64") || vodPic.isEmpty() || vodPic.contains("placeholder")) {
-                    // 对 vodId 进行 Base64 编码，作为参数传递给 proxy
+                    // 将加密串(通常是 vodId 相关的标识)传给代理
                     String idEncoded = Base64.encodeToString(vodId.getBytes(StandardCharsets.UTF_8), Base64.NO_WRAP);
                     vodPic = Proxy.getUrl() + "?do=img&id=" + idEncoded;
                 }
 
-                String vodRemarks = item.select(".date, .time, span.date").text().trim();
+                String vodRemarks = item.select(".date, .time").text().trim();
                 list.add(new Vod(vodId, vodName, vodPic, vodRemarks));
             }
-            return Result.get().vod(list).page(Integer.parseInt(pg), Integer.parseInt(pg) + 1, 20, 1000).string();
+            return Result.get().vod(list).page(Integer.parseInt(pg), Integer.parseInt(pg) + 1, 20, 100).string();
         } catch (Exception e) {
             SpiderDebug.log(e);
             return Result.get().vod(new ArrayList<>()).string();
@@ -111,35 +112,25 @@ public class Heiliao extends com.github.catvod.crawler.Spider {
     public String detailContent(List<String> ids) throws Exception {
         try {
             String id = ids.get(0);
-            Document doc = Jsoup.parse(OkHttp.string(siteUrl + id, getHeaders()));
+            String url = id.startsWith("http") ? id : siteUrl + id;
+            Document doc = Jsoup.parse(OkHttp.string(url, getHeaders()));
+            
             Vod vod = new Vod();
             vod.setVodId(id);
-            Element titleEl = doc.selectFirst("h1.title, .entry-title");
-            vod.setVodName(titleEl != null ? titleEl.text().trim() : "未知标题");
+            vod.setVodName(doc.select("h1.title, .entry-title").text().trim());
             vod.setVodPic(doc.select("meta[property=og:image]").attr("content"));
             
-            List<String> playFrom = new ArrayList<>();
-            List<String> playUrl = new ArrayList<>();
-            Elements videos = doc.select("video, iframe");
-            int idx = 1;
+            Elements videos = doc.select("video source, video, iframe");
+            List<String> urls = new ArrayList<>();
             for (Element v : videos) {
                 String src = v.attr("src");
-                if (src.isEmpty()) {
-                    Element source = v.selectFirst("source");
-                    src = source != null ? source.attr("src") : "";
-                }
-                if (src.isEmpty()) continue;
-
-                playFrom.add("播放源 " + idx);
-                playUrl.add("第" + idx + "段$" + src);
-                idx++;
+                if (!src.isEmpty()) urls.add("播放$" + src);
             }
 
-            vod.setVodPlayFrom(String.join("$$$", playFrom));
-            vod.setVodPlayUrl(String.join("$$$", playUrl));
+            vod.setVodPlayFrom("黑料直连");
+            vod.setVodPlayUrl(String.join("#", urls));
             return Result.string(vod);
         } catch (Exception e) {
-            SpiderDebug.log(e);
             return Result.error("详情解析失败");
         }
     }
@@ -160,27 +151,23 @@ public class Heiliao extends com.github.catvod.crawler.Spider {
         if ("img".equals(params.get("do"))) {
             String id = params.get("id");
             if (id != null) {
-                // 1. 解码传入的 vodId
+                // 1. 获取原始加密串
                 byte[] decodedBytes = Base64.decode(id, Base64.DEFAULT);
-                String vodId = new String(decodedBytes, StandardCharsets.UTF_8);
+                String encryptedStr = new String(decodedBytes, StandardCharsets.UTF_8);
                 
-                // 2. AES 配置 (需匹配网站 JS)
+                // 2. JS 里的 key 和 iv
                 String keyStr = "xIGg8kTtzg0rKz8z";
                 String ivStr = "0000000000000000";
                 
-                // 3. 调用 Crypto.java 中的 CBC 解密得到真实图片 URL
-                // Crypto.CBC 内部会自动处理 URL 中的反斜杠和 Base64 解码
-                String picUrl = Crypto.CBC(vodId, keyStr, ivStr); 
-                if (picUrl.isEmpty()) picUrl = vodId;
+                // 3. 调用 Crypto.CBC 进行 AES 解密
+                String picUrl = Crypto.CBC(encryptedStr, keyStr, ivStr); 
+                if (picUrl.isEmpty()) picUrl = encryptedStr;
 
-                // 4. 调用 OkHttp.java 中已有的公共方法 newCall
-                // 注意：这里直接获取字节流返回给播放器/壳子
+                // 4. 使用公共的 OkHttp.newCall 获取图片流
                 try (Response response = OkHttp.newCall(picUrl, getHeaders())) {
                     if (response.isSuccessful() && response.body() != null) {
                         return new Object[]{200, "image/jpeg", response.body().bytes()};
                     }
-                } catch (Exception e) {
-                    SpiderDebug.log(e);
                 }
             }
         }
