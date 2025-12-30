@@ -11,7 +11,6 @@ import com.github.catvod.crawler.Spider;
 import com.github.catvod.net.OkHttp;
 
 import org.json.JSONArray;
-import org.json.JSONException;
 import org.json.JSONObject;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
@@ -25,7 +24,7 @@ import java.util.Map;
 
 /**
  * 黑料网爬虫 (Heiliao)
- * 已修复 Result.string 歧义及 Vod 字段赋值问题
+ * 文件名必须为 Heiliao.java
  */
 public class Heiliao extends Spider {
 
@@ -71,7 +70,7 @@ public class Heiliao extends Spider {
                     classes.add(new Class(typeId, typeName));
                 }
             }
-            // 修复点：明确调用，解决 ambiguous 错误
+            // 使用 Result.string(classes) 避免 null 导致的歧义报错
             return Result.string(classes);
         } catch (Exception e) {
             return "";
@@ -82,9 +81,9 @@ public class Heiliao extends Spider {
     public String categoryContent(String tid, String pg, boolean filter, HashMap<String, String> extend) {
         try {
             int page = (TextUtils.isEmpty(pg) || Integer.parseInt(pg) <= 0) ? 1 : Integer.parseInt(pg);
-            String url = siteUrl + "/" + tid + "/" + page + ".html";
+            String url = siteUrl + (tid.startsWith("/") ? "" : "/") + tid + "/" + page + ".html";
             List<Vod> videos = getVideos(url);
-            // 修复点：使用 Builder 模式返回列表
+            // 使用 Builder 模式确保类型安全
             return Result.get().vod(videos).string();
         } catch (Exception e) {
             return "";
@@ -95,7 +94,7 @@ public class Heiliao extends Spider {
     public String detailContent(List<String> ids) {
         try {
             String id = ids.get(0);
-            String url = siteUrl + id;
+            String url = siteUrl + (id.startsWith("/") ? "" : "/") + id;
             String html = request(url);
             Document doc = Jsoup.parse(html);
 
@@ -115,9 +114,9 @@ public class Heiliao extends Spider {
                 }
             }
 
+            // 使用 Vod 的 Builder 或 构造函数
             Vod vod = new Vod();
-            // 注意：Vod类中属性为private，根据Vod.java应使用Builder或直接在Result中处理
-            // 这里我们手动设置必要字段
+            vod.setVodId(id);
             vod.setVodContent(content);
             vod.setVodPlayFrom("黑料直连");
             vod.setVodPlayUrl(playUrls.toString());
@@ -134,8 +133,8 @@ public class Heiliao extends Spider {
             String url = siteUrl + "/index/search_article";
             Map<String, String> postData = new HashMap<>();
             postData.put("word", key);
-            postData.size(); // 占位
 
+            // 通过 OkHttp 获取搜索结果
             String response = OkHttp.post(url, postData, headers).getBody();
             JSONObject json = new JSONObject(response);
             JSONArray list = json.getJSONObject("data").getJSONArray("list");
@@ -143,12 +142,12 @@ public class Heiliao extends Spider {
             List<Vod> videos = new ArrayList<>();
             for (int i = 0; i < list.length(); i++) {
                 JSONObject item = list.getJSONObject(i);
-                // 使用构造函数：new Vod(id, name, pic, remarks)
+                // 使用 Vod(id, name, pic, remarks) 构造函数
                 videos.add(new Vod(
                     "/archives/" + item.getString("id") + ".html",
                     item.getString("title"),
                     item.getString("thumb"),
-                    item.getString("created_date")
+                    item.optString("created_date", "")
                 ));
             }
             return Result.get().vod(videos).string();
@@ -159,6 +158,7 @@ public class Heiliao extends Spider {
 
     @Override
     public String playerContent(String flag, String id, List<String> vipFlags) {
+        // 直接返回播放地址
         return Result.get().url(id).header(headers).string();
     }
 
@@ -174,6 +174,7 @@ public class Heiliao extends Spider {
                 String pic = item.select("img").attr("src");
                 if (href.contains("/archives") && !TextUtils.isEmpty(title)) {
                     imgObj.put(href, pic);
+                    // 封面通过 proxy 转换
                     videos.add(new Vod(href, title, getProxyUrl() + base64Encode(href), ""));
                 }
             }
@@ -187,9 +188,12 @@ public class Heiliao extends Spider {
         if (!TextUtils.isEmpty(url)) {
             String decodedId = base64Decode(url);
             if (imgObj.containsKey(decodedId)) {
-                String base64Img = imgObj.get(decodedId).replaceFirst("^data:image/\\w+;base64,", "");
-                byte[] content = Base64.decode(base64Img, Base64.DEFAULT);
-                return new Object[]{200, "image/jpeg", content};
+                String imgData = imgObj.get(decodedId);
+                if (imgData.contains("base64,")) {
+                    String base64Img = imgData.split("base64,")[1];
+                    byte[] content = Base64.decode(base64Img, Base64.DEFAULT);
+                    return new Object[]{200, "image/jpeg", content};
+                }
             }
         }
         return null;
