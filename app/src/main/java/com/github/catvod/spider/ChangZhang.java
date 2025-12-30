@@ -60,7 +60,10 @@ public class ChangZhang extends Spider {
         }
         List<Vod> list = getVideos(siteUrl + "/");
 
-        return Result.get().classes(classes).list(list).string();
+        Result result = new Result();
+        result.classes = classes;
+        result.list = list;
+        return result.string();
     }
 
     @Override
@@ -69,7 +72,9 @@ public class ChangZhang extends Spider {
         String url = siteUrl + "/" + tid + (page > 1 ? "/page/" + page : "");
         List<Vod> list = getVideos(url);
 
-        return Result.get().list(list).string();
+        Result result = new Result();
+        result.list = list;
+        return result.string();
     }
 
     private List<Vod> getVideos(String url) throws Exception {
@@ -147,7 +152,9 @@ public class ChangZhang extends Spider {
         List<Vod> vodList = new ArrayList<>();
         vodList.add(vod);
 
-        return Result.get().list(vodList).string();
+        Result result = new Result();
+        result.list = vodList;
+        return result.string();
     }
 
     @Override
@@ -168,7 +175,9 @@ public class ChangZhang extends Spider {
 
         List<Vod> list = getVideosFromHtml(html);
 
-        return Result.get().list(list).string();
+        Result result = new Result();
+        result.list = list;
+        return result.string();
     }
 
     private List<Vod> getVideosFromHtml(String html) throws Exception {
@@ -216,7 +225,10 @@ public class ChangZhang extends Spider {
                         String decrypted = aesDecrypt(encrypted, keyStr, ivStr);
                         String playUrl = decrypted.split("url:\"")[1].split("\"")[0];
 
-                        return Result.get().url(playUrl).parse(0).string();
+                        Result result = new Result();
+                        result.url = playUrl;
+                        result.parse = 0;
+                        return result.string();
                     }
                 } catch (Exception e) {
                     SpiderDebug.log(e);
@@ -241,12 +253,18 @@ public class ChangZhang extends Spider {
                 int len = decoded.length();
                 String playUrl = decoded.substring(0, (len - 7) / 2) + decoded.substring((len - 7) / 2 + 7);
 
-                return Result.get().url(playUrl).parse(0).string();
+                Result result = new Result();
+                result.url = playUrl;
+                result.parse = 0;
+                return result.string();
             } catch (Exception ignored) {}
         }
 
         // 兜底
-        return Result.get().url(id).parse(1).string();
+        Result result = new Result();
+        result.url = id;
+        result.parse = 1;
+        return result.string();
     }
 
     private String aesDecrypt(String encryptedBase64, String keyStr, String ivStr) {
