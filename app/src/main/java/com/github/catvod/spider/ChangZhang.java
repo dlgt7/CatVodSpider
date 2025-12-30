@@ -30,17 +30,14 @@ public class ChangZhang extends Spider {
     private final Map<String, String> headers = new HashMap<>();
 
     @Override
-    public void init(Object... objects) {
-        super.init(objects);
-        if (objects.length > 0 && objects[0] instanceof org.json.JSONObject cfg) {
-            if (cfg.has("ext")) {
-                siteUrl = cfg.optString("ext").trim();
-                if (siteUrl.endsWith("/")) siteUrl = siteUrl.substring(0, siteUrl.length() - 1);
-            }
+    public void init(Context context, String extend) {
+        super.init(context, extend);
+        if (!extend.isEmpty()) {
+            siteUrl = extend.trim();
+            if (siteUrl.endsWith("/")) siteUrl = siteUrl.substring(0, siteUrl.length() - 1);
         }
         headers.put("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36");
         headers.put("Referer", siteUrl + "/");
-        // 不建议固定 cf_clearance，容易失效，建议用户自行配置或留空
     }
 
     private String fetch(String url) {
@@ -52,7 +49,7 @@ public class ChangZhang extends Spider {
     }
 
     @Override
-    public String homeContent(boolean filter) {
+    public String homeContent(boolean filter) throws Exception {
         List<Class> classes = new ArrayList<>();
         String[] typeIds = {"dbtop250", "zuixindianying", "benyueremen", "gcj", "meijutt", "hanjutv", "fanju", "dongmanjuchangban"};
         String[] typeNames = {"豆瓣电影Top250", "最新电影", "热映中", "国产剧", "美剧", "韩剧", "番剧", "动漫"};
@@ -60,15 +57,15 @@ public class ChangZhang extends Spider {
             classes.add(new Class(typeIds[i], typeNames[i]));
         }
         List<Vod> list = getVideos(siteUrl + "/");
-        return Result.string(classes, list);
+        return Result.get().classes(classes).list(list).string();
     }
 
     @Override
-    public String categoryContent(String tid, String pg, boolean filter, Map<String, String> extend) {
+    public String categoryContent(String tid, String pg, boolean filter, Map<String, String> extend) throws Exception {
         int page = pg.isEmpty() ? 1 : Integer.parseInt(pg);
         String url = siteUrl + "/" + tid + (page > 1 ? "/page/" + page : "");
         List<Vod> list = getVideos(url);
-        return Result.string(list);
+        return Result.get().list(list).string();
     }
 
     private List<Vod> getVideos(String url) {
@@ -83,14 +80,16 @@ public class ChangZhang extends Spider {
             String name = img.attr("alt").trim();
             String pic = img.attr("data-original");
             if (!pic.startsWith("http")) pic = siteUrl + pic;
-            String remark = item.selectFirst("div.jidi span") != null ? item.selectFirst("div.jidi span").text().trim() : "";
-            videos.add(new Vod(id, name, pic, remark));
+            String remark = "";
+            Element rem = item.selectFirst("div.jidi span");
+            if (rem != null) remark = rem.text().trim();
+            videos.add(new Vod().setVodId(id).setVodName(name).setVodPic(pic).setVodRemarks(remark));
         }
         return videos;
     }
 
     @Override
-    public String detailContent(List<String> ids) {
+    public String detailContent(List<String> ids) throws Exception {
         String id = ids.get(0);
         String html = fetch(id);
         Document doc = Jsoup.parse(html);
@@ -101,9 +100,14 @@ public class ChangZhang extends Spider {
         String content = doc.selectFirst("div.yp_context p").text().trim();
 
         Elements lis = doc.select("ul.moviedteail_list li");
-        String typeName = lis.get(0).select("a").texts().toString().replaceAll("[\\[\\]]", "").trim();
-        String area = lis.get(1).selectFirst("a").text().trim();
-        String year = lis.get(2).selectFirst("a").text().trim();
+        StringBuilder typeSb = new StringBuilder();
+        for (Element a : lis.get(0).select("a")) {
+            typeSb.append(a.text().trim()).append(" ");
+        }
+        String typeName = typeSb.toString().trim();
+
+        String area = lis.size() > 1 ? lis.get(1).selectFirst("a").text().trim() : "";
+        String year = lis.size() > 2 ? lis.get(2).selectFirst("a").text().trim() : "";
 
         String director = lis.size() > 4 ? lis.get(4).text().replace("导演：", "").trim() : "";
         String actor = lis.size() > 5 ? lis.get(5).text().replace("主演：", "").trim() : "";
@@ -130,11 +134,11 @@ public class ChangZhang extends Spider {
         vod.setVodPlayFrom("厂长");
         vod.setVodPlayUrl(playUrlSb.toString());
 
-        return Result.string(vod);
+        return Result.get().list(vod).string();
     }
 
     @Override
-    public String searchContent(String key, boolean quick, String pg) {
+    public String searchContent(String key, boolean quick, String pg) throws Exception {
         String url = siteUrl + "/xssearch?q=" + key;
         String html = fetch(url);
 
@@ -150,17 +154,14 @@ public class ChangZhang extends Spider {
             }
         }
 
-        return Result.string(getVideosFromHtml(html));
+        List<Vod> list = getVideosFromHtml(html);
+        return Result.get().list(list).string();
     }
 
     private List<Vod> getVideosFromHtml(String html) {
         Document doc = Jsoup.parse(html);
-        return getVideos(doc); // 复用逻辑
-    }
-
-    private List<Vod> getVideos(Document doc) {
         Elements items = doc.select("div.bt_img.mi_ne_kd ul li a");
-        List<Vod> list = new ArrayList<>();
+        List<Vod> videos = new ArrayList<>();
         for (Element item : items) {
             String href = item.attr("href");
             String id = href.startsWith("http") ? href : siteUrl + href;
@@ -168,18 +169,20 @@ public class ChangZhang extends Spider {
             String name = img.attr("alt").trim();
             String pic = img.attr("data-original");
             if (!pic.startsWith("http")) pic = siteUrl + pic;
-            String remark = item.selectFirst("div.jidi span") != null ? item.selectFirst("div.jidi span").text().trim() : "";
-            list.add(new Vod(id, name, pic, remark));
+            String remark = "";
+            Element rem = item.selectFirst("div.jidi span");
+            if (rem != null) remark = rem.text().trim();
+            videos.add(new Vod().setVodId(id).setVodName(name).setVodPic(pic).setVodRemarks(remark));
         }
-        return list;
+        return videos;
     }
 
     @Override
-    public String playerContent(String flag, String id, List<String> vipFlags) {
+    public String playerContent(String flag, String id, List<String> vipFlags) throws Exception {
         String html = fetch(id);
         Document doc = Jsoup.parse(html);
 
-        // 优先处理 AES 加密（当前主流方式）
+        // 优先 AES 加密（当前主流）
         for (Element script : doc.select("script")) {
             String scriptText = script.html();
             if (scriptText.contains("md5.enc.Utf8")) {
@@ -193,7 +196,7 @@ public class ChangZhang extends Spider {
 
                         String decrypted = aesDecrypt(encrypted, keyStr, ivStr);
                         String playUrl = decrypted.split("url:\"")[1].split("\"")[0];
-                        return Result.get().url(playUrl).parse(0).string();
+                        return Result.get().url(playUrl).string();
                     }
                 } catch (Exception e) {
                     SpiderDebug.log(e);
@@ -201,7 +204,7 @@ public class ChangZhang extends Spider {
             }
         }
 
-        // 备用：iframe 逆序十六进制解密（旧方式）
+        // 备用：iframe 逆序十六进制
         Element iframe = doc.selectFirst("div.videoplay iframe");
         if (iframe != null) {
             String src = iframe.attr("src");
@@ -217,11 +220,11 @@ public class ChangZhang extends Spider {
                 String decoded = temp.toString();
                 int len = decoded.length();
                 String playUrl = decoded.substring(0, (len - 7) / 2) + decoded.substring((len - 7) / 2 + 7);
-                return Result.get().url(playUrl).parse(0).string();
+                return Result.get().url(playUrl).string();
             } catch (Exception ignored) {}
         }
 
-        // 最后兜底
+        // 兜底直接解析
         return Result.get().url(id).parse(1).string();
     }
 
