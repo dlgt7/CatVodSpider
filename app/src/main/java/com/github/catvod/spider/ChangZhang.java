@@ -201,7 +201,7 @@ public class ChangZhang extends Spider {
         String html = fetch(id);
         Document doc = Jsoup.parse(html);
 
-        // 优先 AES 加密
+        // 优先 AES 加密（当前主流）
         for (Element script : doc.select("script")) {
             String scriptText = script.html();
             if (scriptText.contains("md5.enc.Utf8")) {
@@ -216,7 +216,10 @@ public class ChangZhang extends Spider {
                         String decrypted = aesDecrypt(encrypted, keyStr, ivStr);
                         String playUrl = decrypted.split("url:\"")[1].split("\"")[0];
 
-                        return Result.url(playUrl).parse(0).string();
+                        Result result = new Result();
+                        result.url = playUrl;
+                        result.parse = 0;
+                        return result.string();
                     }
                 } catch (Exception e) {
                     SpiderDebug.log(e);
@@ -241,12 +244,18 @@ public class ChangZhang extends Spider {
                 int len = decoded.length();
                 String playUrl = decoded.substring(0, (len - 7) / 2) + decoded.substring((len - 7) / 2 + 7);
 
-                return Result.url(playUrl).parse(0).string();
+                Result result = new Result();
+                result.url = playUrl;
+                result.parse = 0;
+                return result.string();
             } catch (Exception ignored) {}
         }
 
         // 兜底
-        return Result.url(id).parse(1).string();
+        Result result = new Result();
+        result.url = id;
+        result.parse = 1;
+        return result.string();
     }
 
     private String aesDecrypt(String encryptedBase64, String keyStr, String ivStr) {
