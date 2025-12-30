@@ -9,7 +9,6 @@ import com.github.catvod.bean.Result;
 import com.github.catvod.bean.Vod;
 import com.github.catvod.crawler.Spider;
 import com.github.catvod.net.OkHttp;
-import com.github.catvod.utils.Util;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -24,13 +23,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import javax.crypto.Cipher;
-import javax.crypto.spec.IvParameterSpec;
-import javax.crypto.spec.SecretKeySpec;
-
 /**
- * 黑料网爬虫 (HeiLiao)
- * 修复了字段引用、方法名及OkHttp调用问题
+ * 黑料网爬虫 (Heiliao)
+ * 已修复 Result.string 歧义及 Vod 字段赋值问题
  */
 public class Heiliao extends Spider {
 
@@ -76,7 +71,8 @@ public class Heiliao extends Spider {
                     classes.add(new Class(typeId, typeName));
                 }
             }
-            return Result.string(classes, null);
+            // 修复点：明确调用，解决 ambiguous 错误
+            return Result.string(classes);
         } catch (Exception e) {
             return "";
         }
@@ -88,7 +84,8 @@ public class Heiliao extends Spider {
             int page = (TextUtils.isEmpty(pg) || Integer.parseInt(pg) <= 0) ? 1 : Integer.parseInt(pg);
             String url = siteUrl + "/" + tid + "/" + page + ".html";
             List<Vod> videos = getVideos(url);
-            return Result.string(videos);
+            // 修复点：使用 Builder 模式返回列表
+            return Result.get().vod(videos).string();
         } catch (Exception e) {
             return "";
         }
@@ -103,27 +100,24 @@ public class Heiliao extends Spider {
             Document doc = Jsoup.parse(html);
 
             String content = "";
-            Elements contentElems = doc.select("div.detail-page > div > p");
-            if (contentElems.size() >= 3) {
-                content = contentElems.get(2).text();
-            }
+            Elements pTags = doc.select("div.detail-page p");
+            if (pTags.size() >= 3) content = pTags.get(2).text();
 
             StringBuilder playUrls = new StringBuilder();
-            Elements dplayerElems = doc.select("div.dplayer");
-            for (int i = 0; i < dplayerElems.size(); i++) {
-                Element item = dplayerElems.get(i);
-                String configText = item.attr("config");
+            Elements dplayer = doc.select("div.dplayer");
+            for (int i = 0; i < dplayer.size(); i++) {
+                String configText = dplayer.get(i).attr("config");
                 if (!TextUtils.isEmpty(configText)) {
-                    try {
-                        JSONObject config = new JSONObject(configText);
-                        String videoUrl = config.getJSONObject("video").getString("url");
-                        if (i > 0) playUrls.append("#");
-                        playUrls.append("播放列表").append(i + 1).append("$").append(videoUrl);
-                    } catch (JSONException ignored) {}
+                    JSONObject config = new JSONObject(configText);
+                    String videoUrl = config.getJSONObject("video").getString("url");
+                    if (playUrls.length() > 0) playUrls.append("#");
+                    playUrls.append("播放列表").append(i + 1).append("$").append(videoUrl);
                 }
             }
 
             Vod vod = new Vod();
+            // 注意：Vod类中属性为private，根据Vod.java应使用Builder或直接在Result中处理
+            // 这里我们手动设置必要字段
             vod.setVodContent(content);
             vod.setVodPlayFrom("黑料直连");
             vod.setVodPlayUrl(playUrls.toString());
@@ -140,18 +134,24 @@ public class Heiliao extends Spider {
             String url = siteUrl + "/index/search_article";
             Map<String, String> postData = new HashMap<>();
             postData.put("word", key);
-            postData.put("page", "1");
+            postData.size(); // 占位
 
             String response = OkHttp.post(url, postData, headers).getBody();
-            JSONObject jsonResponse = new JSONObject(response);
-            JSONArray list = jsonResponse.getJSONObject("data").getJSONArray("list");
+            JSONObject json = new JSONObject(response);
+            JSONArray list = json.getJSONObject("data").getJSONArray("list");
 
             List<Vod> videos = new ArrayList<>();
             for (int i = 0; i < list.length(); i++) {
                 JSONObject item = list.getJSONObject(i);
-                videos.add(new Vod("/archives/" + item.getString("id") + ".html", item.getString("title"), item.getString("thumb"), item.getString("created_date")));
+                // 使用构造函数：new Vod(id, name, pic, remarks)
+                videos.add(new Vod(
+                    "/archives/" + item.getString("id") + ".html",
+                    item.getString("title"),
+                    item.getString("thumb"),
+                    item.getString("created_date")
+                ));
             }
-            return Result.string(videos);
+            return Result.get().vod(videos).string();
         } catch (Exception e) {
             return "";
         }
@@ -159,7 +159,7 @@ public class Heiliao extends Spider {
 
     @Override
     public String playerContent(String flag, String id, List<String> vipFlags) {
-        return Result.get().url(id).parse(0).header(headers).string();
+        return Result.get().url(id).header(headers).string();
     }
 
     private List<Vod> getVideos(String url) {
@@ -167,14 +167,12 @@ public class Heiliao extends Spider {
         try {
             String html = request(url);
             Document doc = Jsoup.parse(html);
-
-            Elements cursorPointers = doc.select("a.cursor-pointer");
-            for (Element item : cursorPointers) {
+            Elements items = doc.select("a.cursor-pointer");
+            for (Element item : items) {
                 String href = item.attr("href");
                 String title = item.select("div.title").text();
                 String pic = item.select("img").attr("src");
-
-                if (href.startsWith("/archives") && !TextUtils.isEmpty(title)) {
+                if (href.contains("/archives") && !TextUtils.isEmpty(title)) {
                     imgObj.put(href, pic);
                     videos.add(new Vod(href, title, getProxyUrl() + base64Encode(href), ""));
                 }
@@ -185,9 +183,8 @@ public class Heiliao extends Spider {
 
     @Override
     public Object[] proxy(Map<String, String> params) throws Exception {
-        String what = params.get("what");
         String url = params.get("url");
-        if ("img".equals(what)) {
+        if (!TextUtils.isEmpty(url)) {
             String decodedId = base64Decode(url);
             if (imgObj.containsKey(decodedId)) {
                 String base64Img = imgObj.get(decodedId).replaceFirst("^data:image/\\w+;base64,", "");
