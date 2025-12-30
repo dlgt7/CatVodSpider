@@ -24,12 +24,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-import okhttp3.Headers;
-import okhttp3.Request;
 import okhttp3.Response;
 
 /**
- * 黑料网 Spider - 2025最终修正编译版
+ * 黑料网 Spider - 最终修复版 (适配现有 OkHttp.java)
  */
 public class Heiliao extends com.github.catvod.crawler.Spider {
 
@@ -79,7 +77,6 @@ public class Heiliao extends com.github.catvod.crawler.Spider {
         try {
             Document doc = Jsoup.parse(OkHttp.string(url, getHeaders()));
             List<Vod> list = new ArrayList<>();
-            // 适配多种可能的列表容器
             Elements items = doc.select("div.archive-item, article, .post-item");
 
             for (Element item : items) {
@@ -93,10 +90,11 @@ public class Heiliao extends com.github.catvod.crawler.Spider {
                 Element img = item.selectFirst("img");
                 String vodPic = img != null ? img.absUrl("src") : "";
                 
-                // 处理加密图片，走 proxy 代理
-                if (vodPic.contains("base64") || vodPic.isEmpty()) {
+                // 如果是占位图或空图，通过 proxy 代理并进行 AES 解密
+                if (vodPic.contains("base64") || vodPic.isEmpty() || vodPic.contains("placeholder")) {
+                    // 对 vodId 进行 Base64 编码，作为参数传递给 proxy
                     String idEncoded = Base64.encodeToString(vodId.getBytes(StandardCharsets.UTF_8), Base64.NO_WRAP);
-                    vodPic = Proxy.getUrl(false) + "?do=img&id=" + idEncoded;
+                    vodPic = Proxy.getUrl() + "?do=img&id=" + idEncoded;
                 }
 
                 String vodRemarks = item.select(".date, .time, span.date").text().trim();
@@ -126,10 +124,13 @@ public class Heiliao extends com.github.catvod.crawler.Spider {
             int idx = 1;
             for (Element v : videos) {
                 String src = v.attr("src");
-                if (src.isEmpty()) src = v.selectFirst("source") != null ? v.selectFirst("source").attr("src") : "";
+                if (src.isEmpty()) {
+                    Element source = v.selectFirst("source");
+                    src = source != null ? source.attr("src") : "";
+                }
                 if (src.isEmpty()) continue;
 
-                playFrom.add(v.tagName().equals("video") ? "直链" + idx : "外站" + idx);
+                playFrom.add("播放源 " + idx);
                 playUrl.add("第" + idx + "段$" + src);
                 idx++;
             }
@@ -150,7 +151,8 @@ public class Heiliao extends com.github.catvod.crawler.Spider {
 
     @Override
     public String searchContent(String key, boolean quick) throws Exception {
-        return categoryContent("/index/search?keyword=" + URLEncoder.encode(key), "1", false, new HashMap<>());
+        String url = "/index/search?keyword=" + URLEncoder.encode(key, "UTF-8");
+        return categoryContent(url, "1", false, new HashMap<>());
     }
 
     @Override
@@ -158,24 +160,27 @@ public class Heiliao extends com.github.catvod.crawler.Spider {
         if ("img".equals(params.get("do"))) {
             String id = params.get("id");
             if (id != null) {
-                // 1. 解码 ID
+                // 1. 解码传入的 vodId
                 byte[] decodedBytes = Base64.decode(id, Base64.DEFAULT);
                 String vodId = new String(decodedBytes, StandardCharsets.UTF_8);
                 
-                // 2. AES 解密配置 (需与网站 JS 匹配)
+                // 2. AES 配置 (需匹配网站 JS)
                 String keyStr = "xIGg8kTtzg0rKz8z";
                 String ivStr = "0000000000000000";
                 
-                // 3. 解密出真实 URL (Crypto.CBC 内部会处理 Base64 解码)
+                // 3. 调用 Crypto.java 中的 CBC 解密得到真实图片 URL
+                // Crypto.CBC 内部会自动处理 URL 中的反斜杠和 Base64 解码
                 String picUrl = Crypto.CBC(vodId, keyStr, ivStr); 
                 if (picUrl.isEmpty()) picUrl = vodId;
 
-                // 4. 手动发起请求获取字节流 (解决 OkHttp.byteArray 找不到的问题)
-                Request request = new Request.Builder().url(picUrl).headers(Headers.of(getHeaders())).build();
-                try (Response response = OkHttp.client().newCall(request).execute()) {
+                // 4. 调用 OkHttp.java 中已有的公共方法 newCall
+                // 注意：这里直接获取字节流返回给播放器/壳子
+                try (Response response = OkHttp.newCall(picUrl, getHeaders())) {
                     if (response.isSuccessful() && response.body() != null) {
                         return new Object[]{200, "image/jpeg", response.body().bytes()};
                     }
+                } catch (Exception e) {
+                    SpiderDebug.log(e);
                 }
             }
         }
