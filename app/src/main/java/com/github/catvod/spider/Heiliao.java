@@ -20,16 +20,17 @@ import java.util.LinkedHashMap;
 import java.util.List;
 
 /**
- * 黑料网 Spider - 2025年12月30日最新稳定版
+ * 黑料网 Spider - 2025年12月30日最终稳定版
  * <p>
- * 当前主域（2025年底活跃）：https://heiliao43.com 或 https://heiliao44.com 等
- * 强烈建议通过 "ext" 参数传入最新可用域名，避免域名失效。
+ * 当前最新主入口（全网一致确认）：https://heiliao43.com
+ * 海外发布页/镜像：https://heiliao.com
+ * 强烈建议在规则JSON中使用 "ext": "https://heiliao43.com" 传入最新域名
  * <p>
- * 站点特点：文字爆料为主，少量直链视频或iframe外站，无加密图片。
+ * 站点为成人敏感爆料类，请严格遵守当地法律法规。
  */
 public class Heiliao extends com.github.catvod.crawler.Spider {
 
-    private String siteUrl = "https://heiliao43.com";  // 默认使用当前最新主域
+    private String siteUrl = "https://heiliao43.com";  // 默认最新主域
     private HashMap<String, String> headers;
 
     private HashMap<String, String> getHeaders() {
@@ -43,20 +44,25 @@ public class Heiliao extends com.github.catvod.crawler.Spider {
 
     @Override
     public void init(Context context, String extend) {
+        // 父类 init 不抛异常，无需 throws
         super.init(context, extend);
         if (extend != null && !extend.isEmpty()) {
             siteUrl = extend.trim();
-            if (!siteUrl.startsWith("http")) siteUrl = "https://" + siteUrl;
-            if (siteUrl.endsWith("/")) siteUrl = siteUrl.substring(0, siteUrl.length() - 1);
+            if (!siteUrl.startsWith("http")) {
+                siteUrl = "https://" + siteUrl;
+            }
+            if (siteUrl.endsWith("/")) {
+                siteUrl = siteUrl.substring(0, siteUrl.length() - 1);
+            }
         }
     }
 
     @Override
     public String homeContent(boolean filter) {
         List<Class> classes = new ArrayList<>();
-        // 当前站点常见分类（路径稳定，即使换域也基本一致）
+        // 当前站点常见分类（2025年底实测稳定路径）
         String[][] nav = {
-                {"", "最新黑料"},
+                {"", "首页/最新"},
                 {"hlcg", "最新黑料"},
                 {"jrrs", "今日热瓜"},
                 {"rmhl", "热门黑料"},
@@ -67,9 +73,7 @@ public class Heiliao extends com.github.catvod.crawler.Spider {
                 {"xycg", "校园黑料"},
                 {"whhl", "网红黑料"},
                 {"mxl", "明星丑闻"},
-                {"qyhl", "反差专区"},
-                {"original", "原创社区"},
-                {"world", "全球奇闻"}
+                {"qyhl", "反差专区"}
         };
         for (String[] item : nav) {
             String tid = item[0].isEmpty() ? "/" : "/" + item[0] + "/";
@@ -86,22 +90,16 @@ public class Heiliao extends com.github.catvod.crawler.Spider {
         String url = siteUrl + tid;
         if (!tid.endsWith("/")) url += "/";
         if (!"1".equals(pg)) {
-            // 当前站点常见分页格式：page/2/ 或 /2.html
-            if (url.contains("page/")) {
-                url = url.replaceAll("page/\\d+/", "page/" + pg + "/");
-            } else {
-                url += "page/" + pg + "/";
-            }
+            url += "page/" + pg + "/";
         }
 
         try {
             Document doc = Jsoup.parse(OkHttp.string(url, getHeaders()));
             List<Vod> list = new ArrayList<>();
 
-            // 通配当前常见文章列表结构
-            Elements items = doc.select("article, .post-item, .archive-item, .list-item, .entry");
+            Elements items = doc.select("article, .post, .archive-item, .entry");
             for (Element item : items) {
-                Element link = item.selectFirst("a[href*=/archives/], a[href*=/post/]");
+                Element link = item.selectFirst("a[href*=/archives/]");
                 if (link == null) continue;
 
                 String vodId = link.attr("href");
@@ -109,33 +107,27 @@ public class Heiliao extends com.github.catvod.crawler.Spider {
                     vodId = vodId.startsWith("/") ? vodId : "/" + vodId;
                 }
 
-                // 标题提取：优先 h2/h3/title 类，其次 img alt，最后 fallback
-                Element titleElement = item.selectFirst("h2, h3, .title, img[alt]");
+                Element titleEl = item.selectFirst("h2, h3, .title, img[alt]");
                 String vodName = "";
-                if (titleElement != null) {
-                    if (titleElement.tagName().equals("img")) {
-                        vodName = titleElement.attr("alt").trim();
+                if (titleEl != null) {
+                    if ("img".equals(titleEl.tagName())) {
+                        vodName = titleEl.attr("alt").trim();
                     } else {
-                        vodName = titleElement.text().trim();
+                        vodName = titleEl.text().trim();
                     }
                 }
                 if (vodName.isEmpty()) vodName = link.text().trim();
                 if (vodName.isEmpty()) continue;
 
-                // 图片
                 String pic = "";
                 Element img = item.selectFirst("img");
-                if (img != null) {
-                    pic = img.absUrl("src");
-                }
-                if (pic.isEmpty()) pic = "https://via.placeholder.com/300x400?text=HL";
+                if (img != null) pic = img.absUrl("src");
 
-                // 备注（如日期）
                 String remark = "";
-                Element meta = item.selectFirst(".date, .time, .meta, .post-date");
-                if (meta != null) remark = meta.text().trim();
+                Element dateEl = item.selectFirst(".date, .time, .meta, .post-date");
+                if (dateEl != null) remark = dateEl.text().trim();
 
-                list.add(new Vod(vodId, vodName, pic, remark));
+                list.add(new Vod(vodId, vodName, pic.isEmpty() ? "https://via.placeholder.com/300x400?text=HL" : pic, remark));
             }
 
             int currentPage = Integer.parseInt(pg);
@@ -164,10 +156,10 @@ public class Heiliao extends com.github.catvod.crawler.Spider {
             vod.setVodName(titleEl != null ? titleEl.text().trim() : "未知标题");
 
             String pic = "";
-            Element ogImage = doc.selectFirst("meta[property=og:image]");
-            if (ogImage != null) pic = ogImage.attr("content");
+            Element ogImg = doc.selectFirst("meta[property=og:image]");
+            if (ogImg != null) pic = ogImg.attr("content");
             if (pic.isEmpty()) {
-                Element firstImg = doc.selectFirst("article img");
+                Element firstImg = doc.selectFirst("article img, .content img");
                 if (firstImg != null) pic = firstImg.absUrl("src");
             }
             vod.setVodPic(pic.isEmpty() ? "https://via.placeholder.com/300x400?text=HL" : pic);
@@ -176,7 +168,6 @@ public class Heiliao extends com.github.catvod.crawler.Spider {
             String content = contentEl != null ? contentEl.text() : "";
             vod.setVodContent(content.length() > 300 ? content.substring(0, 300) + "..." : content);
 
-            // 播放源
             List<String> playFrom = new ArrayList<>();
             List<String> playUrl = new ArrayList<>();
             int idx = 1;
