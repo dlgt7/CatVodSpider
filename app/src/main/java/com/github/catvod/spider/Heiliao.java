@@ -20,13 +20,15 @@ import java.util.LinkedHashMap;
 import java.util.List;
 
 /**
- * 黑料网 Spider - 2025年12月30日最终版
+ * 黑料网 Spider - 修复版 (2025-12-30)
  * <p>
- * 当前最新入口：https://heiliao43.com (全网确认)
- * 备用：https://heiliao.com (发布页)
- * 请在规则 ext 参数传入当前可用域名。
+ * 基于上传 HTML 文档结构适配:
+ * - 分类: 硬编码从文档提取
+ * - 列表: div.archive-item > a > h2, img, .date
+ * - 详情: h1.title, meta[og:image], div.content p
  * <p>
- * 基于历史 HTML 示例和搜索结果适配结构。
+ * 移除 init throws Exception 以修复编译错误。
+ * 默认域名 https://heiliao43.com, 用 ext 覆盖。
  */
 public class Heiliao extends com.github.catvod.crawler.Spider {
 
@@ -43,7 +45,7 @@ public class Heiliao extends com.github.catvod.crawler.Spider {
     }
 
     @Override
-    public void init(Context context, String extend) throws Exception {
+    public void init(Context context, String extend) {
         super.init(context, extend);
         if (extend != null && !extend.isEmpty()) {
             siteUrl = extend.trim();
@@ -55,11 +57,10 @@ public class Heiliao extends com.github.catvod.crawler.Spider {
     @Override
     public String homeContent(boolean filter) {
         List<Class> classes = new ArrayList<>();
-        // 从历史示例和搜索推断分类
         String[][] nav = {
                 {"", "最新黑料"},
-                {"hlcg", "最新黑料"},
-                {"jrrs", "今日热瓜"},
+                {"hlcg", "吃瓜视频"},
+                {"whhl", "网红事件"},
                 {"rmhl", "热门黑料"},
                 {"jdh", "经典黑料"},
                 {"day", "日榜黑料"},
@@ -105,15 +106,21 @@ public class Heiliao extends com.github.catvod.crawler.Spider {
             Document doc = Jsoup.parse(OkHttp.string(url, getHeaders()));
             List<Vod> list = new ArrayList<>();
 
-            Elements items = doc.select("div.archive-item, article");
+            Elements items = doc.select("div.archive-item, article.archive-item, .post-item");
             for (Element item : items) {
                 Element link = item.selectFirst("a");
                 if (link == null) continue;
 
                 String vodId = link.attr("href");
-                String vodName = item.selectFirst("h2").text().trim();
-                String vodPic = item.selectFirst("img").absUrl("src");
-                String vodRemarks = item.selectFirst(".date").text().trim();
+                Element titleEl = item.selectFirst("h2, .title");
+                String vodName = titleEl != null ? titleEl.text().trim() : link.text().trim();
+                if (vodName.isEmpty()) continue;
+
+                Element img = item.selectFirst("img");
+                String vodPic = img != null ? img.absUrl("src") : "";
+
+                Element dateEl = item.selectFirst(".date, .time");
+                String vodRemarks = dateEl != null ? dateEl.text().trim() : "";
 
                 list.add(new Vod(vodId, vodName, vodPic, vodRemarks));
             }
@@ -135,14 +142,22 @@ public class Heiliao extends com.github.catvod.crawler.Spider {
 
             Vod vod = new Vod();
             vod.setVodId(id);
-            vod.setVodName(doc.selectFirst("h1.title").text().trim());
-            vod.setVodPic(doc.selectFirst("meta[property=og:image]").attr("content"));
-            vod.setVodContent(doc.selectFirst("div.content > p:nth-child(3)").text().trim());
+            Element titleEl = doc.selectFirst("h1.title, h1.entry-title");
+            vod.setVodName(titleEl != null ? titleEl.text().trim() : "未知");
+
+            Element ogImg = doc.selectFirst("meta[property=og:image]");
+            String vodPic = ogImg != null ? ogImg.attr("content") : "";
+            vod.setVodPic(vodPic);
+
+            Element contentEl = doc.selectFirst("div.content, div.entry-content");
+            String vodContent = contentEl != null ? contentEl.text().trim() : "";
+            vod.setVodContent(vodContent);
 
             List<String> playFrom = new ArrayList<>();
             List<String> playUrl = new ArrayList<>();
-            Elements videos = doc.select("video");
             int idx = 1;
+
+            Elements videos = doc.select("video source, video");
             for (Element v : videos) {
                 String src = v.attr("src");
                 if (!src.isEmpty()) {
@@ -152,14 +167,12 @@ public class Heiliao extends com.github.catvod.crawler.Spider {
                 }
             }
 
-            Elements iframes = doc.select("iframe");
+            Elements iframes = doc.select("iframe[src^=http]");
             for (Element iframe : iframes) {
                 String src = iframe.attr("src");
-                if (!src.isEmpty()) {
-                    playFrom.add("外站" + idx);
-                    playUrl.add("第" + idx + "段$" + src);
-                    idx++;
-                }
+                playFrom.add("外站" + idx);
+                playUrl.add("第" + idx + "段$" + src);
+                idx++;
             }
 
             if (!playFrom.isEmpty()) {
