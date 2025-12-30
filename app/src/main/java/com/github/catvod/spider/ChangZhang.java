@@ -60,10 +60,7 @@ public class ChangZhang extends Spider {
         }
         List<Vod> list = getVideos(siteUrl + "/");
 
-        Result result = new Result();
-        result.classes = classes;
-        result.list = list;
-        return result.string();
+        return Result.get().classes(classes).list(list).string();
     }
 
     @Override
@@ -72,9 +69,7 @@ public class ChangZhang extends Spider {
         String url = siteUrl + "/" + tid + (page > 1 ? "/page/" + page : "");
         List<Vod> list = getVideos(url);
 
-        Result result = new Result();
-        result.list = list;
-        return result.string();
+        return Result.get().list(list).string();
     }
 
     private List<Vod> getVideos(String url) throws Exception {
@@ -94,10 +89,10 @@ public class ChangZhang extends Spider {
             if (rem != null) remark = rem.text().trim();
 
             Vod vod = new Vod();
-            vod.vodId = id;
-            vod.vodName = name;
-            vod.vodPic = pic;
-            vod.vodRemarks = remark;
+            vod.setVodId(id);
+            vod.setVodName(name);
+            vod.setVodPic(pic);
+            vod.setVodRemarks(remark);
             videos.add(vod);
         }
         return videos;
@@ -137,24 +132,22 @@ public class ChangZhang extends Spider {
         if (playUrlSb.length() > 0) playUrlSb.deleteCharAt(playUrlSb.length() - 1);
 
         Vod vod = new Vod();
-        vod.vodId = id;
-        vod.vodName = title;
-        vod.vodPic = pic;
-        vod.vodContent = content;
-        vod.typeName = typeName;
-        vod.vodArea = area;
-        vod.vodYear = year;
-        vod.vodDirector = director;
-        vod.vodActor = actor;
-        vod.vodPlayFrom = "厂长";
-        vod.vodPlayUrl = playUrlSb.toString();
+        vod.setVodId(id);
+        vod.setVodName(title);
+        vod.setVodPic(pic);
+        vod.setVodContent(content);
+        vod.setTypeName(typeName);
+        vod.setVodArea(area);
+        vod.setVodYear(year);
+        vod.setVodDirector(director);
+        vod.setVodActor(actor);
+        vod.setVodPlayFrom("厂长");
+        vod.setVodPlayUrl(playUrlSb.toString());
 
-        List<Vod> list = new ArrayList<>();
-        list.add(vod);
+        List<Vod> vodList = new ArrayList<>();
+        vodList.add(vod);
 
-        Result result = new Result();
-        result.list = list;
-        return result.string();
+        return Result.get().list(vodList).string();
     }
 
     @Override
@@ -175,9 +168,7 @@ public class ChangZhang extends Spider {
 
         List<Vod> list = getVideosFromHtml(html);
 
-        Result result = new Result();
-        result.list = list;
-        return result.string();
+        return Result.get().list(list).string();
     }
 
     private List<Vod> getVideosFromHtml(String html) throws Exception {
@@ -196,10 +187,10 @@ public class ChangZhang extends Spider {
             if (rem != null) remark = rem.text().trim();
 
             Vod vod = new Vod();
-            vod.vodId = id;
-            vod.vodName = name;
-            vod.vodPic = pic;
-            vod.vodRemarks = remark;
+            vod.setVodId(id);
+            vod.setVodName(name);
+            vod.setVodPic(pic);
+            vod.setVodRemarks(remark);
             videos.add(vod);
         }
         return videos;
@@ -210,7 +201,7 @@ public class ChangZhang extends Spider {
         String html = fetch(id);
         Document doc = Jsoup.parse(html);
 
-        // 优先 AES 加密（当前主流方式）
+        // 优先 AES 加密
         for (Element script : doc.select("script")) {
             String scriptText = script.html();
             if (scriptText.contains("md5.enc.Utf8")) {
@@ -225,10 +216,7 @@ public class ChangZhang extends Spider {
                         String decrypted = aesDecrypt(encrypted, keyStr, ivStr);
                         String playUrl = decrypted.split("url:\"")[1].split("\"")[0];
 
-                        Result result = new Result();
-                        result.url = playUrl;
-                        result.parse = 0;
-                        return result.string();
+                        return Result.get().url(playUrl).parse(0).string();
                     }
                 } catch (Exception e) {
                     SpiderDebug.log(e);
@@ -253,18 +241,12 @@ public class ChangZhang extends Spider {
                 int len = decoded.length();
                 String playUrl = decoded.substring(0, (len - 7) / 2) + decoded.substring((len - 7) / 2 + 7);
 
-                Result result = new Result();
-                result.url = playUrl;
-                result.parse = 0;
-                return result.string();
+                return Result.get().url(playUrl).parse(0).string();
             } catch (Exception ignored) {}
         }
 
-        // 兜底直接解析
-        Result result = new Result();
-        result.url = id;
-        result.parse = 1;
-        return result.string();
+        // 兜底
+        return Result.get().url(id).parse(1).string();
     }
 
     private String aesDecrypt(String encryptedBase64, String keyStr, String ivStr) {
