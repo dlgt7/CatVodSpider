@@ -181,11 +181,11 @@ public class Pyys extends Spider {
             filters.put(typeId, filterList);
         }
 
-        // 首页视频列表：使用“最近更新”排序，不限分类
+        // 首页视频列表：最近更新，不限分类
         HashMap<String, String> params = new HashMap<>();
         params.put("pageNum", "1");
         params.put("pageSize", "24");
-        params.put("sort", "2");  // 2=最近更新
+        params.put("sort", "2");  // 2 = 最近更新
         String listBody = OkHttp.post(host + "/api/mw-movie/anonymous/v1/get/video/list", js(params), getHeaders(params)).getBody();
         JsonObject listRsp = JsonParser.parseString(listBody).getAsJsonObject();
         List<Vod> list = getVodList(listRsp.getAsJsonArray("data"));
@@ -193,8 +193,120 @@ public class Pyys extends Spider {
         return Result.string(classes, list, filters);
     }
 
-    // 其余方法（categoryContent、detailContent、searchContent、playerContent、getVodList）保持不变，与上版相同
+    @Override
+    public String categoryContent(String tid, String pg, boolean filter, HashMap<String, String> extend) throws Exception {
+        HashMap<String, String> params = new HashMap<>();
+        params.put("pageNum", pg);
+        params.put("pageSize", "20");
+        params.put("typeId", tid);
+        if (extend != null) params.putAll(extend);
 
-    // ... (此处省略不变部分，直接复制上一版的对应方法即可)
+        String body = OkHttp.post(host + "/api/mw-movie/anonymous/v1/get/video/list", js(params), getHeaders(params)).getBody();
+        JsonObject rsp = JsonParser.parseString(body).getAsJsonObject();
 
+        List<Vod> list = getVodList(rsp.getAsJsonArray("data"));
+        int page = Integer.parseInt(pg);
+        int limit = 20;
+        int total = rsp.has("total") ? rsp.get("total").getAsInt() : 0;
+        int pageCount = total > 0 ? (total + limit - 1) / limit : page;
+
+        return Result.get().page(page, pageCount, limit, total).vod(list).string();
+    }
+
+    @Override
+    public String detailContent(List<String> ids) throws Exception {
+        String id = ids.get(0);
+        HashMap<String, String> params = new HashMap<>();
+        params.put("videoId", id);
+
+        String body = OkHttp.post(host + "/api/mw-movie/anonymous/v1/video/detail", js(params), getHeaders(params)).getBody();
+        JsonObject rsp = JsonParser.parseString(body).getAsJsonObject();
+        JsonObject data = rsp.getAsJsonObject("data");
+
+        Vod vod = new Vod();
+        vod.setVodId(data.get("videoId").getAsString());
+        vod.setVodName(data.get("videoName").getAsString());
+        vod.setVodPic(data.get("videoImg").getAsString());
+        vod.setTypeName(data.get("typeName").getAsString());
+        vod.setVodYear(data.get("videoYear").getAsString());
+        vod.setVodArea(data.get("videoArea").getAsString());
+        vod.setVodRemarks(data.get("videoRemarks").getAsString());
+        vod.setVodActor(data.get("videoActor").getAsString());
+        vod.setVodDirector(data.get("videoDirector").getAsString());
+        vod.setVodContent(data.get("videoContent").getAsString());
+
+        LinkedHashMap<String, String> playMap = new LinkedHashMap<>();
+        JsonArray lines = data.getAsJsonArray("lineList");
+        for (JsonElement lineEle : lines) {
+            JsonObject line = lineEle.getAsJsonObject();
+            String from = line.get("lineName").getAsString();
+            StringBuilder urlBuilder = new StringBuilder();
+            JsonArray plays = line.getAsJsonArray("playList");
+            for (JsonElement playEle : plays) {
+                JsonObject play = playEle.getAsJsonObject();
+                String name = play.get("playName").getAsString();
+                String playId = play.get("playId").getAsString();
+                if (urlBuilder.length() > 0) urlBuilder.append("#");
+                urlBuilder.append(name).append("$").append(playId);
+            }
+            playMap.put(from, urlBuilder.toString());
+        }
+
+        vod.setVodPlayFrom(String.join("$$$", playMap.keySet()));
+        vod.setVodPlayUrl(String.join("$$$", playMap.values()));
+
+        List<Vod> vods = new ArrayList<>();
+        vods.add(vod);
+        return Result.string(vods);
+    }
+
+    @Override
+    public String searchContent(String key, boolean quick) throws Exception {
+        return searchContent(key, quick, "1");
+    }
+
+    @Override
+    public String searchContent(String key, boolean quick, String pg) throws Exception {
+        HashMap<String, String> params = new HashMap<>();
+        params.put("pageNum", pg);
+        params.put("pageSize", "20");
+        params.put("wd", key);
+
+        String body = OkHttp.post(host + "/api/mw-movie/anonymous/v1/get/video/list", js(params), getHeaders(params)).getBody();
+        JsonObject rsp = JsonParser.parseString(body).getAsJsonObject();
+
+        List<Vod> list = getVodList(rsp.getAsJsonArray("data"));
+        return Result.string(list);
+    }
+
+    @Override
+    public String playerContent(String flag, String id, List<String> vipFlags) throws Exception {
+        HashMap<String, String> params = new HashMap<>();
+        params.put("playId", id);
+
+        String body = OkHttp.post(host + "/api/mw-movie/anonymous/v1/video/parse/url", js(params), getHeaders(params)).getBody();
+        JsonObject rsp = JsonParser.parseString(body).getAsJsonObject();
+        JsonObject data = rsp.getAsJsonObject("data");
+
+        String url = data.get("url").getAsString();
+        int parse = data.has("parse") ? data.get("parse").getAsInt() : 0;
+
+        return Result.get().url(url).parse(parse).string();
+    }
+
+    // 修复：补全缺失的 getVodList 方法
+    private List<Vod> getVodList(JsonArray array) {
+        List<Vod> list = new ArrayList<>();
+        if (array == null) return list;
+        for (JsonElement ele : array) {
+            JsonObject obj = ele.getAsJsonObject();
+            Vod vod = new Vod();
+            vod.setVodId(obj.get("videoId").getAsString());
+            vod.setVodName(obj.get("videoName").getAsString());
+            vod.setVodPic(obj.get("videoImg").getAsString());
+            vod.setVodRemarks(obj.has("videoRemarks") ? obj.get("videoRemarks").getAsString() : "");
+            list.add(vod);
+        }
+        return list;
+    }
 }
