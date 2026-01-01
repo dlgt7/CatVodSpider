@@ -33,22 +33,20 @@ public class Jpys extends Spider {
 
     @Override
     public void init(Context context, String extend) {
-        // 关键修复：移除 throws Exception，所有异常内部捕获
-        super.init(context, extend);
         try {
+            // 修复点：显式捕获 super.init 的异常
+            super.init(context, extend);
             String hosts = "https://www.jiabaide.cn,https://cqzuoer.com";
             if (!TextUtils.isEmpty(extend) && extend.trim().startsWith("{")) {
                 JSONObject ext = new JSONObject(extend);
                 if (ext.has("site")) hosts = ext.getString("site");
             }
             this.host = getBestHost(hosts);
-        } catch (Throwable e) {  // 改用 Throwable，避免受检异常问题
+        } catch (Exception e) {
             SpiderDebug.log(e);
             this.host = "https://www.jiabaide.cn";
         }
     }
-
-    // 下面所有方法保持完全不变（已是最优实现）
 
     private String getBestHost(String hosts) {
         String[] urls = hosts.split(",");
@@ -74,11 +72,13 @@ public class Jpys extends Spider {
         String t = String.valueOf(System.currentTimeMillis());
         params.put("key", KEY);
         params.put("t", t);
+
         StringBuilder sb = new StringBuilder();
         for (Map.Entry<String, String> entry : params.entrySet()) {
             if (sb.length() > 0) sb.append("&");
             sb.append(entry.getKey()).append("=").append(entry.getValue());
         }
+
         String sign = sha1(md5(sb.toString()));
         Map<String, String> headers = new HashMap<>();
         headers.put("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36");
@@ -93,14 +93,17 @@ public class Jpys extends Spider {
         try {
             String typeUrl = host + "/api/mw-movie/anonymous/get/filer/type";
             String listUrl = host + "/api/mw-movie/anonymous/v1/get/filer/list";
+
             JSONObject cdata = new JSONObject(OkHttp.string(typeUrl, getHeaders(new TreeMap<>())));
             JSONObject fdata = new JSONObject(OkHttp.string(listUrl, getHeaders(new TreeMap<>())));
+
             List<Class> classes = new ArrayList<>();
             JSONArray types = cdata.getJSONArray("data");
             for (int i = 0; i < types.length(); i++) {
                 JSONObject obj = types.getJSONObject(i);
                 classes.add(new Class(obj.getString("typeId"), obj.getString("typeName")));
             }
+
             LinkedHashMap<String, List<Filter>> filters = new LinkedHashMap<>();
             JSONObject filterData = fdata.getJSONObject("data");
             Iterator<String> keys = filterData.keys();
@@ -113,6 +116,7 @@ public class Jpys extends Spider {
                 fList.add(new Filter("year", "年份", getFilterValues(d.getJSONArray("yearList"), "itemText", "itemText")));
                 filters.put(tid, fList);
             }
+            // 优化点：实例化 Result，补上空 vod 列表，符合最新 Result.java
             return new Result().classes(classes).filters(filters).vod(new ArrayList<>()).string();
         } catch (Exception e) {
             SpiderDebug.log(e);
@@ -127,11 +131,14 @@ public class Jpys extends Spider {
             params.put("pageNum", pg);
             params.put("pageSize", "30");
             params.put("type1", tid);
+            // 优化点：直接合并参数
             params.putAll(extend);
+
             StringBuilder url = new StringBuilder(host + "/api/mw-movie/anonymous/video/list?");
             for (Map.Entry<String, String> entry : params.entrySet()) {
                 url.append(entry.getKey()).append("=").append(entry.getValue()).append("&");
             }
+
             String content = OkHttp.string(url.toString(), getHeaders(params));
             JSONObject data = new JSONObject(content).getJSONObject("data");
             return new Result().vod(parseVods(data.getJSONArray("list"))).page(Integer.parseInt(pg), 0, 30, data.getInt("total")).string();
@@ -147,10 +154,10 @@ public class Jpys extends Spider {
             String id = ids.get(0);
             Map<String, String> params = new TreeMap<>();
             params.put("id", id);
-
+            
             String content = OkHttp.string(host + "/api/mw-movie/anonymous/video/detail?id=" + id, getHeaders(params));
             JSONObject data = new JSONObject(content).getJSONObject("data");
-
+            
             Vod vod = new Vod();
             vod.setVodId(data.optString("id"));
             vod.setVodName(data.optString("vodName"));
@@ -162,7 +169,7 @@ public class Jpys extends Spider {
             vod.setVodDirector(data.optString("vodDirector"));
             vod.setVodContent(data.optString("vodContent"));
             vod.setVodRemarks(data.optString("vodRemarks"));
-
+            
             JSONArray episodes = data.getJSONArray("episodelist");
             List<String> playUrls = new ArrayList<>();
             for (int i = 0; i < episodes.length(); i++) {
@@ -171,6 +178,7 @@ public class Jpys extends Spider {
             }
             vod.setVodPlayFrom("金牌影院");
             vod.setVodPlayUrl(TextUtils.join("#", playUrls));
+
             return new Result().vod(Arrays.asList(vod)).string();
         } catch (Exception e) {
             SpiderDebug.log(e);
@@ -186,11 +194,13 @@ public class Jpys extends Spider {
             params.put("clientType", "1");
             params.put("id", ids[0]);
             params.put("nid", ids[1]);
+
             String url = host + "/api/mw-movie/anonymous/v2/video/episode/url?clientType=1&id=" + ids[0] + "&nid=" + ids[1];
             String content = OkHttp.string(url, getHeaders(params));
             JSONObject data = new JSONObject(content).getJSONObject("data");
             String playUrl = data.getJSONArray("list").getJSONObject(0).getString("url");
-
+            
+            // 优化点：parse(0) 明确直链
             return new Result().url(playUrl).header(getHeaders(null)).parse(0).string();
         } catch (Exception e) {
             SpiderDebug.log(e);
@@ -206,6 +216,7 @@ public class Jpys extends Spider {
             params.put("pageNum", "1");
             params.put("pageSize", "30");
             params.put("sourceCode", "1");
+
             String url = host + "/api/mw-movie/anonymous/video/searchByWord?keyword=" + key + "&pageNum=1&pageSize=30&sourceCode=1";
             String content = OkHttp.string(url, getHeaders(params));
             JSONArray list = new JSONObject(content).getJSONObject("data").getJSONObject("result").getJSONArray("list");
