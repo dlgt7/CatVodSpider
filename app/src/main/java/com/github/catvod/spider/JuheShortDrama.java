@@ -9,7 +9,6 @@ import com.github.catvod.bean.Result;
 import com.github.catvod.bean.Vod;
 import com.github.catvod.crawler.Spider;
 import com.github.catvod.crawler.SpiderDebug;
-import com.github.catvod.en.NetPan;
 import com.github.catvod.net.OkHttp;
 import com.github.catvod.utils.Util;
 import com.google.gson.Gson;
