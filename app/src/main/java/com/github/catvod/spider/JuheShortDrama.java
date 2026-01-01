@@ -113,7 +113,7 @@ public class JuheShortDrama extends Spider {
 
     // ==================== 初始化 ====================
     @Override
-    public void init(Context context, String extend) {
+    public void init(Context context, String extend) throws Exception { // 修复：添加了 throws Exception
         super.init(context, extend);
 
         // 解析 extend 配置的自定义域名
