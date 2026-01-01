@@ -16,7 +16,7 @@ import java.util.*;
 
 /**
  * Heiliao Spider for TVBox
- * 优化了分页逻辑、图片补全以及基础播放抓取
+ * 修复了与 Vod Bean 属性不匹配的编译错误
  */
 public class Heiliao extends Spider {
 
@@ -45,7 +45,6 @@ public class Heiliao extends Spider {
     @Override
     public String homeContent(boolean filter) throws Exception {
         List<Class> classes = new ArrayList<>();
-        // 这里的 tid 建议统一不带开头斜杠，在拼接时处理
         String[][] nav = {
             {"", "最新黑料"},
             {"hlcg", "黑料吃瓜"},
@@ -69,10 +68,8 @@ public class Heiliao extends Spider {
         
         String url;
         if (tid.contains("?s=")) {
-            // 搜索结果的分页逻辑通常是 &page= 或使用 WordPress 默认格式
             url = siteUrl + (tid.startsWith("/") ? tid : "/" + tid) + (pg.equals("1") ? "" : "&page=" + pg);
         } else {
-            // 分类页分页逻辑
             String path = tid.isEmpty() ? "" : (tid.startsWith("/") ? tid : "/" + tid + "/");
             url = siteUrl + path + (pg.equals("1") ? "" : "page/" + pg + "/");
         }
@@ -80,10 +77,9 @@ public class Heiliao extends Spider {
         String content = fetch(url);
         if (content.isEmpty()) return Result.get().vod(new ArrayList<>()).string();
 
-        Document doc = Jsoup.parse(content, url); // 传入 url 用于 absUrl 补全
+        Document doc = Jsoup.parse(content, url);
         List<Vod> list = new ArrayList<>();
 
-        // 这里的选择器需根据实际网页结构调整，archive-item 是通用 WP 结构
         Elements items = doc.select("div.archive-item, article, .post-item");
         for (Element item : items) {
             Element link = item.selectFirst("a");
@@ -98,7 +94,6 @@ public class Heiliao extends Spider {
             if (vodName.isEmpty()) continue;
 
             Element img = item.selectFirst("img");
-            // 使用 absUrl 自动补全域名
             String vodPic = img != null ? img.absUrl("src") : "";
             if (vodPic.isEmpty() && img != null) vodPic = img.absUrl("data-src");
 
@@ -106,7 +101,8 @@ public class Heiliao extends Spider {
             Element dateEl = item.selectFirst(".date, .time, .meta");
             if (dateEl != null) vodRemarks = dateEl.text().trim();
 
-            list.add(new Vod().vod_id(vodId).vod_name(vodName).vod_pic(vodPic).vod_remarks(vodRemarks));
+            // 使用 Vod.java 中定义的构造函数
+            list.add(new Vod(vodId, vodName, vodPic, vodRemarks));
         }
 
         int page = Integer.parseInt(pg);
@@ -116,7 +112,6 @@ public class Heiliao extends Spider {
     @Override
     public String detailContent(List<String> ids) throws Exception {
         String url = ids.get(0);
-        // 如果 vod_id 存的是相对路径，则补全
         if (!url.startsWith("http")) url = siteUrl + (url.startsWith("/") ? "" : "/") + url;
 
         String content = fetch(url);
@@ -124,21 +119,21 @@ public class Heiliao extends Spider {
 
         Document doc = Jsoup.parse(content, url);
         Vod vod = new Vod();
-        vod.vod_id(url);
+        
+        // 使用正确的 Setter 方法名
+        vod.setVodId(url);
 
         Element titleEl = doc.selectFirst("h1.title, h1.entry-title, .article-title");
-        vod.vod_name(titleEl != null ? titleEl.text().trim() : "未知视频");
+        vod.setVodName(titleEl != null ? titleEl.text().trim() : "未知视频");
 
         Element picEl = doc.selectFirst("meta[property=og:image]");
-        vod.vod_pic(picEl != null ? picEl.attr("content") : "");
+        vod.setVodPic(picEl != null ? picEl.attr("content") : "");
 
         Element contentEl = doc.selectFirst(".entry-content, .article-content, #content");
-        vod.vod_content(contentEl != null ? contentEl.text().trim() : "");
+        vod.setVodContent(contentEl != null ? contentEl.text().trim() : "");
 
-        // 播放源解析
         Map<String, String> playMap = new LinkedHashMap<>();
         
-        // 1. 尝试直接抓取 video 标签
         Elements videos = doc.select("video source, video[src]");
         int count = 1;
         for (Element v : videos) {
@@ -148,7 +143,6 @@ public class Heiliao extends Spider {
             }
         }
 
-        // 2. 尝试抓取 iframe
         Elements iframes = doc.select("iframe[src]");
         for (Element f : iframes) {
             String src = f.absUrl("src");
@@ -158,7 +152,6 @@ public class Heiliao extends Spider {
         }
 
         if (playMap.isEmpty()) {
-            // 备选：如果都没有，尝试从 script 脚本中匹配地址
             String regex = "(https?://[^\"]+\\.(?:m3u8|mp4))";
             java.util.regex.Pattern pattern = java.util.regex.Pattern.compile(regex);
             java.util.regex.Matcher matcher = pattern.matcher(content);
@@ -171,8 +164,9 @@ public class Heiliao extends Spider {
         }
 
         if (!playMap.isEmpty()) {
-            vod.setVod_play_from(String.join("$$$", playMap.keySet()));
-            vod.setVod_play_url(String.join("$$$", playMap.values()));
+            // 修正 Setter 方法名拼写
+            vod.setVodPlayFrom(String.join("$$$", playMap.keySet()));
+            vod.setVodPlayUrl(String.join("$$$", playMap.values()));
         }
 
         return Result.string(vod);
@@ -180,13 +174,11 @@ public class Heiliao extends Spider {
 
     @Override
     public String playerContent(String flag, String id, List<String> vipFlags) throws Exception {
-        // 如果是直链地址，直接返回；如果是第三方解析页面，TVBox 会根据内置规则解析
         return Result.get().url(id).header(getHeaders()).string();
     }
 
     @Override
     public String searchContent(String key, boolean quick) throws Exception {
-        // 构建 WordPress 标准搜索路径
         String searchTid = "/?s=" + URLEncoder.encode(key, "UTF-8");
         return categoryContent(searchTid, "1", false, null);
     }
