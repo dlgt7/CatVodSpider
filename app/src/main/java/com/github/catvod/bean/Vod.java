@@ -1,193 +1,326 @@
-package com.github.catvod.spider;
+package com.github.catvod.bean;
 
-import android.content.Context;
-import com.github.catvod.bean.Class;
-import com.github.catvod.bean.Result;
-import com.github.catvod.bean.Vod;
-import com.github.catvod.crawler.Spider;
-import com.github.catvod.net.OkHttp;
-import org.jsoup.Jsoup;
-import org.jsoup.nodes.Document;
-import org.jsoup.nodes.Element;
-import org.jsoup.select.Elements;
+import com.google.gson.Gson;
+import com.google.gson.annotations.SerializedName;
 
-import java.net.URLEncoder;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
 
-/**
- * Heiliao Spider for TVBox
- * 修复了与 Vod Bean 属性不匹配的编译错误
- */
-public class Heiliao extends Spider {
+public class Vod {
 
-    private String siteUrl = "https://heiliao43.com"; 
-    private Map<String, String> headers;
+    @SerializedName("type_name")
+    private String typeName;
 
-    private Map<String, String> getHeaders() {
-        if (headers == null) {
-            headers = new HashMap<>();
-            headers.put("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36");
-            headers.put("Referer", siteUrl + "/");
-        }
-        return headers;
+    @SerializedName("vod_id")
+    private String vodId;
+
+    @SerializedName("vod_name")
+    private String vodName;
+
+    @SerializedName("vod_pic")
+    private String vodPic;
+
+    @SerializedName("vod_remarks")
+    private String vodRemarks;
+
+    @SerializedName("vod_year")
+    private String vodYear;
+
+    @SerializedName("vod_area")
+    private String vodArea;
+
+    @SerializedName("vod_actor")
+    private String vodActor;
+
+    @SerializedName("vod_director")
+    private String vodDirector;
+
+    @SerializedName("vod_content")
+    private String vodContent;
+
+    @SerializedName("vod_play_from")
+    private String vodPlayFrom;
+
+    @SerializedName("vod_play_url")
+    private String vodPlayUrl;
+
+    @SerializedName("vod_tag")
+    private String vodTag;
+
+    @SerializedName("action")
+    private String action;
+
+    @SerializedName("style")
+    private Style style;
+
+    // ============================ 静态工厂方法 ============================
+
+    public static Vod objectFrom(String str) {
+        Vod item = new Gson().fromJson(str, Vod.class);
+        return item == null ? new Vod() : item;
     }
 
-    @Override
-    public void init(Context context, String extend) throws Exception {
-        super.init(context, extend);
-        if (extend != null && !extend.trim().isEmpty()) {
-            siteUrl = extend.trim();
-            if (!siteUrl.startsWith("http")) siteUrl = "https://" + siteUrl;
-            if (siteUrl.endsWith("/")) siteUrl = siteUrl.substring(0, siteUrl.length() - 1);
-        }
-    }
-
-    @Override
-    public String homeContent(boolean filter) throws Exception {
-        List<Class> classes = new ArrayList<>();
-        String[][] nav = {
-            {"", "最新黑料"},
-            {"hlcg", "黑料吃瓜"},
-            {"jrrs", "今日热点"},
-            {"rmhl", "热门黑料"},
-            {"jdh", "经典黑料"},
-            {"xycg", "校园专区"},
-            {"whhl", "网红黑料"},
-            {"mxl", "明星八卦"},
-            {"qyhl", "反差专区"}
-        };
-        for (String[] item : nav) {
-            classes.add(new Class(item[0], item[1]));
-        }
-        return Result.string(classes, new ArrayList<>(), new LinkedHashMap<>());
-    }
-
-    @Override
-    public String categoryContent(String tid, String pg, boolean filter, Map<String, String> extend) throws Exception {
-        if (pg == null || pg.isEmpty()) pg = "1";
-        
-        String url;
-        if (tid.contains("?s=")) {
-            url = siteUrl + (tid.startsWith("/") ? tid : "/" + tid) + (pg.equals("1") ? "" : "&page=" + pg);
-        } else {
-            String path = tid.isEmpty() ? "" : (tid.startsWith("/") ? tid : "/" + tid + "/");
-            url = siteUrl + path + (pg.equals("1") ? "" : "page/" + pg + "/");
-        }
-
-        String content = fetch(url);
-        if (content.isEmpty()) return Result.get().vod(new ArrayList<>()).string();
-
-        Document doc = Jsoup.parse(content, url);
-        List<Vod> list = new ArrayList<>();
-
-        Elements items = doc.select("div.archive-item, article, .post-item");
-        for (Element item : items) {
-            Element link = item.selectFirst("a");
-            if (link == null) continue;
-
-            String vodId = link.attr("href"); 
-            String vodName = "";
-            Element titleEl = item.selectFirst("h2, h3, .title");
-            if (titleEl != null) vodName = titleEl.text().trim();
-
-            if (vodName.isEmpty()) vodName = link.attr("title");
-            if (vodName.isEmpty()) continue;
-
-            Element img = item.selectFirst("img");
-            String vodPic = img != null ? img.absUrl("src") : "";
-            if (vodPic.isEmpty() && img != null) vodPic = img.absUrl("data-src");
-
-            String vodRemarks = "";
-            Element dateEl = item.selectFirst(".date, .time, .meta");
-            if (dateEl != null) vodRemarks = dateEl.text().trim();
-
-            // 使用 Vod.java 中定义的构造函数
-            list.add(new Vod(vodId, vodName, vodPic, vodRemarks));
-        }
-
-        int page = Integer.parseInt(pg);
-        return Result.get().vod(list).page(page, page + 1, 20, list.size() + 100).string();
-    }
-
-    @Override
-    public String detailContent(List<String> ids) throws Exception {
-        String url = ids.get(0);
-        if (!url.startsWith("http")) url = siteUrl + (url.startsWith("/") ? "" : "/") + url;
-
-        String content = fetch(url);
-        if (content.isEmpty()) return Result.get().vod(new ArrayList<>()).string();
-
-        Document doc = Jsoup.parse(content, url);
+    public static Vod action(String action) {
         Vod vod = new Vod();
-        
-        // 使用正确的 Setter 方法名
-        vod.setVodId(url);
+        vod.action = action;
+        return vod;
+    }
 
-        Element titleEl = doc.selectFirst("h1.title, h1.entry-title, .article-title");
-        vod.setVodName(titleEl != null ? titleEl.text().trim() : "未知视频");
+    // ============================ 构造器 ============================
 
-        Element picEl = doc.selectFirst("meta[property=og:image]");
-        vod.setVodPic(picEl != null ? picEl.attr("content") : "");
+    public Vod() {
+    }
 
-        Element contentEl = doc.selectFirst(".entry-content, .article-content, #content");
-        vod.setVodContent(contentEl != null ? contentEl.text().trim() : "");
+    public Vod(String vodId, String vodName, String vodPic) {
+        setVodId(vodId);
+        setVodName(vodName);
+        setVodPic(vodPic);
+    }
 
-        Map<String, String> playMap = new LinkedHashMap<>();
-        
-        Elements videos = doc.select("video source, video[src]");
-        int count = 1;
-        for (Element v : videos) {
-            String src = v.absUrl("src");
-            if (src.contains(".mp4") || src.contains(".m3u8")) {
-                playMap.put("播放源 " + count++, "立即播放$" + src);
+    public Vod(String vodId, String vodName, String vodPic, String vodRemarks) {
+        setVodId(vodId);
+        setVodName(vodName);
+        setVodPic(vodPic);
+        setVodRemarks(vodRemarks);
+    }
+
+    public Vod(String vodId, String vodName, String vodPic, String vodRemarks, String action) {
+        this(vodId, vodName, vodPic, vodRemarks);
+        setAction(action);
+    }
+
+    public Vod(String vodId, String vodName, String vodPic, String vodRemarks, Style style) {
+        this(vodId, vodName, vodPic, vodRemarks);
+        setStyle(style);
+    }
+
+    public Vod(String vodId, String vodName, String vodPic, String vodRemarks, Style style, String action) {
+        this(vodId, vodName, vodPic, vodRemarks, style);
+        setAction(action);
+    }
+
+    public Vod(String vodId, String vodName, String vodPic, String vodRemarks, boolean folder) {
+        this(vodId, vodName, vodPic, vodRemarks);
+        setVodTag(folder ? "folder" : "file");
+    }
+
+    // ============================ Getter 方法（完整补充） ============================
+
+    public String getTypeName() {
+        return typeName;
+    }
+
+    public String getVodId() {
+        return vodId;
+    }
+
+    public String getVodName() {
+        return vodName;
+    }
+
+    public String getVodPic() {
+        return vodPic;
+    }
+
+    public String getVodRemarks() {
+        return vodRemarks;
+    }
+
+    public String getVodYear() {
+        return vodYear;
+    }
+
+    public String getVodArea() {
+        return vodArea;
+    }
+
+    public String getVodActor() {
+        return vodActor;
+    }
+
+    public String getVodDirector() {
+        return vodDirector;
+    }
+
+    public String getVodContent() {
+        return vodContent;
+    }
+
+    public String getVodPlayFrom() {
+        return vodPlayFrom;
+    }
+
+    public String getVodPlayUrl() {
+        return vodPlayUrl;
+    }
+
+    public String getVodTag() {
+        return vodTag;
+    }
+
+    public String getAction() {
+        return action;
+    }
+
+    public Style getStyle() {
+        return style;
+    }
+
+    // ============================ Setter 方法 ============================
+
+    public void setTypeName(String typeName) {
+        this.typeName = typeName;
+    }
+
+    public void setVodId(String vodId) {
+        this.vodId = vodId;
+    }
+
+    public void setVodName(String vodName) {
+        this.vodName = vodName;
+    }
+
+    public void setVodPic(String vodPic) {
+        this.vodPic = vodPic;
+    }
+
+    public void setVodRemarks(String vodRemarks) {
+        this.vodRemarks = vodRemarks;
+    }
+
+    public void setVodYear(String vodYear) {
+        this.vodYear = vodYear;
+    }
+
+    public void setVodArea(String vodArea) {
+        this.vodArea = vodArea;
+    }
+
+    public void setVodActor(String vodActor) {
+        this.vodActor = vodActor;
+    }
+
+    public void setVodDirector(String vodDirector) {
+        this.vodDirector = vodDirector;
+    }
+
+    public void setVodContent(String vodContent) {
+        this.vodContent = vodContent;
+}
+
+    public void setVodPlayFrom(String vodPlayFrom) {
+        this.vodPlayFrom = vodPlayFrom;
+}
+
+    public void setVodPlayUrl(String vodPlayUrl) {
+        this.vodPlayUrl = vodPlayUrl;
+    }
+
+    public void setVodTag(String vodTag) {
+        this.vodTag = vodTag;
+    }
+
+    public void setAction(String action) {
+        this.action = action;
+    }
+
+    public void setStyle(Style style) {
+        this.style = style;
+    }
+
+    // ============================ Style 内部类 ============================
+
+    public static class Style {
+
+        @SerializedName("type")
+        private String type;
+
+        @SerializedName("ratio")
+        private Float ratio;
+
+        public static Style rect() {
+            return rect(0.75f);
+}
+
+        public static Style rect(float ratio) {
+            return new Style("rect", ratio);
+        }
+
+        public static Style oval() {
+            return new Style("oval", 1.0f);
+        }
+
+        public static Style full() {
+            return new Style("full");
+        }
+
+        public static Style list() {
+            return new Style("list");
+}
+
+        public Style(String type) {
+            this.type = type;
+}
+
+        public Style(String type, Float ratio) {
+            this.type = type;
+            this.ratio = ratio;
+}
+
+        public String getType() {
+            return type;
+}
+
+        public Float getRatio() {
+            return ratio;
+        }
+}
+
+    // ============================ VodPlayBuilder 播放源构建器 ============================
+
+    public static class VodPlayBuilder {
+        private final List<String> vodPlayFrom = new ArrayList<>();
+        private final List<String> vodPlayUrl = new ArrayList<>();
+
+        /**
+         * 添加一个播放源分组
+         *
+         * @param playFrom 播放源名称（如 "线路1"）
+         * @param playUrl  该源下的剧集列表
+         * @return this
+         */
+        public VodPlayBuilder append(String playFrom, List<PlayUrl> playUrl) {
+            vodPlayFrom.add(playFrom);
+            vodPlayUrl.add(toPlayUrlStr(playUrl));
+            return this;
+        }
+
+        public BuildResult build() {
+            BuildResult result = new BuildResult();
+            result.vodPlayFrom = String.join("$$$", vodPlayFrom);
+            result.vodPlayUrl = String.join("$$$", vodPlayUrl);
+            return result;
+        }
+
+        private String toPlayUrlStr(List<PlayUrl> playUrl) {
+            List<String> list = new ArrayList<>();
+            for (PlayUrl url : playUrl) {
+                // 去掉名称中的 "m3u8" 后缀（常见于某些源）
+                String name = url.name.replace("m3u8", "").trim();
+                list.add(name + "$" + url.url);
             }
+            return String.join("#", list);
         }
 
-        Elements iframes = doc.select("iframe[src]");
-        for (Element f : iframes) {
-            String src = f.absUrl("src");
-            if (src.contains("url=") || src.contains(".mp4") || src.contains(".m3u8") || src.contains("share")) {
-                playMap.put("外链源 " + count++, "解析播放$" + src);
-            }
+        public static class BuildResult {
+            public String vodPlayFrom;
+            public String vodPlayUrl;
         }
 
-        if (playMap.isEmpty()) {
-            String regex = "(https?://[^\"]+\\.(?:m3u8|mp4))";
-            java.util.regex.Pattern pattern = java.util.regex.Pattern.compile(regex);
-            java.util.regex.Matcher matcher = pattern.matcher(content);
-            while (matcher.find()) {
-                String matchUrl = matcher.group(1);
-                if (!playMap.containsValue("立即播放$" + matchUrl)) {
-                    playMap.put("探测源 " + count++, "立即播放$" + matchUrl);
-                }
-            }
-        }
-
-        if (!playMap.isEmpty()) {
-            // 修正 Setter 方法名拼写
-            vod.setVodPlayFrom(String.join("$$$", playMap.keySet()));
-            vod.setVodPlayUrl(String.join("$$$", playMap.values()));
-        }
-
-        return Result.string(vod);
-    }
-
-    @Override
-    public String playerContent(String flag, String id, List<String> vipFlags) throws Exception {
-        return Result.get().url(id).header(getHeaders()).string();
-    }
-
-    @Override
-    public String searchContent(String key, boolean quick) throws Exception {
-        String searchTid = "/?s=" + URLEncoder.encode(key, "UTF-8");
-        return categoryContent(searchTid, "1", false, null);
-    }
-
-    private String fetch(String url) {
-        try {
-            return OkHttp.string(url, getHeaders());
-        } catch (Exception e) {
-            return "";
-        }
-    }
+        public static class PlayUrl {
+            public String flag;  // 线路标志（可选）
+            public String name;  // 剧集名称，如 "第01集"
+            public String url;   // 播放地址
+}
+}
 }
