@@ -16,7 +16,7 @@ import java.util.*;
 
 /**
  * Heiliao Spider for TVBox
- * 修复了与 Vod Bean 属性不匹配的编译错误
+ * 已修正与 Spider 基类参数不匹配导致的编译错误
  */
 public class Heiliao extends Spider {
 
@@ -62,8 +62,9 @@ public class Heiliao extends Spider {
         return Result.string(classes, new ArrayList<>(), new LinkedHashMap<>());
     }
 
+    // 重点修复：将 Map 改为 HashMap 以匹配 Spider.java 的定义
     @Override
-    public String categoryContent(String tid, String pg, boolean filter, Map<String, String> extend) throws Exception {
+    public String categoryContent(String tid, String pg, boolean filter, HashMap<String, String> extend) throws Exception {
         if (pg == null || pg.isEmpty()) pg = "1";
         
         String url;
@@ -101,7 +102,7 @@ public class Heiliao extends Spider {
             Element dateEl = item.selectFirst(".date, .time, .meta");
             if (dateEl != null) vodRemarks = dateEl.text().trim();
 
-            // 使用 Vod.java 中定义的构造函数
+            // 使用 Vod.java 里的四参数构造函数
             list.add(new Vod(vodId, vodName, vodPic, vodRemarks));
         }
 
@@ -120,7 +121,7 @@ public class Heiliao extends Spider {
         Document doc = Jsoup.parse(content, url);
         Vod vod = new Vod();
         
-        // 使用正确的 Setter 方法名
+        // 修正为 Vod.java 对应的 Setter 方法
         vod.setVodId(url);
 
         Element titleEl = doc.selectFirst("h1.title, h1.entry-title, .article-title");
@@ -164,7 +165,7 @@ public class Heiliao extends Spider {
         }
 
         if (!playMap.isEmpty()) {
-            // 修正 Setter 方法名拼写
+            // 修正驼峰式方法名
             vod.setVodPlayFrom(String.join("$$$", playMap.keySet()));
             vod.setVodPlayUrl(String.join("$$$", playMap.values()));
         }
@@ -180,6 +181,7 @@ public class Heiliao extends Spider {
     @Override
     public String searchContent(String key, boolean quick) throws Exception {
         String searchTid = "/?s=" + URLEncoder.encode(key, "UTF-8");
+        // 这里也要传递 null 或者 new HashMap<>()
         return categoryContent(searchTid, "1", false, null);
     }
 
