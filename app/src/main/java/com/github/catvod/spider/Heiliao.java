@@ -12,7 +12,7 @@ import com.github.catvod.bean.Vod;
 import com.github.catvod.crawler.Spider;
 import com.github.catvod.crawler.SpiderDebug;
 import com.github.catvod.net.OkHttp;
-import com.github.catvod.utils.Misc;
+import com.github.catvod.utils.Util;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -23,11 +23,13 @@ import org.jsoup.select.Elements;
 
 import java.net.URLEncoder;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -87,6 +89,7 @@ public class Heiliao extends Spider {
     public String homeContent(boolean filter) {
         try {
             List<Class> classes = new ArrayList<>();
+            LinkedHashMap<String, List<Filter>> filtersMap = new LinkedHashMap<>();
             List<Filter> filters = new ArrayList<>();
             
             // 从网站获取分类
@@ -133,7 +136,8 @@ public class Heiliao extends Spider {
             Result result = new Result();
             result.classes(classes);
             if (filter) {
-                result.filters(filters);
+                filtersMap.put("default", filters);
+                result.filters(filtersMap);
             }
             return result.string();
         } catch (Exception e) {
@@ -186,7 +190,7 @@ public class Heiliao extends Spider {
             }
 
             Result result = new Result();
-            result.list(list);
+            result.vod(list);
             return result.string();
         } catch (Exception e) {
             SpiderDebug.log(e);
@@ -250,7 +254,7 @@ public class Heiliao extends Spider {
             }
 
             Result result = new Result();
-            result.list(list);
+            result.vod(list);
             return result.string();
         } catch (Exception e) {
             SpiderDebug.log(e);
@@ -370,7 +374,7 @@ public class Heiliao extends Spider {
             }
 
             Result result = new Result();
-            result.list(vod);
+            result.vod(Arrays.asList(vod));
             return result.string();
         } catch (Exception e) {
             SpiderDebug.log(e);
@@ -382,7 +386,7 @@ public class Heiliao extends Spider {
     public String searchContent(String key, boolean quick) {
         try {
             // 添加随机延迟以避免频率限制
-            SystemClock.sleep(Misc.random(200, 500));
+            SystemClock.sleep(new Random().nextInt(301) + 200);
             List<Vod> list = new ArrayList<>();
             
             // 构建搜索URL
@@ -422,7 +426,7 @@ public class Heiliao extends Spider {
             }
 
             Result result = new Result();
-            result.list(list);
+            result.vod(list);
             return result.string();
         } catch (Exception e) {
             SpiderDebug.log(e);
@@ -433,7 +437,7 @@ public class Heiliao extends Spider {
     @Override
     public String playerContent(String flag, String id, List<String> vipFlags) {
         try {
-            if (Misc.isVip(id) || Misc.isVideoFormat(id)) {
+            if (false || Util.isMedia(id)) {
                 // 直接播放
                 JSONObject result = new JSONObject();
                 result.put("parse", 0);
