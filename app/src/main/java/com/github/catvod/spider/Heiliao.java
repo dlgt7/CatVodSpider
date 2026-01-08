@@ -51,7 +51,7 @@ public class Heiliao extends Spider {
     protected JSONObject rule; // 规则配置，支持XPath或API
 
     @Override
-    public void init(Context context, String ext) {
+    public void init(Context context, String ext) throws Exception {
         super.init(context, ext);
         this.ext = ext;
         try {
