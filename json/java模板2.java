@@ -6,17 +6,15 @@ package com.github.catvod.spider;
 
 import android.content.Context;
 import android.text.TextUtils;
-import android.os.SystemClock;
 
 import com.github.catvod.bean.Class;
-import com.github.catvod.bean.Danmaku;
 import com.github.catvod.bean.Filter;
 import com.github.catvod.bean.Result;
 import com.github.catvod.bean.Vod;
 import com.github.catvod.crawler.Spider;
 import com.github.catvod.crawler.SpiderDebug;
 import com.github.catvod.net.OkHttp;
-import com.github.catvod.utils.Misc;
+import com.github.catvod.utils.Util;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -28,7 +26,6 @@ import org.jsoup.select.Elements;
 import java.net.URLEncoder;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -38,7 +35,7 @@ import java.util.regex.Pattern;
 public class UniversalSpider extends Spider {
 
     protected String siteUrl = "https://example.com"; // 站点URL，替换为实际站点
-    protected String defaultUa = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"; // 默认User-Agent
+    protected String defaultUa = Util.CHROME; // 默认User-Agent，使用Util.CHROME
 
     protected Map<String, String> headers; // 请求头
     protected String ext; // 扩展参数
@@ -60,22 +57,18 @@ public class UniversalSpider extends Spider {
                 } else {
                     extend = new JSONObject(ext);
                 }
-            }
-            // 初始化请求头
-            headers = new HashMap<>();
-            headers.put("User-Agent", defaultUa);
-            headers.put("Referer", siteUrl + "/");
-            // 初始化筛选和播放配置（如果有）
-            filterConfig = extend.optJSONObject("filters");
-            playerConfig = extend.optJSONObject("players");
-            rule = extend.optJSONObject("rule"); // 支持规则配置，如XPath
-            // 如果有站点URL在ext中，覆盖默认
-            if (extend.has("siteUrl")) {
-                siteUrl = extend.optString("siteUrl");
-            }
-            // 处理siteUrl结尾斜杠
-            if (!siteUrl.endsWith("/")) {
-                siteUrl += "/";
+                // 初始化站点URL和headers
+                siteUrl = extend.optString("siteUrl", siteUrl).trim();
+                if (!siteUrl.endsWith("/")) {
+                    siteUrl += "/";
+                }
+                headers = new HashMap<>();
+                headers.put("User-Agent", extend.optString("ua", defaultUa));
+                headers.put("Referer", siteUrl);
+                // 其他配置
+                filterConfig = extend.optJSONObject("filter");
+                playerConfig = extend.optJSONObject("player");
+                rule = extend.optJSONObject("rule");
             }
         } catch (Exception e) {
             SpiderDebug.log(e);
@@ -85,152 +78,118 @@ public class UniversalSpider extends Spider {
     @Override
     public String homeContent(boolean filter) {
         try {
-            List<com.github.catvod.bean.Class> classes = new ArrayList<>();
-            List<Filter> filters = new ArrayList<>();
-            // 示例：从首页HTML或API获取分类
-            String homeUrl = siteUrl + (rule != null && rule.has("homeUrl") ? rule.optString("homeUrl") : "/");
-            String content = fetch(homeUrl, headers);
-            if (rule != null && rule.has("cateSelector")) {
-                // 使用Jsoup解析
-                Document doc = Jsoup.parse(content);
-                Elements elements = doc.select(rule.optString("cateSelector"));
-                for (Element ele : elements) {
-                    String id = ele.attr(rule.optString("cateIdAttr", "href")).replaceAll(rule.optString("cateIdR", ""), "");
-                    String name = ele.text();
-                    com.github.catvod.bean.Class cls = new com.github.catvod.bean.Class(id, name);
-                    classes.add(cls);
-
-                    // 如果支持筛选，添加筛选选项
-                    if (filter && filterConfig != null) {
-                        JSONArray filterArray = filterConfig.optJSONArray(cls.getTypeId());
-                        if (filterArray != null) {
-                            for (int j = 0; j < filterArray.length(); j++) {
-                                JSONObject fObj = filterArray.getJSONObject(j);
-                                String key = fObj.optString("key");
-                                String fname = fObj.optString("name");
-                                JSONArray values = fObj.optJSONArray("values");
-                                List<Filter.Value> drops = new ArrayList<>();
-                                for (int k = 0; k < values.length(); k++) {
-                                    JSONObject val = values.getJSONObject(k);
-                                    drops.add(new Filter.Value(val.optString("n"), val.optString("v")));
-                                }
-                                filters.add(new Filter(key, fname, drops));
-                            }
-                        }
+            List<Class> classes = new ArrayList<>();
+            LinkedHashMap<String, List<Filter>> filters = new LinkedHashMap<>();
+            if (rule != null && rule.has("homeApi")) {
+                // API模式
+                String homeApi = rule.optString("homeApi");
+                String data = fetch(siteUrl + homeApi, headers);
+                JSONObject json = new JSONObject(data);
+                JSONArray types = json.optJSONArray("types"); // 假设API返回{"types": [...]}
+                for (int i = 0; i < types.length(); i++) {
+                    JSONObject type = types.getJSONObject(i);
+                    String typeId = type.optString("id");
+                    String typeName = type.optString("name");
+                    classes.add(new Class(typeId, typeName));
+                    // 添加筛选
+                    if (filter && filterConfig != null && filterConfig.has(typeId)) {
+                        filters.put(typeId, parseFilters(filterConfig.optJSONArray(typeId)));
                     }
                 }
             } else {
-                // 假设API
-                JSONObject data = new JSONObject(content);
-                JSONArray array = data.optJSONArray("classes");
-                if (array != null) {
-                    for (int i = 0; i < array.length(); i++) {
-                        JSONObject obj = array.getJSONObject(i);
-                        classes.add(new com.github.catvod.bean.Class(obj.optString("type_id"), obj.optString("type_name")));
+                // XPath模式
+                String homeHtml = fetch(siteUrl, headers);
+                Document doc = Jsoup.parse(homeHtml);
+                Elements typeElements = doc.select(rule.optString("typeSelector", ".nav a")); // 示例选择器
+                for (Element el : typeElements) {
+                    String typeId = el.attr("href").replaceAll(rule.optString("typeIdR", ""), "");
+                    String typeName = el.text().trim();
+                    classes.add(new Class(typeId, typeName));
+                    // 添加筛选（如果有）
+                    if (filter && filterConfig != null && filterConfig.has(typeId)) {
+                        filters.put(typeId, parseFilters(filterConfig.optJSONArray(typeId)));
                     }
                 }
             }
-
-            Result result = new Result();
-            result.classes(classes);
-            if (filter) {
-                result.filters(filters);
-            }
-            return result.string();
+            return Result.string(classes, new ArrayList<Vod>(), filters);
         } catch (Exception e) {
             SpiderDebug.log(e);
             return "";
         }
     }
 
-    @Override
-    public String homeVideoContent() {
-        try {
-            List<Vod> list = new ArrayList<>();
-            // 示例：从首页获取推荐视频
-            String homeUrl = siteUrl + (rule != null && rule.has("homeUrl") ? rule.optString("homeUrl") : "/");
-            String content = fetch(homeUrl, headers);
-            if (rule != null && rule.has("recommendSelector")) {
-                Document doc = Jsoup.parse(content);
-                Elements elements = doc.select(rule.optString("recommendSelector"));
-                for (Element ele : elements) {
-                    String id = ele.select(rule.optString("vodIdSelector")).attr("href").replaceAll(rule.optString("vodIdR", ""), "");
-                    String name = ele.select(rule.optString("vodNameSelector")).text();
-                    String pic = fixPicUrl(ele.select(rule.optString("vodPicSelector")).attr("src"));
-                    String remarks = ele.select(rule.optString("vodRemarksSelector")).text();
-                    list.add(new Vod(id, name, pic, remarks));
-                }
-            } else {
-                // 假设API
-                JSONObject data = new JSONObject(content);
-                JSONArray array = data.optJSONArray("videos");
-                if (array != null) {
-                    for (int i = 0; i < array.length(); i++) {
-                        JSONObject v = array.getJSONObject(i);
-                        String pic = fixPicUrl(v.optString("vod_pic"));
-                        list.add(new Vod(v.optString("vod_id"), v.optString("vod_name"), pic, v.optString("vod_remarks")));
-                    }
-                }
+    private List<Filter> parseFilters(JSONArray filterArray) throws Exception {
+        List<Filter> filterList = new ArrayList<>();
+        for (int i = 0; i < filterArray.length(); i++) {
+            JSONObject f = filterArray.getJSONObject(i);
+            String key = f.optString("key");
+            String name = f.optString("name");
+            List<Filter.Value> values = new ArrayList<>();
+            JSONArray vals = f.optJSONArray("values");
+            for (int j = 0; j < vals.length(); j++) {
+                JSONObject v = vals.getJSONObject(j);
+                values.add(new Filter.Value(v.optString("n"), v.optString("v")));
             }
-
-            Result result = new Result();
-            result.list(list);
-            return result.string();
-        } catch (Exception e) {
-            SpiderDebug.log(e);
-            return "";
+            filterList.add(new Filter(key, name, values));
         }
+        return filterList;
     }
 
     @Override
     public String categoryContent(String tid, String pg, boolean filter, HashMap<String, String> extend) {
         try {
             List<Vod> list = new ArrayList<>();
-            // 构建分类URL，支持筛选
-            String cateUrl = siteUrl + (rule != null && rule.has("cateUrl") ? rule.optString("cateUrl") : "/category/{cateId}/{catePg}");
-            if (filter && extend != null && !extend.isEmpty()) {
+            int page = Integer.parseInt(pg);
+            String cateUrl = siteUrl + tid + "?page=" + page; // 示例分类URL
+            if (extend != null && !extend.isEmpty()) {
+                StringBuilder sb = new StringBuilder(cateUrl);
+                sb.append("&");
                 for (Map.Entry<String, String> entry : extend.entrySet()) {
-                    String key = entry.getKey();
-                    String value = entry.getValue();
-                    if (value.length() > 0) {
-                        cateUrl = cateUrl.replace("{" + key + "}", URLEncoder.encode(value, "UTF-8"));
-                    }
+                    sb.append(entry.getKey()).append("=").append(URLEncoder.encode(entry.getValue(), "UTF-8")).append("&");
                 }
+                cateUrl = sb.toString().substring(0, sb.length() - 1);
             }
-            cateUrl = cateUrl.replace("{cateId}", tid).replace("{catePg}", pg);
-            // 移除未替换的占位符
-            Matcher m = Pattern.compile("\\{(.*?)\\}").matcher(cateUrl);
-            while (m.find()) {
-                String n = m.group(0).replace("{", "").replace("}", "");
-                cateUrl = cateUrl.replace(m.group(0), "").replace("/" + n + "/", "");
-            }
-            String content = fetch(cateUrl, headers);
-            if (rule != null && rule.has("listSelector")) {
-                Document doc = Jsoup.parse(content);
-                Elements elements = doc.select(rule.optString("listSelector"));
-                for (Element ele : elements) {
-                    String id = ele.select(rule.optString("vodIdSelector")).attr("href").replaceAll(rule.optString("vodIdR", ""), "");
-                    String name = ele.select(rule.optString("vodNameSelector")).text();
-                    String pic = fixPicUrl(ele.select(rule.optString("vodPicSelector")).attr("src"));
-                    String remarks = ele.select(rule.optString("vodRemarksSelector")).text();
-                    list.add(new Vod(id, name, pic, remarks));
+            if (rule != null && rule.has("cateApi")) {
+                // API模式
+                String data = fetch(cateUrl, headers);
+                JSONObject json = new JSONObject(data);
+                JSONArray videos = json.optJSONArray("videos"); // 假设返回{"videos": [...]}
+                for (int i = 0; i < videos.length(); i++) {
+                    JSONObject v = videos.getJSONObject(i);
+                    String vodId = v.optString("id");
+                    String vodName = v.optString("name");
+                    String vodPic = fixPicUrl(v.optString("pic"));
+                    String vodRemarks = v.optString("remarks");
+                    list.add(new Vod(vodId, vodName, vodPic, vodRemarks));
                 }
             } else {
-                // 假设API
-                JSONObject data = new JSONObject(content);
-                JSONArray array = data.optJSONArray("list");
-                if (array != null) {
-                    for (int i = 0; i < array.length(); i++) {
-                        JSONObject v = array.getJSONObject(i);
-                        String pic = fixPicUrl(v.optString("vod_pic"));
-                        list.add(new Vod(v.optString("vod_id"), v.optString("vod_name"), pic, v.optString("vod_remarks")));
-                    }
+                // XPath模式
+                String html = fetch(cateUrl, headers);
+                Document doc = Jsoup.parse(html);
+                Elements items = doc.select(rule.optString("vodSelector", ".vod-item")); // 示例
+                for (Element item : items) {
+                    String vodId = item.select("a").attr("href").replaceAll(rule.optString("vodIdR", ""), "");
+                    String vodName = item.select("h3").text();
+                    String vodPic = fixPicUrl(item.select("img").attr("src"));
+                    String vodRemarks = item.select(".remarks").text();
+                    list.add(new Vod(vodId, vodName, vodPic, vodRemarks));
                 }
             }
-
-            Result result = new Result();
-            result.list(list);
-            return result.string();
+            // 分页信息（假设总页数从API或HTML中获取）
+            int limit = 20;
+            int total = Integer.MAX_VALUE; // 默认无限
+            int pageCount = Integer.MAX_VALUE; // 默认无限
+            // 尝试从页面解析总页数（示例）
+            // 如果是HTML模式，可以从doc.select(".pagination .total").text() 获取
+            // 这里假设无法获取，使用list.size()判断是否有下一页
+            if (list.size() < limit) {
+                pageCount = page;
+                total = (page - 1) * limit + list.size();
+            } else {
+                total = (page) * limit + 1; // 假设还有更多
+                pageCount = page + 1;
+            }
+            return Result.string(page, pageCount, limit, total, list);
         } catch (Exception e) {
             SpiderDebug.log(e);
             return "";
@@ -240,89 +199,50 @@ public class UniversalSpider extends Spider {
     @Override
     public String detailContent(List<String> ids) {
         try {
+            if (ids == null || ids.isEmpty()) return "";
             String id = ids.get(0);
-            // 构建详情URL
-            String detailUrl = siteUrl + (rule != null && rule.has("detailUrl") ? rule.optString("detailUrl").replace("{vid}", id) : "/detail/" + id);
-            String content = fetch(detailUrl, headers);
-            Document doc = Jsoup.parse(content);
+            String detailUrl = siteUrl + id; // 示例详情URL
+            String html = fetch(detailUrl, headers);
+            Document doc = Jsoup.parse(html);
+
             Vod vod = new Vod();
             vod.setVodId(id);
-            if (rule != null && rule.has("detailNameSelector")) {
-                vod.setVodName(doc.select(rule.optString("detailNameSelector")).text());
-                vod.setVodPic(fixPicUrl(doc.select(rule.optString("detailPicSelector")).attr("src")));
-                vod.setTypeName(doc.select(rule.optString("detailTypeSelector")).text());
-                vod.setVodYear(doc.select(rule.optString("detailYearSelector")).text());
-                vod.setVodArea(doc.select(rule.optString("detailAreaSelector")).text());
-                vod.setVodRemarks(doc.select(rule.optString("detailRemarksSelector")).text());
-                vod.setVodActor(doc.select(rule.optString("detailActorSelector")).text());
-                vod.setVodDirector(doc.select(rule.optString("detailDirectorSelector")).text());
-                vod.setVodContent(doc.select(rule.optString("detailContentSelector")).text());
-            } else {
-                // 假设API
-                JSONObject data = new JSONObject(content).optJSONObject("detail");
-                vod.setVodName(data.optString("vod_name"));
-                vod.setVodPic(fixPicUrl(data.optString("vod_pic")));
-                vod.setTypeName(data.optString("type_name"));
-                vod.setVodYear(data.optString("vod_year"));
-                vod.setVodArea(data.optString("vod_area"));
-                vod.setVodRemarks(data.optString("vod_remarks"));
-                vod.setVodActor(data.optString("vod_actor"));
-                vod.setVodDirector(data.optString("vod_director"));
-                vod.setVodContent(data.optString("vod_content"));
-            }
+            vod.setVodName(doc.select(rule.optString("nameSelector", "h1")).text());
+            vod.setVodPic(fixPicUrl(doc.select(rule.optString("picSelector", ".vod-pic img")).attr("src")));
+            vod.setVodRemarks(doc.select(rule.optString("remarksSelector", ".remarks")).text());
+            vod.setVodYear(doc.select(rule.optString("yearSelector")).text());
+            vod.setVodArea(doc.select(rule.optString("areaSelector")).text());
+            vod.setVodActor(doc.select(rule.optString("actorSelector")).text());
+            vod.setVodDirector(doc.select(rule.optString("directorSelector")).text());
+            vod.setVodContent(doc.select(rule.optString("contentSelector")).text());
 
-            // 播放源
-            Map<String, String> sites = new LinkedHashMap<>();
-            if (rule != null && rule.has("playFromSelector")) {
-                Elements sources = doc.select(rule.optString("playFromSelector"));
-                Elements episodeGroups = doc.select(rule.optString("playUrlSelector"));
-                int size = Math.min(sources.size(), episodeGroups.size());
-                for (int i = 0; i < size; i++) {
-                    Element source = sources.get(i);
-                    if (source.attr("style").contains("display:none") || source.attr("class").contains("hidden")) continue; // 跳过隐藏线路
-                    String siteName = source.text();
-                    String playList = "";
-                    List<String> urls = new ArrayList<>();
-                    Elements eps = episodeGroups.get(i).select("a");
-                    for (Element ep : eps) {
-                        String epName = ep.text();
-                        String epUrl = ep.attr("href");
-                        urls.add(epName + "$" + epUrl);
-                    }
-                    if (!urls.isEmpty()) {
-                        playList = TextUtils.join("#", urls);
-                    }
-                    sites.put(siteName, playList);
-                }
-            } else {
-                // 假设API
-                JSONArray sitesArray = new JSONObject(content).optJSONArray("play_sources");
-                if (sitesArray != null) {
-                    for (int i = 0; i < sitesArray.length(); i++) {
-                        JSONObject site = sitesArray.getJSONObject(i);
-                        String siteName = site.optString("name");
-                        String playList = "";
-                        List<String> urls = new ArrayList<>();
-                        JSONArray playArray = site.optJSONArray("plays");
-                        for (int j = 0; j < playArray.length(); j++) {
-                            JSONObject play = playArray.getJSONObject(j);
-                            urls.add(play.optString("title") + "$" + play.optString("url"));
-                        }
-                        if (!urls.isEmpty()) {
-                            playList = TextUtils.join("#", urls);
-                        }
-                        sites.put(siteName, playList);
-                    }
-                }
-            }
-            if (!sites.isEmpty()) {
-                vod.setVodPlayFrom(TextUtils.join("$$$", sites.keySet()));
-                vod.setVodPlayUrl(TextUtils.join("$$$", sites.values()));
-            }
+            // 播放源加固版
+            Elements tabs = doc.select(rule.optString("tabSelector", ".play-tabs li"));
+            Elements lists = doc.select(rule.optString("listSelector", ".play-list"));
+            StringBuilder playFrom = new StringBuilder();
+            StringBuilder playUrl = new StringBuilder();
+            for (int i = 0; i < tabs.size() && i < lists.size(); i++) {
+                String from = tabs.get(i).text().trim();
+                if (from.isEmpty()) from = "播放源 " + (i + 1); // 防止源名称为空
+                playFrom.append(from).append("$$$");
 
-            Result result = new Result();
-            result.list(vod);
-            return result.string();
+                Elements episodes = lists.get(i).select("a");
+                List<String> vodItems = new ArrayList<>();
+                for (Element ep : episodes) {
+                    String epName = ep.text().replace("$", "").replace("#", ""); // 过滤敏感字符
+                    String epUrl = ep.attr("href");
+                    vodItems.add(epName + "$" + epUrl);
+                }
+                playUrl.append(TextUtils.join("#", vodItems)).append("$$$");
+            }
+            if (playFrom.length() > 0) {
+                playFrom.delete(playFrom.length() - 3, playFrom.length());
+                playUrl.delete(playUrl.length() - 3, playUrl.length());
+            }
+            vod.setVodPlayFrom(playFrom.toString());
+            vod.setVodPlayUrl(playUrl.toString());
+
+            return Result.string(vod);
         } catch (Exception e) {
             SpiderDebug.log(e);
             return "";
@@ -332,38 +252,19 @@ public class UniversalSpider extends Spider {
     @Override
     public String searchContent(String key, boolean quick) {
         try {
-            // 添加随机延迟以避免频率限制
-            SystemClock.sleep(Misc.random(200, 500));
             List<Vod> list = new ArrayList<>();
-            // 构建搜索URL
-            String searchUrl = siteUrl + (rule != null && rule.has("searchUrl") ? rule.optString("searchUrl") : "/search?key=" + URLEncoder.encode(key, "UTF-8"));
-            String content = fetch(searchUrl, headers);
-            if (rule != null && rule.has("searchListSelector")) {
-                Document doc = Jsoup.parse(content);
-                Elements elements = doc.select(rule.optString("searchListSelector"));
-                for (Element ele : elements) {
-                    String id = ele.select(rule.optString("vodIdSelector")).attr("href").replaceAll(rule.optString("vodIdR", ""), "");
-                    String name = ele.select(rule.optString("vodNameSelector")).text();
-                    String pic = fixPicUrl(ele.select(rule.optString("vodPicSelector")).attr("src"));
-                    String remarks = ele.select(rule.optString("vodRemarksSelector")).text();
-                    list.add(new Vod(id, name, pic, remarks));
-                }
-            } else {
-                // 假设API
-                JSONObject data = new JSONObject(content);
-                JSONArray array = data.optJSONArray("results");
-                if (array != null) {
-                    for (int i = 0; i < array.length(); i++) {
-                        JSONObject v = array.getJSONObject(i);
-                        String pic = fixPicUrl(v.optString("vod_pic"));
-                        list.add(new Vod(v.optString("vod_id"), v.optString("vod_name"), pic, v.optString("vod_remarks")));
-                    }
-                }
+            String searchUrl = siteUrl + "/search?q=" + URLEncoder.encode(key, "UTF-8");
+            String html = fetch(searchUrl, headers);
+            Document doc = Jsoup.parse(html);
+            Elements items = doc.select(rule.optString("searchSelector", ".search-item"));
+            for (Element item : items) {
+                String vodId = item.select("a").attr("href").replaceAll(rule.optString("vodIdR", ""), "");
+                String vodName = item.select("h3").text();
+                String vodPic = fixPicUrl(item.select("img").attr("src"));
+                String vodRemarks = item.select(".remarks").text();
+                list.add(new Vod(vodId, vodName, vodPic, vodRemarks));
             }
-
-            Result result = new Result();
-            result.list(list);
-            return result.string();
+            return Result.string(list);
         } catch (Exception e) {
             SpiderDebug.log(e);
             return "";
@@ -373,58 +274,87 @@ public class UniversalSpider extends Spider {
     @Override
     public String playerContent(String flag, String id, List<String> vipFlags) {
         try {
-            // 构建播放URL
-            if (Misc.isVip(id) || Misc.isVideoFormat(id)) {
-                // 直接播放
-                JSONObject result = new JSONObject();
-                result.put("parse", 0);
-                result.put("playUrl", "");
-                result.put("url", id);
-                // 添加弹幕支持
-                addDanmaku(result, id);
-                return result.toString();
+            if (id.startsWith("http")) {
+                // 直接URL
+                if (super.isVideoFormat(id)) { // 使用super.isVideoFormat
+                    return Result.get().url(id).string();
+                }
             }
-            String playUrl = siteUrl + (rule != null && rule.has("playUrl") ? rule.optString("playUrl").replace("{playUrl}", id) : id);
-            String content = fetch(playUrl, headers);
-            // 处理可能的转义
-            content = content.replace("\\", "");
-            String parseUrl = "";
-            String regexStr = rule != null && rule.has("playRegex") ? rule.optString("playRegex") : "(http\\S+?m3u8)";
-            Pattern regex = Pattern.compile(regexStr);
-            Matcher matcher = regex.matcher(content);
+            // 假设id是播放页URL
+            String playUrl = siteUrl + id;
+            String html = fetch(playUrl, headers);
+            // 提取播放地址（示例使用正则或XPath）
+            Pattern pattern = Pattern.compile(rule.optString("playUrlR", "var playerData = (.*?);"));
+            Matcher matcher = pattern.matcher(html);
+            String url = "";
+            JSONArray subs = new JSONArray();
+            JSONArray danmakuArray = new JSONArray();
             if (matcher.find()) {
-                parseUrl = matcher.group(1);
+                JSONObject playerData = new JSONObject(matcher.group(1));
+                url = playerData.optString("url");
+                if (url.startsWith("http")) {
+                    return Result.get().url(url).string();
+                }
             }
-            if (!TextUtils.isEmpty(parseUrl) && (parseUrl.contains(".m3u8") || parseUrl.contains(".mp4"))) {
-                // 直接播放
-                JSONObject result = new JSONObject();
-                result.put("parse", 0);
-                result.put("playUrl", "");
-                result.put("url", parseUrl);
-                // 添加弹幕支持
-                addDanmaku(result, id);
-                return result.toString();
-            } else {
-                // 需要嗅探或代理
-                JSONObject result = new JSONObject();
-                result.put("parse", 1);
-                result.put("playUrl", "");
-                result.put("url", playUrl);
-                // 添加header
-                JSONObject h = new JSONObject();
-                h.put("User-Agent", defaultUa);
-                result.put("header", h.toString());
-                // 添加弹幕支持
-                addDanmaku(result, id);
-                return result.toString();
+            // 嗅探或解析
+            // 示例：如果需要解析
+            String parseUrl = playerConfig.optString(flag, "");
+            if (!TextUtils.isEmpty(parseUrl)) {
+                if (parseUrl.startsWith("js:")) {
+                    // 执行JS（但模板中无JS引擎，假设直接返回）
+                    String js = parseUrl.substring(3);
+                    // 这里可添加JS执行逻辑，如果有QuickJS
+                } else {
+                    // 请求解析接口
+                    String parseContent = fetch(parseUrl + id, headers);
+                    // 提取url（假设返回JSON{"url": "..."})
+                    JSONObject parseJson = new JSONObject(parseContent);
+                    url = parseJson.optString("url");
+                }
             }
+            // VIP解析检查
+            // 假设根据parseUrl域名判断是否VIP，例如如果包含"vip"则视为VIP
+            boolean isVip = parseUrl.contains("vip"); // 自定义逻辑，根据实际站点调整
+            int parse = isVip ? 1 : 0;
+            int jx = isVip ? 1 : 0;
+            // 添加字幕
+            addSubs(subs, html);
+            // 添加headers
+            JSONObject h = new JSONObject();
+            h.put("User-Agent", headers.get("User-Agent"));
+            // 添加弹幕支持
+            addDanmaku(danmakuArray, id);
+            return Result.get()
+                .url(url)
+                .header(h)
+                .subs(subs)
+                .danmaku(danmakuArray)
+                .parse(parse)
+                .jx(jx)
+                .string();
         } catch (Exception e) {
             SpiderDebug.log(e);
             return "";
         }
     }
 
-    private void addDanmaku(JSONObject result, String id) throws Exception {
+    private void addSubs(JSONArray subs, String html) throws Exception {
+        // 示例：从html中提取字幕
+        Pattern subPattern = Pattern.compile("<subtitle>(.*?)</subtitle>");
+        Matcher subMatcher = subPattern.matcher(html);
+        if (subMatcher.find()) {
+            String subUrl = subMatcher.group(1);
+            if (Util.isSub(Util.getExt(subUrl))) { // 使用Util.isSub和Util.getExt
+                JSONObject sub = new JSONObject();
+                sub.put("name", "字幕");
+                sub.put("url", subUrl);
+                sub.put("format", Util.getExt(subUrl));
+                subs.put(sub);
+            }
+        }
+    }
+
+    private void addDanmaku(JSONArray danmakuArray, String id) throws Exception {
         if (rule != null && rule.has("danmakuUrl")) {
             // 优化：确保id是正确的占位符值，如果id是URL，可能需要提取部分
             String danId = id;
@@ -433,12 +363,10 @@ public class UniversalSpider extends Spider {
             }
             String danmakuUrl = rule.optString("danmakuUrl").replace("{id}", danId);
             // 假设danmakuUrl是弹幕文件URL
-            JSONArray danmakuArray = new JSONArray();
             JSONObject dm = new JSONObject();
             dm.put("name", "弹幕");
             dm.put("url", danmakuUrl);
             danmakuArray.put(dm);
-            result.put("danmaku", danmakuArray);
         }
         // 或如果需要从内容中提取
         // String danmakuContent = fetch(danmakuUrl, headers);
@@ -450,9 +378,17 @@ public class UniversalSpider extends Spider {
         if (pic.startsWith("//")) {
             pic = "https:" + pic;
         } else if (pic.startsWith("/")) {
-            pic = siteUrl + pic.substring(1);
+            if (siteUrl.endsWith("/")) {
+                pic = siteUrl + pic.substring(1);
+            } else {
+                pic = siteUrl + pic;
+            }
         } else if (!pic.startsWith("http")) {
-            pic = siteUrl + pic;
+            if (siteUrl.endsWith("/")) {
+                pic = siteUrl + pic;
+            } else {
+                pic = siteUrl + "/" + pic;
+            }
         }
         return pic;
     }
