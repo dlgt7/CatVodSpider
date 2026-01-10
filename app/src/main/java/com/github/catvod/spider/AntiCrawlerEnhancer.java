@@ -16,21 +16,17 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * 完美优化版反爬虫增强器
- * 1. 自动管理 Referer 链（解决图片/视频防盗链核心问题）
- * 2. 智能随机延迟（防 IP 频率屏蔽）
- * 3. 动态指纹与 UA 注入
- * 4. 适配项目 Init, OkHttp, UA 现有逻辑
+ * 深度优化版反爬虫增强器
+ * 1. 自动管理 Referer 链
+ * 2. 正态分布随机延迟（模拟人类行为）
+ * 3. 注入 Sec-Fetch 系列现代浏览器指纹
+ * 4. 自动同步 WebView 挑战后的 Cookie
  */
 public class AntiCrawlerEnhancer {
 
     private final Random random = new Random();
-    
-    // 缓存每个域名的最后访问 URL，用于自动生成 Referer
     private final Map<String, String> refererMap = new ConcurrentHashMap<>();
-    // 缓存每个域名的访问时间戳，用于频率控制
     private final Map<String, Long> lastRequestTimeMap = new ConcurrentHashMap<>();
-    // 缓存设备指纹
     private final Map<String, String> fingerprintMap = new ConcurrentHashMap<>();
 
     private boolean enableDelay = true;
@@ -45,7 +41,7 @@ public class AntiCrawlerEnhancer {
     }
 
     /**
-     * 初始化环境
+     * 初始化环境，确保 CookieManager 可用
      */
     public void init(Context context) {
         try {
@@ -54,25 +50,26 @@ public class AntiCrawlerEnhancer {
             
             CookieManager cookieManager = CookieManager.getInstance();
             cookieManager.setAcceptCookie(true);
-            // 移除过时的 setAcceptThirdPartyCookies 调用，保持兼容性
             cookieManager.flush();
-            SpiderDebug.log("AntiCrawlerEnhancer: 运行环境就绪");
+            SpiderDebug.log("AntiCrawlerEnhancer: 运行环境已就绪");
         } catch (Throwable e) {
             SpiderDebug.log(e);
         }
     }
 
     /**
-     * 智能延迟逻辑
+     * 正态分布随机延迟逻辑：相比简单随机，更难被 AI 识别为爬虫
      */
     private void checkDelay(String host) {
         if (!enableDelay) return;
         long lastTime = lastRequestTimeMap.getOrDefault(host, 0L);
         long now = System.currentTimeMillis();
-        long diff = now - lastTime;
 
-        // 随机设定 600ms - 1500ms 的保护间隔，模拟真人浏览
-        long waitTime = 600 + random.nextInt(900);
+        // 模拟正态分布：均值 1000ms，标准差 300ms
+        long waitTime = (long) (random.nextGaussian() * 300 + 1000);
+        waitTime = Math.max(400, Math.min(waitTime, 3000)); // 限制在 0.4s - 3s 之间
+
+        long diff = now - lastTime;
         if (diff < waitTime) {
             try {
                 Thread.sleep(waitTime - diff);
@@ -82,42 +79,51 @@ public class AntiCrawlerEnhancer {
     }
 
     /**
-     * 构建动态请求头
+     * 构建高度仿真的动态请求头
      */
     private Map<String, String> makeHeaders(String url, Map<String, String> extHeaders) {
         Map<String, String> headers = new HashMap<>();
-        // 先放入用户传入的自定义头
-        if (extHeaders != null) headers.putAll(extHeaders);
-
         String host = getHost(url);
 
-        // 1. 注入动态 User-Agent (使用项目中 UA 类的能力)
-        if (!headers.containsKey("User-Agent")) {
-            headers.put("User-Agent", UA.getRandom());
-        }
+        // 1. 基础仿真头
+        headers.put("User-Agent", UA.getRandom()); // 动态获取项目定义的 UA
+        headers.put("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8");
+        headers.put("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8");
 
-        // 2. 自动注入 Referer (防盗链逻辑)
-        if (enableAutoReferer && !headers.containsKey("Referer")) {
+        // 2. 现代浏览器 Sec-Fetch 特征 (过防火墙关键)
+        headers.put("Sec-Fetch-Dest", "document");
+        headers.put("Sec-Fetch-Mode", "navigate");
+        headers.put("Sec-Fetch-Site", "same-origin");
+        headers.put("Sec-Fetch-User", "?1");
+        headers.put("Upgrade-Insecure-Requests", "1");
+
+        // 3. 自动 Referer 逻辑
+        if (enableAutoReferer) {
             String prevUrl = refererMap.get(host);
             headers.put("Referer", TextUtils.isEmpty(prevUrl) ? (getProtocolHost(url) + "/") : prevUrl);
         }
 
-        // 3. 模拟指纹 (部分 WAF 防火墙会校验此特征)
+        // 4. 指纹与设备伪装
         if (!fingerprintMap.containsKey(host)) {
             fingerprintMap.put(host, UUID.randomUUID().toString().substring(0, 8));
         }
         headers.put("X-Requested-With", "com.android.browser");
         headers.put("X-Device-Fingerprint", fingerprintMap.get(host));
 
-        // 4. 标准浏览器行为补充
-        headers.put("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8");
-        headers.put("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8");
+        // 5. 自动同步项目中的 Cookie 状态 (过盾核心)
+        String cookie = CookieManager.getInstance().getCookie(url);
+        if (!TextUtils.isEmpty(cookie)) {
+            headers.put("Cookie", cookie);
+        }
+
+        // 6. 外部传入头具有最高优先级（允许覆盖默认逻辑）
+        if (extHeaders != null) headers.putAll(extHeaders);
 
         return headers;
     }
 
     /**
-     * 核心增强抓取：GET
+     * 增强版 GET 请求
      */
     public String enhancedGet(String url, Map<String, String> headers) {
         String host = getHost(url);
@@ -125,11 +131,10 @@ public class AntiCrawlerEnhancer {
             checkDelay(host);
             Map<String, String> finalHeaders = makeHeaders(url, headers);
             
-            // 使用 OkHttp.java 的 string(url, headers)
+            // 完美适配项目中 OkHttp.java 的调用方式
             String result = OkHttp.string(url, finalHeaders);
             
             if (!TextUtils.isEmpty(result)) {
-                // 只有请求成功才更新 Referer 链
                 refererMap.put(host, url);
             }
             return result;
@@ -139,37 +144,14 @@ public class AntiCrawlerEnhancer {
         }
     }
 
-    /**
-     * 辅助：获取主机名
-     */
     private String getHost(String urlStr) {
-        try {
-            return new URL(urlStr).getHost();
-        } catch (Exception e) {
-            return "";
-        }
+        try { return new URL(urlStr).getHost(); } catch (Exception e) { return ""; }
     }
 
-    /**
-     * 辅助：获取协议+主机 (如 https://www.google.com)
-     */
     private String getProtocolHost(String urlStr) {
         try {
             URL url = new URL(urlStr);
             return url.getProtocol() + "://" + url.getHost();
-        } catch (Exception e) {
-            return urlStr;
-        }
-    }
-
-    // --- 配置器 ---
-    public AntiCrawlerEnhancer setEnableDelay(boolean enable) {
-        this.enableDelay = enable;
-        return this;
-    }
-
-    public AntiCrawlerEnhancer setEnableAutoReferer(boolean enable) {
-        this.enableAutoReferer = enable;
-        return this;
+        } catch (Exception e) { return urlStr; }
     }
 }
