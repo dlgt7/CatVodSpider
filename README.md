@@ -6,6 +6,8 @@ WebViewHelper.java
 AntiCrawlerEnhancer.java 
 这个类负责在后台静默处理所有 OkHttp 请求的伪装。
 
+AdBlocker.java 广告过滤
+
 ### Based on CatVod
 
 https://github.com/CatVodTVOfficial/CatVodTVSpider
