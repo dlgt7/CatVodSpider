@@ -39,20 +39,18 @@ public class Xiuer extends Spider {
                 if (typeName.isEmpty() && a.selectFirst("span, strong") != null) {
                     typeName = a.selectFirst("span, strong").ownText().trim();
                 }
-                if (!typeId.isEmpty() && !typeName.isEmpty() && classes.stream().noneMatch(c -> c.getTypeId().equals(typeId))) {
+                if (!typeId.isEmpty() && !typeName.isEmpty() && !typeName.equals("首页") && !typeName.equals("电影") && !typeName.equals("连续剧") && !typeName.equals("动漫") && !typeName.equals("综艺")) {
                     classes.add(new Class(typeId, typeName));
                 }
             }
 
-            // 首页视频模块提取
-            List<Vod> videos = new ArrayList<>();
-            Elements modules = doc.select(".module");
+            // 首页视频
+            List<Vod> list = new ArrayList<>();
+            Elements modules = doc.select(".module:not([class*='search']):not([class*='block'])");
             for (Element module : modules) {
-                Element title = module.selectFirst(".module-title, .title, h2");
+                // 跳过伪模块（如广告、banner等）
+                if (module.select(".module-items").isEmpty()) continue;
                 Elements items = module.select(".module-item");
-                // 过滤掉轮播图（通常无标题）或 item 过少的模块
-                if (title == null || items.size() < 4) continue;
-
                 for (Element item : items) {
                     Element a = item.selectFirst("a[href*=/detail/]");
                     if (a == null) continue;
@@ -60,98 +58,90 @@ public class Xiuer extends Spider {
                     String name = firstNonEmpty(a.attr("title"), item.select(".module-item-title").text());
                     String pic = firstNonEmpty(item.selectFirst("img").attr("data-original"), item.selectFirst("img").attr("src"));
                     String remark = item.select(".module-item-note").text().trim();
-                    videos.add(new Vod(id, name, fixUrl(pic), remark));
+                    list.add(new Vod(id, name, fixUrl(pic), remark));
                 }
             }
-            return Result.string(classes, videos);
+
+            return Result.string(classes, list);
         } catch (Exception e) {
-            SpiderDebug.log(e);
-            return Result.get().msg("首页解析异常").string();
-        }
-    }
-
-    @Override
-    public String detailContent(List<String> ids) {
-        try {
-            String url = HOST + "/detail/" + ids.get(0) + ".html";
-            String html = AntiCrawlerEnhancer.get().enhancedGet(url, null);
-            if (TextUtils.isEmpty(html)) return Result.get().msg("详情页加载失败").string();
-            Document doc = Jsoup.parse(html);
-
-            Vod vod = new Vod();
-            vod.setVodId(ids.get(0));
-            
-            // 基础信息提取
-            Element titleNode = doc.selectFirst(".module-info-item-title strong, h1");
-            vod.setVodName(titleNode != null ? titleNode.text().trim() : "未知");
-
-            Element picNode = doc.selectFirst(".module-info-poster img");
-            if (picNode != null) {
-                vod.setVodPic(fixUrl(firstNonEmpty(picNode.attr("data-original"), picNode.attr("src"))));
-            }
-
-            Element contentNode = doc.selectFirst(".module-info-item-content, .vod_content");
-            vod.setVodContent(contentNode != null ? contentNode.text().trim() : "");
-
-            // 播放源解析 - 深度加固
-            Elements tabs = doc.select(".module-tab-item");
-            Elements lists = doc.select(".module-play-list, .module-list");
-
-            List<String> fromList = new ArrayList<>();
-            List<String> urlList = new ArrayList<>();
-
-            for (int i = 0; i < Math.min(tabs.size(), lists.size()); i++) {
-                // 清理线路名中的括号和集数数字，如 "蓝光(120)" -> "蓝光"
-                String from = tabs.get(i).text().replaceAll("\\(\\d+\\)|\\d+集|\\s+", "").trim();
-                if (from.isEmpty() || from.matches("\\d+")) from = "线路" + (i + 1);
-
-                List<String> eps = new ArrayList<>();
-                Elements aLinks = lists.get(i).select("a");
-                for (Element a : aLinks) {
-                    String name = a.text().trim();
-                    String href = a.attr("href");
-                    // 核心过滤：排除无效脚本链接，仅保留 play 路径
-                    if (!name.isEmpty() && (href.contains("/play/") || href.contains("/video/"))) {
-                        eps.add(name + "$" + fixUrl(href));
-                    }
-                }
-
-                if (!eps.isEmpty()) {
-                    fromList.add(from);
-                    urlList.add(TextUtils.join("#", eps));
-                }
-            }
-
-            // 如果上述常规解析失败，尝试备用单线路方案（针对某些特殊页面布局）
-            if (fromList.isEmpty() && !lists.isEmpty()) {
-                fromList.add("默认线路");
-                List<String> eps = new ArrayList<>();
-                for (Element a : lists.select("a")) {
-                    if (a.attr("href").contains("/play/")) {
-                        eps.add(a.text().trim() + "$" + fixUrl(a.attr("href")));
-                    }
-                }
-                urlList.add(TextUtils.join("#", eps));
-            }
-
-            vod.setVodPlayFrom(TextUtils.join("$$$", fromList));
-            vod.setVodPlayUrl(TextUtils.join("$$$", urlList));
-
-            return Result.get().vod(vod).string();
-        } catch (Exception e) {
-            SpiderDebug.log(e);
-            return Result.get().msg("详情解析失败").string();
+            return Result.get().msg("首页加载失败: " + e.getMessage()).string();
         }
     }
 
     @Override
     public String categoryContent(String tid, String pg, boolean filter, HashMap<String, String> extend) {
         try {
-            String url = HOST + "/show/" + tid + "/page/" + pg + ".html";
+            String url = HOST + "/" + (tid.contains("/") ? tid : "show/" + tid) + "----------" + pg + "---.html";
             String html = AntiCrawlerEnhancer.get().enhancedGet(url, null);
-            return Result.get().page(Integer.parseInt(pg), 100, 24, 2400).vod(parseVodList(Jsoup.parse(html))).string();
+            Document doc = Jsoup.parse(html);
+            List<Vod> list = parseVodList(doc);
+            int total = list.size() * Integer.parseInt(pg); // 粗估
+            int limit = 24; // 假设每页24
+            int pageCount = total / limit + 1;
+            return Result.get().vod(list).page(Integer.parseInt(pg), pageCount, limit, total).string();
         } catch (Exception e) {
             return Result.get().vod(new ArrayList<>()).string();
+        }
+    }
+
+    @Override
+    public String detailContent(List<String> ids) {
+        try {
+            String id = ids.get(0);
+            String url = HOST + "/detail/" + id + ".html";
+            String html = AntiCrawlerEnhancer.get().enhancedGet(url, null);
+            Document doc = Jsoup.parse(html);
+
+            // 基本信息
+            String name = doc.selectFirst("h1.title, .video-info-title").text().trim();
+            String pic = fixUrl(doc.selectFirst(".video-cover img, .module-item-pic img").attr("data-src"));
+            String type = doc.select(".video-info-items:contains(类型) a").text().trim();
+            String year = doc.select(".video-info-items:contains(年份) a").text().trim();
+            String area = doc.select(".video-info-items:contains(地区) a").text().trim();
+            String actor = doc.select(".video-info-items:contains(主演) a").eachText().toString().replaceAll("[\\[\\]]", "").replace(",", " ");
+            String director = doc.select(".video-info-items:contains(导演) a").eachText().toString().replaceAll("[\\[\\]]", "").replace(",", " ");
+            String desc = doc.select(".video-info-content, .show-desc").text().trim();
+
+            Vod vod = new Vod(id, name, pic);
+            vod.setVodYear(year);
+            vod.setVodArea(area);
+            vod.setVodActor(actor);
+            vod.setVodDirector(director);
+            vod.setVodContent(desc);
+            vod.setTypeName(type);
+
+            // 播放源
+            Elements sources = doc.select(".module-tab-item");
+            Elements playlists = doc.select(".sort-item, .module-play-list");
+            if (sources.size() != playlists.size()) {
+                SpiderDebug.log("线路数与播放列表数不匹配");
+                return Result.string(vod);
+            }
+
+            Vod.VodPlayBuilder builder = new Vod.VodPlayBuilder();
+            for (int i = 0; i < sources.size(); i++) {
+                Element source = sources.get(i);
+                String flag = source.selectFirst("span, div").text().trim();
+                if (flag.isEmpty()) flag = "线路" + (i + 1);
+                Element playlist = playlists.get(i);
+                List<Vod.VodPlayBuilder.PlayUrl> playUrls = new ArrayList<>();
+                Elements eps = playlist.select("a");
+                for (Element ep : eps) {
+                    String epName = ep.text().trim();
+                    String playUrl = fixUrl(ep.attr("href"));
+                    playUrls.add(new Vod.VodPlayBuilder.PlayUrl("", epName, playUrl));
+                }
+                builder.append(flag, playUrls);
+            }
+
+            Vod.VodPlayBuilder.BuildResult buildResult = builder.build();
+            vod.setVodPlayFrom(buildResult.vodPlayFrom);
+            vod.setVodPlayUrl(buildResult.vodPlayUrl);
+
+            return Result.string(vod);
+        } catch (Exception e) {
+            SpiderDebug.log("详情加载失败: " + e.getMessage());
+            return Result.get().msg("详情加载失败").string();
         }
     }
 
