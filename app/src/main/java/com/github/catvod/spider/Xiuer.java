@@ -130,14 +130,14 @@ public class Xiuer extends Spider {
             }
 
             Vod vod = new Vod(ids.get(0), name, pic, remark);
-            vod.setVod_type(typeName);
-            vod.setVod_year(year);
-            vod.setVod_area(area);
-            vod.setVod_actor(actor);
-            vod.setVod_director(director);
-            vod.setVod_content(content);
-            vod.setVod_play_from(vodPlayFrom);
-            vod.setVod_play_url(vodPlayUrl);
+            vod.setTypeName(typeName);
+            vod.setVodYear(year);
+            vod.setVodArea(area);
+            vod.setVodActor(actor);
+            vod.setVodDirector(director);
+            vod.setVodContent(content);
+            vod.setVodPlayFrom(vodPlayFrom);
+            vod.setVodPlayUrl(vodPlayUrl);
 
             return Result.get().vod(vod).string();
         } catch (Exception e) {
