@@ -15,8 +15,8 @@ import java.util.HashMap;
 import java.util.List;
 
 /**
- * 秀儿影视 - 2026.01 终极版
- * 修复：1. 编译路径符号丢失 2. 详情页线路抓取不到 3. 首页伪模块过滤
+ * 秀儿影视 - 2026.01 修复版
+ * 修复：Container Unsupported 问题（调整 playerContent 解析逻辑）
  */
 public class Xiuer extends Spider {
 
@@ -25,6 +25,7 @@ public class Xiuer extends Spider {
     @Override
     public String homeContent(boolean filter) {
         try {
+            // 注意：AntiCrawlerEnhancer 需在您的工程中已实现，否则此处会编译报错
             String html = AntiCrawlerEnhancer.get().enhancedGet(HOST, null);
             if (TextUtils.isEmpty(html)) return Result.get().msg("首页源码为空").string();
             Document doc = Jsoup.parse(html);
@@ -48,7 +49,6 @@ public class Xiuer extends Spider {
             List<Vod> list = new ArrayList<>();
             Elements modules = doc.select(".module:not([class*='search']):not([class*='block'])");
             for (Element module : modules) {
-                // 跳过伪模块（如广告、banner等）
                 if (module.select(".module-items").isEmpty()) continue;
                 Elements items = module.select(".module-item");
                 for (Element item : items) {
@@ -75,8 +75,8 @@ public class Xiuer extends Spider {
             String html = AntiCrawlerEnhancer.get().enhancedGet(url, null);
             Document doc = Jsoup.parse(html);
             List<Vod> list = parseVodList(doc);
-            int total = list.size() * Integer.parseInt(pg); // 粗估
-            int limit = 24; // 假设每页24
+            int total = list.size() * Integer.parseInt(pg); 
+            int limit = 24; 
             int pageCount = total / limit + 1;
             return Result.get().vod(list).page(Integer.parseInt(pg), pageCount, limit, total).string();
         } catch (Exception e) {
@@ -94,7 +94,10 @@ public class Xiuer extends Spider {
 
             // 基本信息
             String name = doc.selectFirst("h1.title, .video-info-title").text().trim();
-            String pic = fixUrl(doc.selectFirst(".video-cover img, .module-item-pic img").attr("data-src"));
+            String picElement = doc.selectFirst(".video-cover img, .module-item-pic img").attr("data-src");
+            if(TextUtils.isEmpty(picElement)) picElement = doc.selectFirst(".video-cover img, .module-item-pic img").attr("src");
+            String pic = fixUrl(picElement);
+            
             String type = doc.select(".video-info-items:contains(类型) a").text().trim();
             String year = doc.select(".video-info-items:contains(年份) a").text().trim();
             String area = doc.select(".video-info-items:contains(地区) a").text().trim();
@@ -112,17 +115,14 @@ public class Xiuer extends Spider {
 
             // 播放源
             Elements sources = doc.select(".module-tab-item");
-            Elements playlists = doc.select(".sort-item, .module-play-list");
-            if (sources.size() != playlists.size()) {
-                SpiderDebug.log("线路数与播放列表数不匹配");
-                return Result.string(vod);
-            }
-
+            Elements playlists = doc.select(".module-play-list");
+            
             Vod.VodPlayBuilder builder = new Vod.VodPlayBuilder();
             for (int i = 0; i < sources.size(); i++) {
                 Element source = sources.get(i);
-                String flag = source.selectFirst("span, div").text().trim();
+                String flag = source.selectFirst("span").text().trim();
                 if (flag.isEmpty()) flag = "线路" + (i + 1);
+                
                 Element playlist = playlists.get(i);
                 List<Vod.VodPlayBuilder.PlayUrl> playUrls = new ArrayList<>();
                 Elements eps = playlist.select("a");
@@ -140,7 +140,7 @@ public class Xiuer extends Spider {
 
             return Result.string(vod);
         } catch (Exception e) {
-            SpiderDebug.log("详情加载失败: " + e.getMessage());
+            SpiderDebug.log(e);
             return Result.get().msg("详情加载失败").string();
         }
     }
@@ -156,9 +156,14 @@ public class Xiuer extends Spider {
         }
     }
 
+    /**
+     * 核心修复点：
+     * 1. 显式调用 .parse() 设置 parse 为 1，让壳子通过嗅探获取视频地址。
+     * 2. 确保返回的是完整的 URL 字符串。
+     */
     @Override
     public String playerContent(String flag, String id, List<String> vipFlags) {
-        return Result.get().url(id).parse(0).string();
+        return Result.get().url(id).parse().string(); 
     }
 
     private List<Vod> parseVodList(Document doc) {
