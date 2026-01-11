@@ -129,25 +129,37 @@ public class Xiuer extends Spider {
         }
     }
 
-    @Override
+@Override
     public String searchContent(String key, boolean quick) {
         try {
-            // 重点 3：根据 JS 修改搜索 URL 路径
+            // 1. 修正搜索路径，匹配 JS 规则中的 /vod/search/wd/
             String url = HOST + "/vod/search/wd/" + key + ".html";
             String html = AntiCrawlerEnhancer.get().enhancedGet(url, null);
             Document doc = Jsoup.parse(html);
             
             List<Vod> list = new ArrayList<>();
-            // 搜索结果通常在 .module-search-item
-            Elements items = doc.select(".module-search-item, .module-item");
+            // 2. 使用 JS 规则中定义的 .module-search-item 选择器
+            Elements items = doc.select(".module-search-item");
+            
             for (Element item : items) {
+                // 3. 提取详情页链接
                 Element a = item.selectFirst("a[href*=/detail/]");
                 if (a == null) continue;
                 
                 String id = a.attr("href").replaceAll(".*/detail/|\\.html.*", "").trim();
-                String name = firstNonEmpty(item.select("h3").text(), item.select(".module-item-title").text(), a.attr("title")).trim();
-                String pic = firstNonEmpty(item.selectFirst("img").attr("data-src"), item.selectFirst("img").attr("data-original"), item.selectFirst("img").attr("src"));
-                String remark = item.select(".video-serial, .module-item-note").text().trim();
+                
+                // 4. 提取标题 (h3 标签)
+                String name = item.selectFirst("h3") != null ? item.selectFirst("h3").text().trim() : "";
+                
+                // 5. 提取图片 (优先使用 data-src，匹配 JS 规则)
+                Element img = item.selectFirst("img");
+                String pic = "";
+                if (img != null) {
+                    pic = firstNonEmpty(img.attr("data-src"), img.attr("data-original"), img.attr("src"));
+                }
+                
+                // 6. 提取备注 (匹配 JS 规则中的 .video-serial)
+                String remark = item.select(".video-serial").text().trim();
                 
                 if (!id.isEmpty() && !name.isEmpty()) {
                     list.add(new Vod(id, name, fixUrl(pic), remark));
@@ -155,6 +167,7 @@ public class Xiuer extends Spider {
             }
             return Result.string(list);
         } catch (Exception e) {
+            SpiderDebug.log(e);
             return Result.get().vod(new ArrayList<>()).string();
         }
     }
