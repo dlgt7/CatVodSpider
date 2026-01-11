@@ -90,9 +90,8 @@ public class Xiuer extends Spider {
                 else if (text.contains("年份：")) vod.setVodYear(text.replace("年份：", "").trim());
             }
 
-            // 重点 2：线路与播放列表
+// 线路与集数提取
             Elements tabs = doc.select(".module-tab-item");
-            // 注意这里是 module-player-list 而不是 module-play-list
             Elements lists = doc.select(".module-player-list, .module-play-list");
             
             List<String> fromList = new ArrayList<>();
@@ -100,15 +99,17 @@ public class Xiuer extends Spider {
 
             for (int i = 0; i < tabs.size(); i++) {
                 String from = tabs.get(i).text().trim();
-                if (from.contains("排序")) continue; // 排除排序按钮
-
+                
                 Elements eps = lists.get(i).select("a");
                 List<String> epList = new ArrayList<>();
                 for (Element a : eps) {
-                    String epName = a.text().trim();
-                    // 提取播放 ID，通常是 /play/xxx.html 中的 xxx
                     String href = a.attr("href");
-                    String epId = href.contains("/play/") ? href.split("/play/")[1].replace(".html", "") : href;
+                    
+                    // 过滤掉不含播放路径的按钮（如：排序、下拉菜单等）
+                    if (!href.contains("/play/")) continue;
+                    
+                    String epName = a.text().trim();
+                    String epId = href.split("/play/")[1].replace(".html", "").trim();
                     epList.add(epName + "$" + epId);
                 }
                 
