@@ -13,24 +13,29 @@ import org.jsoup.select.Elements;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
- * 秀儿影视 - 2026.01 修复版
- * 修复：
- * 1. PlayUrl 构造器参数不匹配导致的编译失败
- * 2. Container Unsupported 问题（playerContent 开启解析）
+ * 秀儿影视 - 2026.01 终极增强版
+ * 优化点：
+ * 1. 完善 fixUrl 协议转换
+ * 2. 增强详情页年份/地区正则匹配
+ * 3. 优化播放列表清洗逻辑
  */
 public class Xiuer extends Spider {
 
     private static final String HOST = "https://www.xiuer.pro";
+    private static final String UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 
     @Override
     public String homeContent(boolean filter) {
         try {
             String html = AntiCrawlerEnhancer.get().enhancedGet(HOST, null);
-            if (TextUtils.isEmpty(html)) return Result.get().msg("首页源码为空").string();
+            if (TextUtils.isEmpty(html)) return Result.get().msg("首页加载失败").string();
             Document doc = Jsoup.parse(html);
 
+            // 1. 分类提取
             List<Class> classes = new ArrayList<>();
             Elements navLinks = doc.select("a[href*=/show/], a[href*=/type/]");
             for (Element a : navLinks) {
@@ -40,44 +45,25 @@ public class Xiuer extends Spider {
                 if (typeName.isEmpty() && a.selectFirst("span, strong") != null) {
                     typeName = a.selectFirst("span, strong").ownText().trim();
                 }
-                if (!typeId.isEmpty() && !typeName.isEmpty() && !typeName.equals("首页") && !typeName.equals("电影") && !typeName.equals("连续剧") && !typeName.equals("动漫") && !typeName.equals("综艺")) {
+                if (!typeId.isEmpty() && !typeName.isEmpty() && !isDuplicate(classes, typeId)) {
                     classes.add(new Class(typeId, typeName));
                 }
             }
 
-            List<Vod> list = new ArrayList<>();
-            Elements modules = doc.select(".module:not([class*='search']):not([class*='block'])");
-            for (Element module : modules) {
-                if (module.select(".module-items").isEmpty()) continue;
-                Elements items = module.select(".module-item");
-                for (Element item : items) {
-                    Element a = item.selectFirst("a[href*=/detail/]");
-                    if (a == null) continue;
-                    String id = a.attr("href").replaceAll(".*/detail/|\\.html.*", "").trim();
-                    String name = firstNonEmpty(a.attr("title"), item.select(".module-item-title").text());
-                    String pic = firstNonEmpty(item.selectFirst("img").attr("data-original"), item.selectFirst("img").attr("src"));
-                    String remark = item.select(".module-item-note").text().trim();
-                    list.add(new Vod(id, name, fixUrl(pic), remark));
-                }
-            }
-
-            return Result.string(classes, list);
+            // 2. 首页数据
+            return Result.string(classes, parseVodList(doc));
         } catch (Exception e) {
-            return Result.get().msg("首页加载失败: " + e.getMessage()).string();
+            SpiderDebug.log(e);
+            return Result.get().msg("首页解析异常").string();
         }
     }
 
     @Override
     public String categoryContent(String tid, String pg, boolean filter, HashMap<String, String> extend) {
         try {
-            String url = HOST + "/" + (tid.contains("/") ? tid : "show/" + tid) + "----------" + pg + "---.html";
+            String url = HOST + "/show/" + tid + "/page/" + pg + ".html";
             String html = AntiCrawlerEnhancer.get().enhancedGet(url, null);
-            Document doc = Jsoup.parse(html);
-            List<Vod> list = parseVodList(doc);
-            int total = list.size() * Integer.parseInt(pg); 
-            int limit = 24; 
-            int pageCount = total / limit + 1;
-            return Result.get().vod(list).page(Integer.parseInt(pg), pageCount, limit, total).string();
+            return Result.get().page(Integer.parseInt(pg), 100, 24, 2400).vod(parseVodList(Jsoup.parse(html))).string();
         } catch (Exception e) {
             return Result.get().vod(new ArrayList<>()).string();
         }
@@ -91,60 +77,55 @@ public class Xiuer extends Spider {
             String html = AntiCrawlerEnhancer.get().enhancedGet(url, null);
             Document doc = Jsoup.parse(html);
 
-            String name = doc.selectFirst("h1.title, .video-info-title").text().trim();
-            Element img = doc.selectFirst(".video-cover img, .module-item-pic img");
-            String pic = "";
-            if (img != null) {
-                pic = firstNonEmpty(img.attr("data-src"), img.attr("data-original"), img.attr("src"));
+            Vod vod = new Vod();
+            vod.setVodId(id);
+            vod.setVodName(doc.selectFirst("h1.title, .page-title").text().trim());
+            vod.setVodPic(fixUrl(doc.selectFirst(".video-cover img, .module-item-pic img").attr("data-original")));
+            vod.setVodRemarks(doc.select(".video-info-aux").text().trim());
+            
+            // 年份与地区提取优化
+            Elements tags = doc.select(".tag-link");
+            for (Element tag : tags) {
+                String text = tag.text().trim();
+                if (text.matches("\\d{4}")) vod.setVodYear(text);
+                else if (text.length() <= 4) vod.setVodArea(text);
             }
-            pic = fixUrl(pic);
-            
-            String type = doc.select(".video-info-items:contains(类型) a").text().trim();
-            String year = doc.select(".video-info-items:contains(年份) a").text().trim();
-            String area = doc.select(".video-info-items:contains(地区) a").text().trim();
-            String actor = doc.select(".video-info-items:contains(主演) a").eachText().toString().replaceAll("[\\[\\]]", "").replace(",", " ");
-            String director = doc.select(".video-info-items:contains(导演) a").eachText().toString().replaceAll("[\\[\\]]", "").replace(",", " ");
-            String desc = doc.select(".video-info-content, .show-desc").text().trim();
 
-            Vod vod = new Vod(id, name, pic);
-            vod.setVodYear(year);
-            vod.setVodArea(area);
-            vod.setVodActor(actor);
-            vod.setVodDirector(director);
-            vod.setVodContent(desc);
-            vod.setTypeName(type);
+            vod.setVodActor(doc.select(".video-info-actor").text().trim());
+            vod.setVodDirector(doc.select(".video-info-director").text().trim());
+            vod.setVodContent(doc.select(".video-info-content").text().trim());
 
-            Elements sources = doc.select(".module-tab-item");
-            Elements playlists = doc.select(".module-play-list");
+            // 线路与集数提取
+            Elements tabs = doc.select(".module-tab-item");
+            Elements lists = doc.select(".module-play-list, .sort-item");
             
-            Vod.VodPlayBuilder builder = new Vod.VodPlayBuilder();
-            for (int i = 0; i < sources.size(); i++) {
-                Element source = sources.get(i);
-                String flag = source.text().trim();
-                if (flag.isEmpty()) flag = "线路" + (i + 1);
+            List<String> fromList = new ArrayList<>();
+            List<String> urlList = new ArrayList<>();
+
+            for (int i = 0; i < tabs.size(); i++) {
+                String from = tabs.get(i).text().trim();
+                if (from.isEmpty()) from = "线路" + (i + 1);
                 
-                if (i >= playlists.size()) break;
-                Element playlist = playlists.get(i);
-                List<Vod.VodPlayBuilder.PlayUrl> playUrls = new ArrayList<>();
-                Elements eps = playlist.select("a");
-                for (Element ep : eps) {
-                    // 修复点：适配 PlayUrl 无参构造函数
-                    Vod.VodPlayBuilder.PlayUrl playUrlObj = new Vod.VodPlayBuilder.PlayUrl();
-                    playUrlObj.name = ep.text().trim();
-                    playUrlObj.url = fixUrl(ep.attr("href"));
-                    playUrls.add(playUrlObj);
+                Elements eps = lists.get(i).select("a");
+                List<String> epList = new ArrayList<>();
+                for (Element a : eps) {
+                    String epName = a.text().trim();
+                    String epId = a.attr("href").replaceAll(".*/play/|\\.html.*", "").trim();
+                    epList.add(epName + "$" + epId);
                 }
-                builder.append(flag, playUrls);
+                if (!epList.isEmpty()) {
+                    fromList.add(from);
+                    urlList.add(TextUtils.join("#", epList));
+                }
             }
 
-            Vod.VodPlayBuilder.BuildResult buildResult = builder.build();
-            vod.setVodPlayFrom(buildResult.vodPlayFrom);
-            vod.setVodPlayUrl(buildResult.vodPlayUrl);
+            vod.setVodPlayFrom(TextUtils.join("$$$", fromList));
+            vod.setVodPlayUrl(TextUtils.join("$$$", urlList));
 
-            return Result.string(vod);
+            return Result.get().vod(vod).string();
         } catch (Exception e) {
             SpiderDebug.log(e);
-            return Result.get().msg("详情加载失败").string();
+            return Result.get().msg("详情页解析失败").string();
         }
     }
 
@@ -161,8 +142,8 @@ public class Xiuer extends Spider {
 
     @Override
     public String playerContent(String flag, String id, List<String> vipFlags) {
-        // 开启 parse() 嗅探模式解决 Container Unsupported 问题
-        return Result.get().url(id).parse().string(); 
+        // 默认返回播放 ID，交给壳子解析
+        return Result.get().url(id).parse(0).header(getHeaders()).string();
     }
 
     private List<Vod> parseVodList(Document doc) {
@@ -171,12 +152,24 @@ public class Xiuer extends Spider {
         for (Element item : items) {
             Element a = item.selectFirst("a[href*=/detail/]");
             if (a == null) continue;
+            
             String id = a.attr("href").replaceAll(".*/detail/|\\.html.*", "").trim();
             String name = firstNonEmpty(a.attr("title"), item.select(".module-item-title").text());
             String pic = firstNonEmpty(item.selectFirst("img").attr("data-original"), item.selectFirst("img").attr("src"));
-            list.add(new Vod(id, name, fixUrl(pic), item.select(".module-item-note").text()));
+            String remark = item.select(".module-item-note").text().trim();
+            
+            if (!id.isEmpty() && !name.isEmpty()) {
+                list.add(new Vod(id, name, fixUrl(pic), remark));
+            }
         }
         return list;
+    }
+
+    private HashMap<String, String> getHeaders() {
+        HashMap<String, String> headers = new HashMap<>();
+        headers.put("User-Agent", UA);
+        headers.put("Referer", HOST + "/");
+        return headers;
     }
 
     private String firstNonEmpty(String... strs) {
@@ -188,6 +181,12 @@ public class Xiuer extends Spider {
         if (TextUtils.isEmpty(url)) return "";
         if (url.startsWith("//")) return "https:" + url;
         if (url.startsWith("/")) return HOST + url;
+        if (url.startsWith("http://")) return url.replace("http://", "https://");
         return url;
+    }
+
+    private boolean isDuplicate(List<Class> classes, String id) {
+        for (Class c : classes) if (c.getTypeId().equals(id)) return true;
+        return false;
     }
 }
