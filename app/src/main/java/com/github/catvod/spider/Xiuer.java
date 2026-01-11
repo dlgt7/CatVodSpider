@@ -16,7 +16,9 @@ import java.util.List;
 
 /**
  * 秀儿影视 - 2026.01 修复版
- * 修复：Container Unsupported 问题（调整 playerContent 解析逻辑）
+ * 修复：
+ * 1. PlayUrl 构造器参数不匹配导致的编译失败
+ * 2. Container Unsupported 问题（playerContent 开启解析）
  */
 public class Xiuer extends Spider {
 
@@ -25,12 +27,10 @@ public class Xiuer extends Spider {
     @Override
     public String homeContent(boolean filter) {
         try {
-            // 注意：AntiCrawlerEnhancer 需在您的工程中已实现，否则此处会编译报错
             String html = AntiCrawlerEnhancer.get().enhancedGet(HOST, null);
             if (TextUtils.isEmpty(html)) return Result.get().msg("首页源码为空").string();
             Document doc = Jsoup.parse(html);
 
-            // 分类提取
             List<Class> classes = new ArrayList<>();
             Elements navLinks = doc.select("a[href*=/show/], a[href*=/type/]");
             for (Element a : navLinks) {
@@ -45,7 +45,6 @@ public class Xiuer extends Spider {
                 }
             }
 
-            // 首页视频
             List<Vod> list = new ArrayList<>();
             Elements modules = doc.select(".module:not([class*='search']):not([class*='block'])");
             for (Element module : modules) {
@@ -92,11 +91,13 @@ public class Xiuer extends Spider {
             String html = AntiCrawlerEnhancer.get().enhancedGet(url, null);
             Document doc = Jsoup.parse(html);
 
-            // 基本信息
             String name = doc.selectFirst("h1.title, .video-info-title").text().trim();
-            String picElement = doc.selectFirst(".video-cover img, .module-item-pic img").attr("data-src");
-            if(TextUtils.isEmpty(picElement)) picElement = doc.selectFirst(".video-cover img, .module-item-pic img").attr("src");
-            String pic = fixUrl(picElement);
+            Element img = doc.selectFirst(".video-cover img, .module-item-pic img");
+            String pic = "";
+            if (img != null) {
+                pic = firstNonEmpty(img.attr("data-src"), img.attr("data-original"), img.attr("src"));
+            }
+            pic = fixUrl(pic);
             
             String type = doc.select(".video-info-items:contains(类型) a").text().trim();
             String year = doc.select(".video-info-items:contains(年份) a").text().trim();
@@ -113,23 +114,25 @@ public class Xiuer extends Spider {
             vod.setVodContent(desc);
             vod.setTypeName(type);
 
-            // 播放源
             Elements sources = doc.select(".module-tab-item");
             Elements playlists = doc.select(".module-play-list");
             
             Vod.VodPlayBuilder builder = new Vod.VodPlayBuilder();
             for (int i = 0; i < sources.size(); i++) {
                 Element source = sources.get(i);
-                String flag = source.selectFirst("span").text().trim();
+                String flag = source.text().trim();
                 if (flag.isEmpty()) flag = "线路" + (i + 1);
                 
+                if (i >= playlists.size()) break;
                 Element playlist = playlists.get(i);
                 List<Vod.VodPlayBuilder.PlayUrl> playUrls = new ArrayList<>();
                 Elements eps = playlist.select("a");
                 for (Element ep : eps) {
-                    String epName = ep.text().trim();
-                    String playUrl = fixUrl(ep.attr("href"));
-                    playUrls.add(new Vod.VodPlayBuilder.PlayUrl("", epName, playUrl));
+                    // 修复点：适配 PlayUrl 无参构造函数
+                    Vod.VodPlayBuilder.PlayUrl playUrlObj = new Vod.VodPlayBuilder.PlayUrl();
+                    playUrlObj.name = ep.text().trim();
+                    playUrlObj.url = fixUrl(ep.attr("href"));
+                    playUrls.add(playUrlObj);
                 }
                 builder.append(flag, playUrls);
             }
@@ -156,13 +159,9 @@ public class Xiuer extends Spider {
         }
     }
 
-    /**
-     * 核心修复点：
-     * 1. 显式调用 .parse() 设置 parse 为 1，让壳子通过嗅探获取视频地址。
-     * 2. 确保返回的是完整的 URL 字符串。
-     */
     @Override
     public String playerContent(String flag, String id, List<String> vipFlags) {
+        // 开启 parse() 嗅探模式解决 Container Unsupported 问题
         return Result.get().url(id).parse().string(); 
     }
 
