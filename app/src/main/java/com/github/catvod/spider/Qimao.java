@@ -283,30 +283,58 @@ public class Qimao extends Spider {
         }
     }
 
-    @Override
+@Override
     public String searchContent(String key, boolean quick) {
         return searchContent(key, quick, "1");
     }
 
     public String searchContent(String key, boolean quick, String pg) {
         try {
-            int page = Integer.parseInt(pg.isEmpty() ? "1" : pg);
-            String signStr = "extend=page=" + pg + "read_preference=0track_id=ec1280db127955061754851657967wd=" + key + KEYS;
+            if (pg == null || pg.isEmpty()) pg = "1";
+            String trackId = "ec1280db127955061754851657967";
+            
+            // 1. 严格按照 JS/Py 的顺序拼接签名字符串
+            // 注意：wd 参数在签名时使用的是原始字符，而不是 URL 编码后的字符
+            String signStr = "extend=page=" + pg + "read_preference=0track_id=" + trackId + "wd=" + key + KEYS;
             String sign = md5(signStr);
-            String url = XURL + "/api/v1/playlet/search?extend=&page=" + pg + "&wd=" + URLEncoder.encode(key, "UTF-8") + "&read_preference=0&track_id=ec1280db127955061754851657967&sign=" + sign;
 
+            // 2. 构建请求 URL，确保 wd 参数进行了 URL 编码
+            String url = XURL + "/api/v1/playlet/search?" +
+                    "extend=" +
+                    "&page=" + pg +
+                    "&wd=" + URLEncoder.encode(key, "UTF-8") +
+                    "&read_preference=0" +
+                    "&track_id=" + trackId +
+                    "&sign=" + sign;
+
+            // 3. 发送请求并解析
             String response = OkHttp.string(url, getHeaders());
-            JSONArray list = new JSONObject(response).getJSONObject("data").getJSONArray("list");
-
+            JSONObject responseJson = new JSONObject(response);
+            
+            // 增加防御性编程：检查 data 和 list 是否存在
+            if (!responseJson.has("data") || responseJson.isNull("data")) return "";
+            JSONObject dataObj = responseJson.getJSONObject("data");
+            if (!dataObj.has("list") || dataObj.isNull("list")) return "";
+            
+            JSONArray list = dataObj.getJSONArray("list");
             JSONArray videos = new JSONArray();
+            
             for (int i = 0; i < list.length(); i++) {
                 JSONObject vod = list.getJSONObject(i);
-                String name = vod.getString("title").replaceAll("<[^>]+>", "").trim();
+                // 过滤 HTML 标签并处理空白字符 (对应 JS 的 replace(/<[^>]+>/g, ''))
+                String name = vod.optString("title", "").replaceAll("<[^>]+>", "").replaceAll("\\s+", " ").trim();
+                
+                // 如果启用了 search_match 逻辑 (可选，此处参照 JS 实现)
+                if (quick && !name.toLowerCase().contains(key.toLowerCase())) {
+                    continue;
+                }
+
                 JSONObject v = new JSONObject();
-                v.put("vod_id", vod.getString("id"));
+                // 搜索接口返回的是 id 而非 playlet_id
+                v.put("vod_id", vod.optString("id", ""));
                 v.put("vod_name", name);
-                v.put("vod_pic", vod.getString("image_link"));
-                v.put("vod_remarks", "集多▶️" + vod.getString("total_num"));
+                v.put("vod_pic", vod.optString("image_link", ""));
+                v.put("vod_remarks", "集多▶️" + vod.optString("total_num", "0"));
                 videos.put(v);
             }
 
@@ -318,6 +346,7 @@ public class Qimao extends Spider {
             result.put("list", videos);
             return result.toString();
         } catch (Exception e) {
+            e.printStackTrace();
             return "";
         }
     }
