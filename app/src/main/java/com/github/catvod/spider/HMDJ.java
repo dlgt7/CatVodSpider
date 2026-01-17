@@ -240,80 +240,52 @@ public class HMDJ extends Spider {
     }
 
     @Override
-    public String searchContent(String key, boolean quick) throws Exception {
-        return searchContentPage(key, quick, "1");
+private String searchContentPage(String key, boolean quick, String pg) throws Exception {
+    JSONObject result = new JSONObject();
+    result.put("page", Integer.parseInt(pg));
+    result.put("pagecount", 1);
+    result.put("limit", 20);
+    result.put("total", 0);
+    
+    List<Vod> videos = new ArrayList<>();
+    // 111.txt 确认搜索路径为 /search ，参数名为 searchValue 
+    String searchUrl = siteUrl + "/search?searchValue=" + URLEncoder.encode(key, "UTF-8");
+    if (!pg.equals("1")) {
+        searchUrl += "&page=" + pg;
     }
-
-    @Override
-    public String searchContent(String key, boolean quick, String pg) throws Exception {
-        return searchContentPage(key, quick, pg);
-    }
-
-    private String searchContentPage(String key, boolean quick, String pg) throws Exception {
-        JSONObject result = new JSONObject();
-        result.put("page", Integer.parseInt(pg));
-        result.put("pagecount", 1);
-        result.put("limit", 20);
-        result.put("total", 0);
+    
+    Map<String, String> response = fetch(searchUrl);
+    if (response == null || !response.containsKey("body")) return Result.string(result);
+    
+    String htmlContent = response.get("body");
+    // 匹配 111.txt 末尾的 __NEXT_DATA__ 数据块 
+    Pattern pattern = Pattern.compile("<script id=\"__NEXT_DATA__\" type=\"application/json\">(.*?)</script>", Pattern.DOTALL);
+    Matcher matcher = pattern.matcher(htmlContent);
+    
+    if (matcher.find()) {
+        JSONObject nextDataJson = new JSONObject(matcher.group(1));
+        JSONObject pageProps = nextDataJson.optJSONObject("props").optJSONObject("pageProps");
         
-        List<Vod> videos = new ArrayList<>();
-        String searchUrl = siteUrl + "/search?searchValue=" + URLEncoder.encode(key, "UTF-8") + "&page=" + pg;
-        
-        Map<String, String> response = fetch(searchUrl);
-        if (response == null || !response.containsKey("body")) {
-            result.put("list", new JSONArray());
-            return result.toString();
-        }
-        
-        String htmlContent = response.get("body");
-        Pattern pattern = Pattern.compile("<script id=\"__NEXT_DATA__\" type=\"application/json\">(.*?)</script>", Pattern.DOTALL);
-        Matcher matcher = pattern.matcher(htmlContent);
-        if (!matcher.find()) {
-            result.put("list", new JSONArray());
-            return result.toString();
-        }
-        
-        try {
-            JSONObject nextDataJson = new JSONObject(matcher.group(1));
-            JSONObject pageProps = nextDataJson.optJSONObject("props").optJSONObject("pageProps");
-            
-            int totalPages = pageProps.optInt("pages", 1);
-            JSONArray bookList = pageProps.optJSONArray("bookList");
-            
-            if (bookList != null) {
-                for (int i = 0; i < bookList.length(); i++) {
-                    JSONObject book = bookList.getJSONObject(i);
-                    if (book.has("bookId")) {
-                        Vod vod = new Vod();
-                        vod.setVodId("/drama/" + book.getString("bookId"));
-                        vod.setVodName(book.optString("bookName", ""));
-                        vod.setVodPic(book.optString("coverWap", ""));
-                        vod.setVodRemarks((book.optString("statusDesc", "") + " " + book.optString("totalChapterNum", "") + "集").trim());
-                        videos.add(vod);
-                    }
-                }
+        if (pageProps != null && pageProps.has("bookList")) {
+            JSONArray bookList = pageProps.getJSONArray("bookList");
+            for (int i = 0; i < bookList.length(); i++) {
+                JSONObject book = bookList.getJSONObject(i);
+                Vod vod = new Vod();
+                vod.setVodId("/drama/" + book.optString("bookId"));
+                vod.setVodName(book.optString("bookName"));
+                vod.setVodPic(book.optString("coverWap"));
+                vod.setVodRemarks(book.optString("statusDesc") + " " + book.optString("totalChapterNum") + "集");
+                videos.add(vod);
             }
-            
-            result.put("pagecount", totalPages);
-            result.put("total", videos.size() * totalPages);
-            
-            JSONArray listArray = new JSONArray();
-            for (Vod vod : videos) {
-                JSONObject vodObj = new JSONObject();
-                vodObj.put("vod_id", vod.getVodId());
-                vodObj.put("vod_name", vod.getVodName());
-                vodObj.put("vod_pic", vod.getVodPic());
-                vodObj.put("vod_remarks", vod.getVodRemarks());
-                listArray.put(vodObj);
-            }
-            result.put("list", listArray);
-        } catch (Exception e) {
-            e.printStackTrace();
+            result.put("pagecount", pageProps.optInt("pages", 1));
         }
-        
-        return result.toString();
     }
-
+    
+    JSONArray listArray = new JSONArray();
+    for (Vod vod : videos) listArray.put(vod.toJSONObject());
+    result.put("list", listArray);
+    return result.toString();
+}
     @Override
     public String detailContent(List<String> ids) throws Exception {
         JSONObject result = new JSONObject();
@@ -603,4 +575,5 @@ public class HMDJ extends Spider {
     public void destroy() {
         super.destroy();
     }
+
 }
