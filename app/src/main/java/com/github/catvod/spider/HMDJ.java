@@ -246,15 +246,6 @@ public class HMDJ extends Spider {
 // ==================== 搜索部分 (针对 Gradle 编译报错修复版) ====================
 
 @Override
-    import com.github.catvod.spider.AntiCrawlerEnhancer;
-import com.github.catvod.spider.WebViewHelper;
-import com.github.catvod.utils.UA;
-import java.net.URLEncoder;
-import java.util.HashMap;
-import java.util.Map;
-import org.json.JSONArray;
-import org.json.JSONObject;
-
 public String searchContent(String wd, boolean quick) throws Exception {
     // 1. 定义搜索路径
     // 源码显示搜索页面为 /search [cite: 1, 10]，API 路径通常符合该规律
@@ -597,6 +588,7 @@ public void preSearchChallenge(String wd) {
     }
 
 }
+
 
 
 
