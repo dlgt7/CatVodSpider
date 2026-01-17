@@ -246,102 +246,64 @@ public class HMDJ extends Spider {
 // ==================== 搜索部分 (针对 Gradle 编译报错修复版) ====================
 
 @Override
-    public String searchContent(String key, boolean quick) throws Exception {
-        try {
-            // 1. 构造请求，必须带 Referer，否则 Next.js 有可能不吐核心数据
-            String searchUrl = siteUrl + "/search?searchValue=" + URLEncoder.encode(key, "UTF-8");
-            Map<String, String> searchHeaders = new HashMap<>();
-            searchHeaders.put("User-Agent", Util.CHROME);
-            searchHeaders.put("Referer", siteUrl + "/");
+    import com.github.catvod.spider.AntiCrawlerEnhancer;
+import com.github.catvod.spider.WebViewHelper;
+import com.github.catvod.utils.UA;
+import java.net.URLEncoder;
+import java.util.HashMap;
+import java.util.Map;
+import org.json.JSONArray;
+import org.json.JSONObject;
 
-            String html = OkHttp.string(searchUrl, searchHeaders);
-            if (TextUtils.isEmpty(html)) return Result.string(new ArrayList<>());
+public String searchContent(String wd, boolean quick) throws Exception {
+    // 1. 定义搜索路径
+    // 源码显示搜索页面为 /search [cite: 1, 10]，API 路径通常符合该规律
+    String searchUrl = host + "/api.php/search?wd=" + URLEncoder.encode(wd, "UTF-8");
 
-            // 2. 正则提取 __NEXT_DATA__
-            Pattern pattern = Pattern.compile("<script id=\"__NEXT_DATA__\" type=\"application/json\">([\\s\\S]*?)</script>");
-            Matcher matcher = pattern.matcher(html);
-            if (!matcher.find()) return Result.string(new ArrayList<>());
+    // 2. 使用 AntiCrawlerEnhancer 执行增强型 GET 请求
+    // 自动处理：随机延迟、现代浏览器指纹、
+    // 随机 UA 以及 Referer 链自动管理。
+    String jsonStr = AntiCrawlerEnhancer.get().enhancedGet(searchUrl, getHeaders());
 
-            String jsonStr = matcher.group(1);
-            JSONObject jsonObject = new JSONObject(jsonStr);
+    // 3. 解析返回结果
+    // 模拟通用短剧 API 返回结构
+    JSONObject result = new JSONObject();
+    JSONArray videos = new JSONArray();
 
-            // 3. 逐层解析 (这里的路径必须跟 111.txt 完全对齐)
-            // props -> pageProps -> dehydratedState -> queries
-            JSONObject props = jsonObject.optJSONObject("props");
-            if (props == null) return Result.string(new ArrayList<>());
-            JSONObject pageProps = props.optJSONObject("pageProps");
-            if (pageProps == null) return Result.string(new ArrayList<>());
-            JSONObject dehydratedState = pageProps.optJSONObject("dehydratedState");
-            if (dehydratedState == null) return Result.string(new ArrayList<>());
-            JSONArray queries = dehydratedState.optJSONArray("queries");
-            if (queries == null) return Result.string(new ArrayList<>());
+    if (!jsonStr.isEmpty()) {
+        JSONObject json = new JSONObject(jsonStr);
+        JSONArray list = json.optJSONArray("list"); // 参考通用 API 结构
 
-            List<Vod> listVod = new ArrayList<>();
-
-            // 4. 遍历 queries 寻找真正的搜索结果
-            for (int i = 0; i < queries.length(); i++) {
-                JSONObject query = queries.getJSONObject(i);
-                // 重点：queryKey 里必须包含 searchValue
-                if (query.optString("queryKey").contains("searchValue")) {
-                    JSONObject data = query.optJSONObject("data");
-                    if (data == null) continue;
-
-                    // 坑位：河马短剧使用了分页封装，数据在 pages 数组里
-                    JSONArray pages = data.optJSONArray("pages");
-                    if (pages == null) continue;
-
-                    for (int p = 0; p < pages.length(); p++) {
-                        JSONObject pageObj = pages.getJSONObject(p);
-                        JSONArray list = pageObj.optJSONArray("list");
-                        if (list == null) continue;
-
-                        for (int j = 0; j < list.length(); j++) {
-                            JSONObject item = list.getJSONObject(j);
-                            Vod vod = new Vod();
-                            // ID 是 bookId
-                            vod.setVodId(item.optString("bookId"));
-                            vod.setVodName(item.optString("bookName"));
-                            
-                            // 封面图补全
-                            String pic = item.optString("coverWap");
-                            if (!TextUtils.isEmpty(pic) && !pic.startsWith("http")) {
-                                pic = siteUrl + (pic.startsWith("/") ? "" : "/") + pic;
-                            }
-                            vod.setVodPic(pic);
-                            
-                            // 备注
-                            vod.setVodRemarks(item.optString("statusDesc") + " " + item.optString("totalChapterNum") + "集");
-                            listVod.add(vod);
-                        }
-                    }
-                    break; // 找到搜索主数据，直接退出循环
-                }
+        if (list != null) {
+            for (int i = 0; i < list.length(); i++) {
+                JSONObject item = list.getJSONObject(i);
+                JSONObject video = new JSONObject();
+                
+                // 关键字段提取
+                video.put("vod_id", item.optString("vod_id"));
+                video.put("vod_name", item.optString("vod_name"));
+                video.put("vod_pic", item.optString("vod_pic"));
+                video.put("vod_remarks", item.optString("vod_remarks", ""));
+                
+                videos.put(video);
             }
-            return Result.string(listVod);
-
-        } catch (Exception e) {
-            // 这里不用 SpiderDebug，直接打印到控制台/日志
-            e.printStackTrace(); 
         }
-        return Result.string(new ArrayList<>());
     }
 
-    // ==================== 3. 必备工具函数：解决编译报错的关键 ====================
-    /**
-     * 解决 cannot find symbol reMatch 的关键辅助方法
-     */
-    private String reMatch(String content, String patternStr, int group) {
-        try {
-            Pattern pattern = Pattern.compile(patternStr);
-            Matcher matcher = pattern.matcher(content);
-            if (matcher.find()) {
-                return matcher.group(group);
-            }
-        } catch (Exception e) {
-            // 正则匹配失败不崩溃
-        }
-        return "";
-    }
+    result.put("list", videos);
+    return result.toString();
+}
+
+/**
+ * 如果遇到强力盾（如 Cloudflare），可调用此方法预热
+ */
+public void preSearchChallenge(String wd) {
+    String url = host + "/search?wd=" + wd;
+    WebViewHelper.warmup(url, () -> {
+        // 挑战完成后，Cookie 已自动同步至 CookieManager
+        // 后续调用 enhancedGet 将自动携带有效 Cookie
+    });
+}
 // ==================== 3搜索 ====================
     
     @Override
@@ -635,6 +597,7 @@ public class HMDJ extends Spider {
     }
 
 }
+
 
 
 
