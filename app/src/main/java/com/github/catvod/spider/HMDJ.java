@@ -6,14 +6,10 @@ import android.text.TextUtils;
 import com.github.catvod.bean.Class;
 import com.github.catvod.bean.Result;
 import com.github.catvod.bean.Vod;
-import com.github.catvod.crawler.SpiderDebug;
 import com.github.catvod.crawler.Spider;
 import com.github.catvod.net.OkHttp;
 import com.github.catvod.utils.Json;
 import com.github.catvod.utils.Util;
-import com.github.catvod.utils.UA;
-import com.github.catvod.spider.AntiCrawlerEnhancer;
-import com.github.catvod.spider.WebViewHelper;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -243,60 +239,81 @@ public class HMDJ extends Spider {
         return result.toString();
     }
 
-// ==================== 搜索部分 (针对 Gradle 编译报错修复版) ====================
-
-@Override
-public String searchContent(String wd, boolean quick) throws Exception {
-    // 1. 定义搜索路径
-    // 源码显示搜索页面为 /search [cite: 1, 10]，API 路径通常符合该规律
-    String searchUrl = host + "/api.php/search?wd=" + URLEncoder.encode(wd, "UTF-8");
-
-    // 2. 使用 AntiCrawlerEnhancer 执行增强型 GET 请求
-    // 自动处理：随机延迟、现代浏览器指纹、
-    // 随机 UA 以及 Referer 链自动管理。
-    String jsonStr = AntiCrawlerEnhancer.get().enhancedGet(searchUrl, getHeaders());
-
-    // 3. 解析返回结果
-    // 模拟通用短剧 API 返回结构
-    JSONObject result = new JSONObject();
-    JSONArray videos = new JSONArray();
-
-    if (!jsonStr.isEmpty()) {
-        JSONObject json = new JSONObject(jsonStr);
-        JSONArray list = json.optJSONArray("list"); // 参考通用 API 结构
-
-        if (list != null) {
-            for (int i = 0; i < list.length(); i++) {
-                JSONObject item = list.getJSONObject(i);
-                JSONObject video = new JSONObject();
-                
-                // 关键字段提取
-                video.put("vod_id", item.optString("vod_id"));
-                video.put("vod_name", item.optString("vod_name"));
-                video.put("vod_pic", item.optString("vod_pic"));
-                video.put("vod_remarks", item.optString("vod_remarks", ""));
-                
-                videos.put(video);
-            }
-        }
+    @Override
+    public String searchContent(String key, boolean quick) throws Exception {
+        return searchContentPage(key, quick, "1");
     }
 
-    result.put("list", videos);
-    return result.toString();
-}
+    @Override
+    public String searchContent(String key, boolean quick, String pg) throws Exception {
+        return searchContentPage(key, quick, pg);
+    }
 
-/**
- * 如果遇到强力盾（如 Cloudflare），可调用此方法预热
- */
-public void preSearchChallenge(String wd) {
-    String url = host + "/search?wd=" + wd;
-    WebViewHelper.warmup(url, () -> {
-        // 挑战完成后，Cookie 已自动同步至 CookieManager
-        // 后续调用 enhancedGet 将自动携带有效 Cookie
-    });
-}
-// ==================== 3搜索 ====================
-    
+    private String searchContentPage(String key, boolean quick, String pg) throws Exception {
+        JSONObject result = new JSONObject();
+        result.put("page", Integer.parseInt(pg));
+        result.put("pagecount", 1);
+        result.put("limit", 20);
+        result.put("total", 0);
+        
+        List<Vod> videos = new ArrayList<>();
+        String searchUrl = siteUrl + "/search?searchValue=" + URLEncoder.encode(key, "UTF-8") + "&page=" + pg;
+        
+        Map<String, String> response = fetch(searchUrl);
+        if (response == null || !response.containsKey("body")) {
+            result.put("list", new JSONArray());
+            return result.toString();
+        }
+        
+        String htmlContent = response.get("body");
+        Pattern pattern = Pattern.compile("<script id=\"__NEXT_DATA__\" type=\"application/json\">(.*?)</script>", Pattern.DOTALL);
+        Matcher matcher = pattern.matcher(htmlContent);
+        if (!matcher.find()) {
+            result.put("list", new JSONArray());
+            return result.toString();
+        }
+        
+        try {
+            JSONObject nextDataJson = new JSONObject(matcher.group(1));
+            JSONObject pageProps = nextDataJson.optJSONObject("props").optJSONObject("pageProps");
+            
+            int totalPages = pageProps.optInt("pages", 1);
+            JSONArray bookList = pageProps.optJSONArray("bookList");
+            
+            if (bookList != null) {
+                for (int i = 0; i < bookList.length(); i++) {
+                    JSONObject book = bookList.getJSONObject(i);
+                    if (book.has("bookId")) {
+                        Vod vod = new Vod();
+                        vod.setVodId("/drama/" + book.getString("bookId"));
+                        vod.setVodName(book.optString("bookName", ""));
+                        vod.setVodPic(book.optString("coverWap", ""));
+                        vod.setVodRemarks((book.optString("statusDesc", "") + " " + book.optString("totalChapterNum", "") + "集").trim());
+                        videos.add(vod);
+                    }
+                }
+            }
+            
+            result.put("pagecount", totalPages);
+            result.put("total", videos.size() * totalPages);
+            
+            JSONArray listArray = new JSONArray();
+            for (Vod vod : videos) {
+                JSONObject vodObj = new JSONObject();
+                vodObj.put("vod_id", vod.getVodId());
+                vodObj.put("vod_name", vod.getVodName());
+                vodObj.put("vod_pic", vod.getVodPic());
+                vodObj.put("vod_remarks", vod.getVodRemarks());
+                listArray.put(vodObj);
+            }
+            result.put("list", listArray);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        
+        return result.toString();
+    }
+
     @Override
     public String detailContent(List<String> ids) throws Exception {
         JSONObject result = new JSONObject();
@@ -586,20 +603,4 @@ public void preSearchChallenge(String wd) {
     public void destroy() {
         super.destroy();
     }
-
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
