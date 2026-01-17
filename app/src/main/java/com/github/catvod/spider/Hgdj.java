@@ -21,7 +21,6 @@ public class Hgdj extends Spider {
 
     private Map<String, String> getHeaderx() {
         Map<String, String> headers = new HashMap<>();
-        // 升级至 2025 年主流浏览器 UA
         headers.put("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36");
         headers.put("Referer", xurl + "/");
         return headers;
@@ -31,7 +30,6 @@ public class Hgdj extends Spider {
     public String homeContent(boolean filter) {
         try {
             List<Class> classes = new ArrayList<>();
-            // 硬编码稳定分类，彻底弃用 le.com 逻辑
             String[] names = {"都市", "古装", "逆袭", "重生", "甜宠", "虐恋", "战神", "神医", "总裁", "玄幻"};
             for (String name : names) {
                 classes.add(new Class(name, name));
@@ -66,20 +64,19 @@ public class Hgdj extends Spider {
                     vod.setVodId(vodObj.getString("book_id"));
                     vod.setVodName(vodObj.getString("title"));
                     vod.setVodPic(vodObj.getString("cover"));
-                    // 映射备注信息，去除冗余字样
                     vod.setVodRemarks(vodObj.optString("type"));
                     list.add(vod);
                 }
             }
             
-            // 【分页优化：方案 A】
-            // 假设永远有下一页，直到列表为空，避免 UI 上的页码混乱
+            // 分页优化：方案 A (无限翻页逻辑)
             int pageCount = list.isEmpty() ? page : page + 1;
             return Result.get().page(page, pageCount, 20, Integer.MAX_VALUE).vod(list).string();
             
         } catch (Exception e) {
             SpiderDebug.log(e);
-            return Result.error("分类获取异常").string();
+            // 修复点：Result.error 已经返回 String，去掉 .string()
+            return Result.error("分类获取异常"); 
         }
     }
 
@@ -115,7 +112,8 @@ public class Hgdj extends Spider {
             return Result.string(vod);
         } catch (Exception e) {
             SpiderDebug.log(e);
-            return Result.error("详情解析失败").string();
+            // 修复点：Result.error 已经返回 String，去掉 .string()
+            return Result.error("详情解析失败");
         }
     }
 
@@ -133,16 +131,13 @@ public class Hgdj extends Spider {
             JSONObject data = new JSONObject(json);
             String videoUrl = data.getJSONObject("data").getString("url");
             
-            // 【播放优化 1】：追踪 302 跳转地址
-            // 很多短剧源会通过 302 重定向到 CDN 的带签名链接
+            // 302 跳转跟踪
             String finalUrl = OkHttp.getLocation(videoUrl, getHeaderx());
             if (!TextUtils.isEmpty(finalUrl)) {
                 videoUrl = finalUrl;
             }
 
             Result result = Result.get().url(videoUrl).header(getHeaderx()).parse(0);
-            
-            // 【播放优化 2】：M3U8 格式声明
             if (videoUrl.contains(".m3u8")) {
                 result.m3u8();
             }
@@ -151,7 +146,8 @@ public class Hgdj extends Spider {
             
         } catch (Exception e) {
             SpiderDebug.log(e);
-            return Result.error("播放解析失败").string();
+            // 修复点：Result.error 已经返回 String，去掉 .string()
+            return Result.error("播放解析失败");
         }
     }
 }
