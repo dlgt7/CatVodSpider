@@ -241,72 +241,72 @@ public class HMDJ extends Spider {
 
 // ==================== 搜索部分 (针对 Gradle 编译报错修复版) ====================
 
+// ==================== 1. 搜索入口：对齐框架接口 ====================
     @Override
     public String searchContent(String key, boolean quick) throws Exception {
-        // 调用带分页的方法，page 默认为 "1"
         return searchContentPage(key, quick, "1");
     }
 
-    // 修复 Error: cannot find symbol method searchContentPage
+    // ==================== 2. 核心逻辑：分页搜索与数据解析 ====================
     public String searchContentPage(String key, boolean quick, String page) throws Exception {
         try {
-            // 1. 构造请求 URL (参考 JS 路由)
+            // A. 构造 URL (参考 JS 版路径)
             String searchUrl = siteUrl + "/search/" + page + "?searchValue=" + URLEncoder.encode(key, "UTF-8");
             
-            // 2. 构造 Headers (必须包含 Referer 绕过验证，参考 PY 版)
+            // B. 模拟 Header (必须包含 Referer 和 UA，否则 Next.js 不返回数据)
             Map<String, String> searchHeaders = new HashMap<>(headers);
             searchHeaders.put("Referer", siteUrl + "/");
             
             String html = OkHttp.string(searchUrl, searchHeaders);
-            
-            // 3. 提取 JSON 数据块 (修复 cannot find symbol reMatch)
+            if (TextUtils.isEmpty(html)) return Result.error("网络请求失败");
+
+            // C. 提取 Next.js 数据 (核心优化：正则提取)
             String jsonStr = reMatch(html, "<script id=\"__NEXT_DATA__\" type=\"application/json\">([\\s\\S]*?)</script>", 1);
-            if (TextUtils.isEmpty(jsonStr)) return Result.error("未找到数据");
+            if (TextUtils.isEmpty(jsonStr)) return Result.error("页面解析失败");
 
             JSONObject jsonObject = new JSONObject(jsonStr);
-            JSONObject props = jsonObject.getJSONObject("props").getJSONObject("pageProps");
-            JSONArray queries = props.getJSONArray("queries");
+            JSONArray queries = jsonObject.getJSONObject("props").getJSONObject("pageProps").getJSONArray("queries");
             
             List<Vod> listVod = new ArrayList<>();
             
-            // 4. 动态查找匹配搜索词的 Data 块 (搅拌逻辑优化：确保不抓到猜你喜欢)
+            // D. 遍历查询块 (搅拌逻辑：精准匹配搜索数据块)
             for (int i = 0; i < queries.length(); i++) {
                 JSONObject query = queries.getJSONObject(i);
+                // 必须检查 queryKey，确保我们拿到的是 search 接口的数据，而不是底部的猜你喜欢
                 if (query.has("queryKey") && query.getJSONArray("queryKey").toString().contains("searchValue")) {
                     JSONObject data = query.getJSONObject("data");
+                    if (data.optInt("total", 0) <= 0) continue; // 如果搜不到结果，不解析
                     
-                    // 只有 total > 0 才解析列表
-                    if (data.optInt("total", 0) > 0) {
-                        JSONArray list = data.getJSONArray("list");
-                        for (int j = 0; j < list.length(); j++) {
-                            JSONObject item = list.getJSONObject(j);
-                            Vod vod = new Vod();
-                            vod.setVodId(item.getString("bookId"));
-                            vod.setVodName(item.getString("bookName"));
-                            
-                            // 图片地址补全
-                            String pic = item.optString("bookCover", "");
-                            if (!pic.startsWith("http")) pic = siteUrl + (pic.startsWith("/") ? "" : "/") + pic;
-                            vod.setVodPic(pic);
-                            
-                            // 备注信息
-                            vod.setVodRemarks(item.optString("lastChapterName", "全集"));
-                            listVod.add(vod);
-                        }
+                    JSONArray list = data.getJSONArray("list");
+                    for (int j = 0; j < list.length(); j++) {
+                        JSONObject item = list.getJSONObject(j);
+                        Vod vod = new Vod();
+                        // 字段对齐 (参考 PY 版 bookId)
+                        vod.setVodId(item.getString("bookId"));
+                        vod.setVodName(item.getString("bookName"));
+                        
+                        // 图片补全 (处理相对路径)
+                        String pic = item.optString("bookCover", "");
+                        if (!pic.startsWith("http")) pic = siteUrl + (pic.startsWith("/") ? "" : "/") + pic;
+                        vod.setVodPic(pic);
+                        
+                        // 备注：显示最新集数
+                        vod.setVodRemarks(item.optString("lastChapterName", "全集"));
+                        listVod.add(vod);
                     }
-                    break; // 找到主搜索数据块，跳出循环
+                    break; // 找到主数据块，立即退出循环提高效率
                 }
             }
             return Result.string(listVod);
         } catch (Exception e) {
             e.printStackTrace();
         }
-        return Result.error("搜索异常");
+        return Result.error("未搜索到结果");
     }
 
+    // ==================== 3. 必备工具函数：解决编译报错的关键 ====================
     /**
-     * 辅助函数：正则表达式提取 (修复 cannot find symbol reMatch 错误)
-     * 注意：请确保此方法放在 HMDJ 类内部
+     * 解决 cannot find symbol reMatch 的关键辅助方法
      */
     private String reMatch(String content, String patternStr, int group) {
         try {
@@ -316,10 +316,11 @@ public class HMDJ extends Spider {
                 return matcher.group(group);
             }
         } catch (Exception e) {
-            e.printStackTrace();
+            // 正则匹配失败不崩溃
         }
         return "";
     }
+// ==================== 3搜索 ====================
     
     @Override
     public String detailContent(List<String> ids) throws Exception {
@@ -612,6 +613,7 @@ public class HMDJ extends Spider {
     }
 
 }
+
 
 
 
