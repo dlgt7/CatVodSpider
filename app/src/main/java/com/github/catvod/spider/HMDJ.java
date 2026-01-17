@@ -239,6 +239,10 @@ public class HMDJ extends Spider {
         return result.toString();
     }
 
+@Override
+public String searchContent(String key, boolean quick) throws Exception {
+    return searchContentPage(key, quick, "1");
+}
 
     private String searchContentPage(String key, boolean quick, String pg) throws Exception {
     List<Vod> videos = new ArrayList<>();
@@ -586,6 +590,7 @@ public class HMDJ extends Spider {
     }
 
 }
+
 
 
 
