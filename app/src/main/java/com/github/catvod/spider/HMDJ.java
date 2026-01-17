@@ -244,7 +244,7 @@ public String searchContent(String key, boolean quick) throws Exception {
     return searchContentPage(key, quick, "1");
 }
 
-@Override
+
 public String searchContent(String key, boolean quick) throws Exception {
     try {
         // 1. 模拟移动端请求，获取 Next.js 原始数据
@@ -598,6 +598,7 @@ public String searchContent(String key, boolean quick) throws Exception {
     }
 
 }
+
 
 
 
