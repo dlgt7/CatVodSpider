@@ -239,53 +239,61 @@ public class HMDJ extends Spider {
         return result.toString();
     }
 
-    @Override
 private String searchContentPage(String key, boolean quick, String pg) throws Exception {
-    JSONObject result = new JSONObject();
-    result.put("page", Integer.parseInt(pg));
-    result.put("pagecount", 1);
-    result.put("limit", 20);
-    result.put("total", 0);
-    
     List<Vod> videos = new ArrayList<>();
-    // 111.txt 确认搜索路径为 /search ，参数名为 searchValue 
+    
+    // 1. 构造请求地址
     String searchUrl = siteUrl + "/search?searchValue=" + URLEncoder.encode(key, "UTF-8");
     if (!pg.equals("1")) {
         searchUrl += "&page=" + pg;
     }
     
+    // 2. 获取源码
     Map<String, String> response = fetch(searchUrl);
-    if (response == null || !response.containsKey("body")) return Result.string(result);
+    if (response == null || !response.containsKey("body")) {
+        return Result.string(new ArrayList<>(), videos); // 返回空结果，适配 Result.java 的方法签名
+    }
     
     String htmlContent = response.get("body");
-    // 匹配 111.txt 末尾的 __NEXT_DATA__ 数据块 
+    // 3. 提取 NEXT_DATA 中的搜索结果
     Pattern pattern = Pattern.compile("<script id=\"__NEXT_DATA__\" type=\"application/json\">(.*?)</script>", Pattern.DOTALL);
     Matcher matcher = pattern.matcher(htmlContent);
     
+    int totalPages = 1;
     if (matcher.find()) {
-        JSONObject nextDataJson = new JSONObject(matcher.group(1));
-        JSONObject pageProps = nextDataJson.optJSONObject("props").optJSONObject("pageProps");
-        
-        if (pageProps != null && pageProps.has("bookList")) {
-            JSONArray bookList = pageProps.getJSONArray("bookList");
-            for (int i = 0; i < bookList.length(); i++) {
-                JSONObject book = bookList.getJSONObject(i);
-                Vod vod = new Vod();
-                vod.setVodId("/drama/" + book.optString("bookId"));
-                vod.setVodName(book.optString("bookName"));
-                vod.setVodPic(book.optString("coverWap"));
-                vod.setVodRemarks(book.optString("statusDesc") + " " + book.optString("totalChapterNum") + "集");
-                videos.add(vod);
+        try {
+            JSONObject nextDataJson = new JSONObject(matcher.group(1));
+            JSONObject pageProps = nextDataJson.optJSONObject("props").optJSONObject("pageProps");
+            
+            if (pageProps != null) {
+                totalPages = pageProps.optInt("pages", 1);
+                JSONArray bookList = pageProps.optJSONArray("bookList");
+                
+                if (bookList != null) {
+                    for (int i = 0; i < bookList.length(); i++) {
+                        JSONObject book = bookList.getJSONObject(i);
+                        // 使用 Vod.java 中已有的构造函数
+                        String id = "/drama/" + book.optString("bookId");
+                        String name = book.optString("bookName");
+                        String pic = book.optString("coverWap");
+                        String remarks = (book.optString("statusDesc") + " " + book.optString("totalChapterNum") + "集").trim();
+                        
+                        videos.add(new Vod(id, name, pic, remarks));
+                    }
+                }
             }
-            result.put("pagecount", pageProps.optInt("pages", 1));
+        } catch (Exception e) {
+            e.printStackTrace();
         }
     }
     
-    JSONArray listArray = new JSONArray();
-    for (Vod vod : videos) listArray.put(vod.toJSONObject());
-    result.put("list", listArray);
-    return result.toString();
+    // 4. 使用框架标准 Result.string 方法返回数据，并带上分页信息
+    return Result.get()
+            .vod(videos)
+            .page(Integer.parseInt(pg), totalPages, videos.size(), videos.size() * totalPages)
+            .string();
 }
+    
     @Override
     public String detailContent(List<String> ids) throws Exception {
         JSONObject result = new JSONObject();
@@ -577,3 +585,4 @@ private String searchContentPage(String key, boolean quick, String pg) throws Ex
     }
 
 }
+
