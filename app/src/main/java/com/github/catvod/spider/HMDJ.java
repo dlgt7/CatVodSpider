@@ -244,70 +244,67 @@ public String searchContent(String key, boolean quick) throws Exception {
     return searchContentPage(key, quick, "1");
 }
 
-private String searchContentPage(String key, boolean quick, String pg) throws Exception {
-    List<Vod> videos = new ArrayList<>();
-    
-    // 1. 严格匹配 111.txt 源码中的搜索路径和参数名
-    String searchUrl = siteUrl + "/search?searchValue=" + URLEncoder.encode(key, "UTF-8");
-    if (!pg.equals("1")) {
-        searchUrl += "&page=" + pg;
-    }
-    
-    // 2. 发起请求并获取 HTML
-    Map<String, String> response = fetch(searchUrl);
-    if (response == null || !response.containsKey("body")) {
-        return Result.get().vod(videos).string();
-    }
-    
-    String htmlContent = response.get("body");
-    
-    // 3. 使用正则提取 Next.js 的核心数据 JSON
-    // 这是修复“不搜索”的关键，因为搜索结果不在 HTML 标签里，而在 script 的 JSON 里
-    Pattern pattern = Pattern.compile("<script id=\"__NEXT_DATA__\" type=\"application/json\">(.*?)</script>", Pattern.DOTALL);
-    Matcher matcher = pattern.matcher(htmlContent);
-    
-    int totalPages = 1;
-    if (matcher.find()) {
-        try {
-            JSONObject nextDataJson = new JSONObject(matcher.group(1));
-            // 路径定位：props -> pageProps -> bookList
-            JSONObject pageProps = nextDataJson.optJSONObject("props").optJSONObject("pageProps");
-            
-            if (pageProps != null) {
-                // 获取总页数用于翻页
-                totalPages = pageProps.optInt("pages", 1);
-                JSONArray bookList = pageProps.optJSONArray("bookList");
+@Override
+public String searchContent(String key, boolean quick) throws Exception {
+    try {
+        // 1. 模拟移动端请求，获取 Next.js 原始数据
+        String searchUrl = siteUrl + "/search/1?searchValue=" + URLEncoder.encode(key, "UTF-8");
+        // 必须携带 Referer，否则部分接口会返回空
+        Map<String, String> searchHeaders = new HashMap<>(headers);
+        searchHeaders.put("Referer", siteUrl + "/");
+        
+        String html = OkHttp.string(searchUrl, searchHeaders);
+        String jsonStr = reMatch(html, "<script id=\"__NEXT_DATA__\" type=\"application/json\">([\\s\\S]*?)</script>", 1);
+        if (TextUtils.isEmpty(jsonStr)) return "";
+
+        JSONObject props = new JSONObject(jsonStr).getJSONObject("props").getJSONObject("pageProps");
+        JSONArray queries = props.getJSONArray("queries");
+        
+        List<Vod> listVod = new ArrayList<>();
+        
+        // 2. 搅拌逻辑：动态查找匹配搜索词的 Data 块
+        for (int i = 0; i < queries.length(); i++) {
+            JSONObject query = queries.getJSONObject(i);
+            // 校验 queryKey，确保这是搜索业务的数据块，而不是广告或推荐
+            if (query.has("queryKey") && query.getJSONArray("queryKey").toString().contains("searchValue")) {
+                JSONObject data = query.getJSONObject("data");
                 
-                if (bookList != null) {
-                    for (int i = 0; i < bookList.length(); i++) {
-                        JSONObject book = bookList.getJSONObject(i);
-                        
-                        // 提取字段：bookId, bookName, coverWap
-                        String id = "/drama/" + book.optString("bookId");
-                        String name = book.optString("bookName");
-                        String pic = book.optString("coverWap");
-                        
-                        // 备注显示状态和总集数
-                        String status = book.optString("statusDesc", "");
-                        String count = book.optString("totalChapterNum", "");
-                        String remarks = (status + " " + (count.isEmpty() ? "" : count + "集")).trim();
-                        
-                        // 使用 Vod 的标准构造函数
-                        videos.add(new Vod(id, name, pic, remarks));
-                    }
+                // 检查总数，如果为0直接跳过，防止抓到“猜你喜欢”
+                if (data.optInt("total", 0) <= 0) continue;
+                
+                JSONArray list = data.getJSONArray("list");
+                for (int j = 0; j < list.length(); j++) {
+                    JSONObject item = list.getJSONObject(j);
+                    
+                    // 过滤：如果搜索词和结果完全无关，可以根据需要在这里做二次过滤
+                    String name = item.getString("bookName");
+                    
+                    Vod vod = new Vod();
+                    vod.setVodId(item.getString("bookId"));
+                    vod.setVodName(name);
+                    
+                    // 图片补全 (参考 Py 版的 urljoin 逻辑)
+                    String pic = item.optString("bookCover", "");
+                    if (!pic.startsWith("http")) pic = siteUrl + (pic.startsWith("/") ? "" : "/") + pic;
+                    vod.setVodPic(pic);
+                    
+                    // 搅拌优化：整合简介和状态
+                    String remarks = item.optString("lastChapterName", "全集");
+                    String count = item.optString("totalChapter", "");
+                    vod.setVodRemarks(remarks + (count.isEmpty() ? "" : " / 共" + count + "集"));
+                    
+                    listVod.add(vod);
                 }
+                // 找到搜索主块后，直接退出循环，效率最高
+                break; 
             }
-        } catch (Exception e) {
-            // 记录解析异常，防止一个报错导致整个搜索失效
-            e.printStackTrace();
         }
+
+        return Result.string(listVod);
+    } catch (Exception e) {
+        e.printStackTrace();
     }
-    
-    // 4. 使用 Result.java 提供的链式调用返回结果，适配框架
-    return Result.get()
-            .vod(videos)
-            .page(Integer.parseInt(pg), totalPages, 20, videos.size() * totalPages)
-            .string();
+    return Result.error("未找到相关剧集");
 }
     
     @Override
@@ -601,6 +598,7 @@ private String searchContentPage(String key, boolean quick, String pg) throws Ex
     }
 
 }
+
 
 
 
