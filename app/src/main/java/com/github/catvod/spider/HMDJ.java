@@ -248,61 +248,77 @@ public class HMDJ extends Spider {
     }
 
     // ==================== 2. 核心逻辑：分页搜索与数据解析 ====================
-    public String searchContentPage(String key, boolean quick, String page) throws Exception {
-        try {
-            // A. 构造 URL (参考 JS 版路径)
-            String searchUrl = siteUrl + "/search/" + page + "?searchValue=" + URLEncoder.encode(key, "UTF-8");
-            
-            // B. 模拟 Header (必须包含 Referer 和 UA，否则 Next.js 不返回数据)
-            Map<String, String> searchHeaders = new HashMap<>(headers);
-            searchHeaders.put("Referer", siteUrl + "/");
-            
-            String html = OkHttp.string(searchUrl, searchHeaders);
-            if (TextUtils.isEmpty(html)) return Result.error("网络请求失败");
+public String searchContentPage(String key, boolean quick, String page) throws Exception {
+    try {
+        // 1. 构造搜索 URL
+        String searchUrl = siteUrl + "/search?searchValue=" + URLEncoder.encode(key, "UTF-8");
+        
+        // 2. 必须带上 Referer
+        Map<String, String> searchHeaders = new HashMap<>(headers);
+        searchHeaders.put("Referer", siteUrl + "/");
+        
+        String html = OkHttp.string(searchUrl, searchHeaders);
+        if (TextUtils.isEmpty(html)) return Result.error("搜索请求失败");
 
-            // C. 提取 Next.js 数据 (核心优化：正则提取)
-            String jsonStr = reMatch(html, "<script id=\"__NEXT_DATA__\" type=\"application/json\">([\\s\\S]*?)</script>", 1);
-            if (TextUtils.isEmpty(jsonStr)) return Result.error("页面解析失败");
+        // 3. 提取 JSON
+        String jsonStr = reMatch(html, "<script id=\"__NEXT_DATA__\" type=\"application/json\">([\\s\\S]*?)</script>", 1);
+        JSONObject jsonObject = new JSONObject(jsonStr);
+        
+        // 深入路径：props -> pageProps -> dehydratedState -> queries
+        JSONArray queries = jsonObject.getJSONObject("props")
+                                      .getJSONObject("pageProps")
+                                      .getJSONObject("dehydratedState")
+                                      .getJSONArray("queries");
 
-            JSONObject jsonObject = new JSONObject(jsonStr);
-            JSONArray queries = jsonObject.getJSONObject("props").getJSONObject("pageProps").getJSONArray("queries");
-            
-            List<Vod> listVod = new ArrayList<>();
-            
-            // D. 遍历查询块 (搅拌逻辑：精准匹配搜索数据块)
-            for (int i = 0; i < queries.length(); i++) {
-                JSONObject query = queries.getJSONObject(i);
-                // 必须检查 queryKey，确保我们拿到的是 search 接口的数据，而不是底部的猜你喜欢
-                if (query.has("queryKey") && query.getJSONArray("queryKey").toString().contains("searchValue")) {
-                    JSONObject data = query.getJSONObject("data");
-                    if (data.optInt("total", 0) <= 0) continue; // 如果搜不到结果，不解析
-                    
-                    JSONArray list = data.getJSONArray("list");
+        List<Vod> listVod = new ArrayList<>();
+        for (int i = 0; i < queries.length(); i++) {
+            JSONObject query = queries.getJSONObject(i);
+            String queryKey = query.optString("queryKey", "");
+
+            // 坑位修复：确认是搜索接口的数据块
+            if (queryKey.contains("searchValue")) {
+                JSONObject data = query.optJSONObject("data");
+                if (data == null) continue;
+
+                // 【核心修改点】：适配 React Query 的 pages 分页结构
+                JSONArray pages = data.optJSONArray("pages");
+                if (pages == null || pages.length() == 0) continue;
+
+                // 取第一页的数据
+                for (int p = 0; p < pages.length(); p++) {
+                    JSONObject pageObj = pages.getJSONObject(p);
+                    JSONArray list = pageObj.optJSONArray("list");
+                    if (list == null) continue;
+
                     for (int j = 0; j < list.length(); j++) {
                         JSONObject item = list.getJSONObject(j);
                         Vod vod = new Vod();
-                        // 字段对齐 (参考 PY 版 bookId)
-                        vod.setVodId(item.getString("bookId"));
-                        vod.setVodName(item.getString("bookName"));
                         
-                        // 图片补全 (处理相对路径)
-                        String pic = item.optString("bookCover", "");
+                        // ID 处理：源码中是 bookId
+                        vod.setVodId(item.optString("bookId"));
+                        vod.setVodName(item.optString("bookName"));
+                        
+                        // 图片补全：从 coverWap 获取
+                        String pic = item.optString("coverWap");
                         if (!pic.startsWith("http")) pic = siteUrl + (pic.startsWith("/") ? "" : "/") + pic;
                         vod.setVodPic(pic);
                         
-                        // 备注：显示最新集数
-                        vod.setVodRemarks(item.optString("lastChapterName", "全集"));
+                        // 备注：显示状态 + 总集数
+                        String remarks = item.optString("statusDesc") + " " + item.optString("totalChapterNum") + "集";
+                        vod.setVodRemarks(remarks.trim());
+                        
                         listVod.add(vod);
                     }
-                    break; // 找到主数据块，立即退出循环提高效率
                 }
+                break; 
             }
-            return Result.string(listVod);
-        } catch (Exception e) {
-            e.printStackTrace();
         }
-        return Result.error("未搜索到结果");
+        return Result.string(listVod);
+    } catch (Exception e) {
+        SpiderDebug.log(e);
+        return Result.error("搜索解析失败: " + e.getMessage());
     }
+}
 
     // ==================== 3. 必备工具函数：解决编译报错的关键 ====================
     /**
@@ -613,6 +629,7 @@ public class HMDJ extends Spider {
     }
 
 }
+
 
 
 
