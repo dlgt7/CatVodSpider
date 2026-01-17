@@ -17,7 +17,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * 锦鲤短剧 Java 版本 - 最终修复版
+ * 锦鲤短剧 Java 版本 - 适配 List 接口与 OkResult
  */
 public class Jinli extends Spider {
 
@@ -42,7 +42,7 @@ public class Jinli extends Spider {
         classes.add(new Class("5", "🌠伦理现实"));
         classes.add(new Class("6", "🌠时空穿越"));
         classes.add(new Class("7", "🌠权谋身份"));
-        // 显式强转 null 解决 Result.string 的重载歧义
+        // 使用强制转型消除 Result.string 的重载歧义
         return Result.string(classes, new ArrayList<Vod>(), (JSONObject) null);
     }
 
@@ -61,11 +61,12 @@ public class Jinli extends Spider {
             payload.put("year", "");
             payload.put("keyword", "");
 
-            // 修正点：调用 .getBody() 获取返回的字符串
+            // 确保调用 getBody()
             String res = OkHttp.post(apiHost + "/api/search", payload.toString(), headerx).getBody();
             return parseList(res);
         } catch (Exception e) {
-            return Result.get().list(new ArrayList<Vod>()).string();
+            // 修正：直接返回空结果字符串，避开泛型匹配问题
+            return Result.get().string();
         }
     }
 
@@ -78,11 +79,10 @@ public class Jinli extends Spider {
             payload.put("type_id", "");
             payload.put("keyword", key);
 
-            // 修正点：调用 .getBody()
             String res = OkHttp.post(apiHost + "/api/search", payload.toString(), headerx).getBody();
             return parseList(res);
         } catch (Exception e) {
-            return Result.get().list(new ArrayList<Vod>()).string();
+            return Result.get().string();
         }
     }
 
@@ -99,6 +99,7 @@ public class Jinli extends Spider {
             vod.setVodRemarks("▶️" + v.optString("vod_total", v.optString("vod_remarks")) + "集");
             videos.add(vod);
         }
+        // 直接使用 Result.string(List<Vod>)，这是最稳妥的静态方法
         return Result.string(videos);
     }
 
@@ -106,7 +107,6 @@ public class Jinli extends Spider {
     public String detailContent(List<String> ids) {
         try {
             String did = ids.get(0);
-            // 修正点：调用 .getBody()
             String res = OkHttp.post(apiHost + "/api/detail/" + did, "{}", headerx).getBody();
             JSONObject data = new JSONObject(res).getJSONObject("data");
 
@@ -119,11 +119,10 @@ public class Jinli extends Spider {
             vod.setVodActor(data.optString("vod_actor"));
             vod.setVodDirector(data.optString("vod_director"));
             vod.setVodRemarks(data.optString("vod_tag"));
-            vod.setVodContent("🎉为您介绍剧情📢" + data.optString("vod_blurb"));
+            vod.setVodContent("🎉剧情简介📢" + data.optString("vod_blurb"));
 
             JSONObject player = data.getJSONObject("player");
             List<String> playUrls = new ArrayList<>();
-            // 遍历所有集数
             Iterator<String> keys = player.keys();
             while (keys.hasNext()) {
                 String key = keys.next();
@@ -143,9 +142,7 @@ public class Jinli extends Spider {
     @Override
     public String playerContent(String flag, String id, List<String> vipFlags) {
         try {
-            // 解析逻辑：访问 auto=1 的页面并提取真实播放地址
             String playUrl = id + "&auto=1";
-            // OkHttp.string() 直接返回 String，无需 getBody()
             String html = OkHttp.string(playUrl, headerx);
             
             Pattern pattern = Pattern.compile("\"url\":\"(.*?)\"");
