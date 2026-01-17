@@ -239,7 +239,8 @@ public class HMDJ extends Spider {
         return result.toString();
     }
 
-private String searchContentPage(String key, boolean quick, String pg) throws Exception {
+    @Override
+    private String searchContentPage(String key, boolean quick, String pg) throws Exception {
     List<Vod> videos = new ArrayList<>();
     
     // 1. 构造请求地址
@@ -585,4 +586,5 @@ private String searchContentPage(String key, boolean quick, String pg) throws Ex
     }
 
 }
+
 
