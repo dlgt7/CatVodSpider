@@ -6,7 +6,7 @@ import com.github.catvod.bean.Result;
 import com.github.catvod.bean.Vod;
 import com.github.catvod.crawler.Spider;
 import com.github.catvod.net.OkHttp;
-import com.github.catvod.utils.Util;
+import com.google.gson.JsonObject; // 确保导入
 import org.json.JSONArray;
 import org.json.JSONObject;
 import java.util.ArrayList;
@@ -18,8 +18,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * 锦鲤短剧 Java 版本
- * 适配自 Python 和 JS 脚本
+ * 锦鲤短剧 Java 版本 - 修正编译错误版
  */
 public class Jinli extends Spider {
 
@@ -43,8 +42,9 @@ public class Jinli extends Spider {
         classes.add(new Class("4", "🌠战斗热血"));
         classes.add(new Class("5", "🌠伦理现实"));
         classes.add(new Class("6", "🌠时空穿越"));
-        classes.add(new Class("7", "🌠谋权身份"));
-        return Result.string(classes, new ArrayList<>(), null);
+        classes.add(new Class("7", "🌠权谋身份"));
+        // 修正错误1：显式强转 null 为 JSONObject 以消除 Result.string 的歧义
+        return Result.string(classes, new ArrayList<Vod>(), (JSONObject) null);
     }
 
     @Override
@@ -62,7 +62,9 @@ public class Jinli extends Spider {
             payload.put("year", "");
             payload.put("keyword", "");
 
-            String res = OkHttp.postJson(apiHost + "/api/search", payload.toString(), headerx);
+            // 修正错误2：适配 OkHttp.java 中的 post 方法
+            // 你的 OkHttp.java 中 post 定义为 post(String url, String json, Map<String, String> header)
+            String res = OkHttp.post(apiHost + "/api/search", payload.toString(), headerx);
             return parseList(res);
         } catch (Exception e) {
             return "";
@@ -78,7 +80,7 @@ public class Jinli extends Spider {
             payload.put("type_id", "");
             payload.put("keyword", key);
 
-            String res = OkHttp.postJson(apiHost + "/api/search", payload.toString(), headerx);
+            String res = OkHttp.post(apiHost + "/api/search", payload.toString(), headerx);
             return parseList(res);
         } catch (Exception e) {
             return "";
@@ -105,7 +107,8 @@ public class Jinli extends Spider {
     public String detailContent(List<String> ids) {
         try {
             String did = ids.get(0);
-            String res = OkHttp.postJson(apiHost + "/api/detail/" + did, "{}", headerx);
+            // 修正：使用 post 而不是 postJson
+            String res = OkHttp.post(apiHost + "/api/detail/" + did, "{}", headerx);
             JSONObject data = new JSONObject(res).getJSONObject("data");
 
             Vod vod = new Vod();
@@ -119,10 +122,8 @@ public class Jinli extends Spider {
             vod.setVodRemarks(data.optString("vod_tag"));
             vod.setVodContent("🎉为您介绍剧情📢" + data.optString("vod_blurb"));
 
-            // 解析播放列表
             JSONObject player = data.getJSONObject("player");
             List<String> playUrls = new ArrayList<>();
-            // 按照 Key 排序（通常是集数名称）
             Iterator<String> keys = player.keys();
             while (keys.hasNext()) {
                 String key = keys.next();
@@ -142,12 +143,9 @@ public class Jinli extends Spider {
     @Override
     public String playerContent(String flag, String id, List<String> vipFlags) {
         try {
-            // 对应 JS 脚本的 lazy 逻辑：访问 id&auto=1 获取跳转后的真实 URL
             String playUrl = id + "&auto=1";
             String html = OkHttp.string(playUrl, headerx);
             
-            // 尝试从 JS 变量中提取 data 里的 url
-            // Python 版是用正则提取 "url":"..."
             Pattern pattern = Pattern.compile("\"url\":\"(.*?)\"");
             Matcher matcher = pattern.matcher(html);
             if (matcher.find()) {
