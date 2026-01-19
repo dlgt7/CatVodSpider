@@ -4,6 +4,9 @@ import com.github.catvod.utils.Json;
 import com.google.gson.Gson;
 import com.google.gson.annotations.SerializedName;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public class Vod {
 
     @SerializedName("type_name")
@@ -273,6 +276,63 @@ public class Vod {
 
         public void setRatio(Float ratio) {
             this.ratio = ratio;
+        }
+    }
+    
+    public static class VodPlayBuilder {
+        private final List<String> fromList = new ArrayList<>();
+        private final List<String> urlList = new ArrayList<>();
+
+        public static class PlayUrl {
+            public String name;
+            public String url;
+
+            public PlayUrl() {}
+
+            public PlayUrl(String name, String url) {
+                this.name = name;
+                this.url = url;
+            }
+        }
+
+        /**
+         * 对应 DJW.java 中调用的 builder.append(from, pus)
+         */
+        public void append(String from, List<PlayUrl> urls) {
+            fromList.add(from);
+            List<String> urlStrings = new ArrayList<>();
+            for (PlayUrl pu : urls) {
+                // CatVod 规范：集名$链接
+                urlStrings.add(pu.name + "$" + pu.url);
+            }
+            // CatVod 规范：集与集之间用 # 分隔
+            urlList.add(join("#", urlStrings));
+        }
+
+        public static class BuildResult {
+            // DJW.java 访问了这两个字段
+            public String vodPlayFrom;
+            public String vodPlayUrl;
+        }
+
+        public BuildResult build() {
+            BuildResult br = new BuildResult();
+            // CatVod 规范：不同播放源之间用 $$$ 分隔
+            br.vodPlayFrom = join("$$$", fromList);
+            br.vodPlayUrl = join("$$$", urlList);
+            return br;
+        }
+
+        // 内部辅助方法，替代 android.text.TextUtils.join
+        private String join(String delimiter, List<String> tokens) {
+            StringBuilder sb = new StringBuilder();
+            boolean first = true;
+            for (String token : tokens) {
+                if (first) first = false;
+                else sb.append(delimiter);
+                sb.append(token);
+            }
+            return sb.toString();
         }
     }
 }
