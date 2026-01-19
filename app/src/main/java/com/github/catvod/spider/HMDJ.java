@@ -255,16 +255,16 @@ public class HMDJ extends Spider {
         result.put("pagecount", 1);
         result.put("limit", 20);
         result.put("total", 0);
-        
+            
         List<Vod> videos = new ArrayList<>();
-        String searchUrl = siteUrl + "/search?searchValue=" + URLEncoder.encode(key, "UTF-8") + "&page=" + pg;
-        
+        String searchUrl = siteUrl + "/search?searchValue=" + URLEncoder.encode(key, "UTF-8");
+            
         Map<String, String> response = fetch(searchUrl);
         if (response == null || !response.containsKey("body")) {
             result.put("list", new JSONArray());
             return result.toString();
         }
-        
+            
         String htmlContent = response.get("body");
         Pattern pattern = Pattern.compile("<script id=\"__NEXT_DATA__\" type=\"application/json\">(.*?)</script>", Pattern.DOTALL);
         Matcher matcher = pattern.matcher(htmlContent);
@@ -272,31 +272,43 @@ public class HMDJ extends Spider {
             result.put("list", new JSONArray());
             return result.toString();
         }
-        
+            
         try {
             JSONObject nextDataJson = new JSONObject(matcher.group(1));
             JSONObject pageProps = nextDataJson.optJSONObject("props").optJSONObject("pageProps");
-            
-            int totalPages = pageProps.optInt("pages", 1);
-            JSONArray bookList = pageProps.optJSONArray("bookList");
-            
+                
+            // 根据页面结构，搜索结果可能在不同字段下
+            JSONArray bookList = null;
+            if (pageProps.has("dataList")) {
+                bookList = pageProps.optJSONArray("dataList");
+            } else if (pageProps.has("list")) {
+                bookList = pageProps.optJSONArray("list");
+            } else if (pageProps.has("bookList")) {
+                bookList = pageProps.optJSONArray("bookList");
+            }
+                
             if (bookList != null) {
                 for (int i = 0; i < bookList.length(); i++) {
                     JSONObject book = bookList.getJSONObject(i);
-                    if (book.has("bookId")) {
-                        Vod vod = new Vod();
-                        vod.setVodId("/drama/" + book.getString("bookId"));
-                        vod.setVodName(book.optString("bookName", ""));
-                        vod.setVodPic(book.optString("coverWap", ""));
-                        vod.setVodRemarks((book.optString("statusDesc", "") + " " + book.optString("totalChapterNum", "") + "集").trim());
-                        videos.add(vod);
+                    if (book.has("bookId") || book.has("id")) {
+                        String bookId = !book.optString("bookId", "").isEmpty() ? book.optString("bookId", "") : book.optString("id", "");
+                        if (!bookId.isEmpty()) {
+                            Vod vod = new Vod();
+                            vod.setVodId("/drama/" + bookId);
+                            vod.setVodName(!book.optString("bookName", "").isEmpty() ? book.optString("bookName", "") : (!book.optString("name", "").isEmpty() ? book.optString("name", "") : book.optString("title", "")));
+                            vod.setVodPic(!book.optString("coverWap", "").isEmpty() ? book.optString("coverWap", "") : (!book.optString("cover", "").isEmpty() ? book.optString("cover", "") : (!book.optString("pic", "").isEmpty() ? book.optString("pic", "") : book.optString("image", ""))));
+                            String status = !book.optString("statusDesc", "").isEmpty() ? book.optString("statusDesc", "") : (!book.optString("status", "").isEmpty() ? book.optString("status", "") : book.optString("desc", ""));
+                            String chapters = !book.optString("totalChapterNum", "").isEmpty() ? book.optString("totalChapterNum", "") : (!book.optString("chapters", "").isEmpty() ? book.optString("chapters", "") : book.optString("total", ""));
+                            vod.setVodRemarks((status + " " + chapters + "集").trim());
+                            videos.add(vod);
+                        }
                     }
                 }
             }
-            
-            result.put("pagecount", totalPages);
-            result.put("total", videos.size() * totalPages);
-            
+                
+            result.put("pagecount", 1);
+            result.put("total", videos.size());
+                
             JSONArray listArray = new JSONArray();
             for (Vod vod : videos) {
                 JSONObject vodObj = new JSONObject();
@@ -310,7 +322,7 @@ public class HMDJ extends Spider {
         } catch (Exception e) {
             e.printStackTrace();
         }
-        
+            
         return result.toString();
     }
 
