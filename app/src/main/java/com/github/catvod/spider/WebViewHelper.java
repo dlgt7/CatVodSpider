@@ -106,7 +106,7 @@ public class WebViewHelper {
                 settings.setLoadWithOverviewMode(true);
                 settings.setUseWideViewPort(true);
                 settings.setDomStorageEnabled(true);
-                settings.setAppCacheEnabled(true);
+                // settings.setAppCacheEnabled(true); // 已废弃，现代WebView自动处理缓存
                 settings.setGeolocationEnabled(false); // 禁用地理位置以避免权限请求
                 settings.setSaveFormData(false);
 
@@ -337,7 +337,7 @@ public class WebViewHelper {
                 settings.setLoadWithOverviewMode(true);
                 settings.setUseWideViewPort(true);
                 settings.setDomStorageEnabled(true);
-                settings.setAppCacheEnabled(true);
+                // settings.setAppCacheEnabled(true); // 已废弃，现代WebView自动处理缓存
                 settings.setGeolocationEnabled(false); // 禁用地理位置以避免权限请求
                 settings.setSaveFormData(false);
 
