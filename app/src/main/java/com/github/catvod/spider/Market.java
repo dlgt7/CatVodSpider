@@ -52,7 +52,6 @@ public class Market extends Spider {
     @Override
     public String action(String action) {
         try {
-            OkHttp.cancel(TAG);
             String name = Uri.parse(action).getLastPathSegment();
             Notify.show("正在下載..." + name);
             Response response = OkHttp.newCall(action, TAG);
@@ -90,6 +89,6 @@ public class Market extends Spider {
 
     @Override
     public void destroy() {
-        OkHttp.cancel(TAG);
+        // OkHttp.cancel(TAG); // 当前版本OkHttp不支持按标签取消请求
     }
 }
