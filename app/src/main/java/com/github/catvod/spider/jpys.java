@@ -12,6 +12,9 @@ import com.github.catvod.net.OkHttp;
 import com.github.catvod.utils.Crypto;
 import com.github.catvod.utils.Json;
 import com.github.catvod.utils.Util;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -19,9 +22,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-
-import org.json.JSONArray;
-import org.json.JSONObject;
 
 /**
  * 金牌影视爬虫实现
@@ -36,7 +36,7 @@ public class jpys extends Spider {
     public void init(String extend) {
         if (!TextUtils.isEmpty(extend)) {
             try {
-                JSONObject extObj = Json.parse(extend).getAsJsonObject();
+                JsonObject extObj = Json.parse(extend).getAsJsonObject();
                 String sites = extObj.has("site") ? extObj.get("site").getAsString() : "";
                 if (!TextUtils.isEmpty(sites)) {
                     String[] hosts = sites.split(",");
@@ -57,21 +57,21 @@ public class jpys extends Spider {
             // 获取分类数据
             String categoryUrl = host + "/api/mw-movie/anonymous/get/filer/type";
             String categoryJson = OkHttp.string(categoryUrl, getHeaders(null));
-            JSONObject categoryData = Json.parse(categoryJson).getAsJsonObject();
+            JsonObject categoryData = Json.parse(categoryJson).getAsJsonObject();
 
             // 获取筛选数据
             String filterUrl = host + "/api/mw-movie/anonymous/v1/get/filer/list";
             String filterJson = OkHttp.string(filterUrl, getHeaders(null));
-            JSONObject filterData = Json.parse(filterJson).getAsJsonObject();
+            JsonObject filterData = Json.parse(filterJson).getAsJsonObject();
 
             List<Class> classes = new ArrayList<>();
             Map<String, List<Filter>> filters = new LinkedHashMap<>();
 
             // 解析分类
             if (categoryData.has("data") && categoryData.get("data").isJsonArray()) {
-                JSONArray dataArray = categoryData.getAsJsonArray("data");
+                JsonArray dataArray = categoryData.getAsJsonArray("data");
                 for (int i = 0; i < dataArray.size(); i++) {
-                    JSONObject item = dataArray.get(i).getAsJsonObject();
+                    JsonObject item = dataArray.get(i).getAsJsonObject();
                     String typeName = item.has("typeName") ? item.get("typeName").getAsString() : "";
                     String typeId = item.has("typeId") ? String.valueOf(item.get("typeId").getAsInt()) : "";
                     classes.add(new Class(typeId, typeName));
@@ -80,7 +80,7 @@ public class jpys extends Spider {
 
             // 解析筛选条件
             if (filterData.has("data") && filterData.get("data").isJsonObject()) {
-                JSONObject dataObj = filterData.getAsJsonObject("data");
+                JsonObject dataObj = filterData.getAsJsonObject("data");
                 for (String tid : dataObj.keySet()) {
                     List<Filter> filterItems = new ArrayList<>();
                     
@@ -90,14 +90,14 @@ public class jpys extends Spider {
                     sortValues.add(new Filter.Value("人气高低", "3"));
                     sortValues.add(new Filter.Value("评分高低", "4"));
 
-                    JSONObject d = dataObj.getAsJsonObject(tid);
+                    JsonObject d = dataObj.getAsJsonObject(tid);
                     
                     // 类型筛选
                     if (d.has("typeList") && d.getAsJsonArray("typeList").size() > 0) {
                         List<Filter.Value> typeValues = new ArrayList<>();
-                        JSONArray typeList = d.getAsJsonArray("typeList");
+                        JsonArray typeList = d.getAsJsonArray("typeList");
                         for (int i = 0; i < typeList.size(); i++) {
-                            JSONObject typeItem = typeList.get(i).getAsJsonObject();
+                            JsonObject typeItem = typeList.get(i).getAsJsonObject();
                             String itemText = typeItem.has("itemText") ? typeItem.get("itemText").getAsString() : "";
                             String itemValue = typeItem.has("itemValue") ? typeItem.get("itemValue").getAsString() : "";
                             typeValues.add(new Filter.Value(itemText, itemValue));
@@ -108,9 +108,9 @@ public class jpys extends Spider {
                     // 剧情筛选
                     if (d.has("plotList") && d.getAsJsonArray("plotList").size() > 0) {
                         List<Filter.Value> plotValues = new ArrayList<>();
-                        JSONArray plotList = d.getAsJsonArray("plotList");
+                        JsonArray plotList = d.getAsJsonArray("plotList");
                         for (int i = 0; i < plotList.size(); i++) {
-                            JSONObject plotItem = plotList.get(i).getAsJsonObject();
+                            JsonObject plotItem = plotList.get(i).getAsJsonObject();
                             String itemText = plotItem.has("itemText") ? plotItem.get("itemText").getAsString() : "";
                             plotValues.add(new Filter.Value(itemText, itemText));
                         }
@@ -120,9 +120,9 @@ public class jpys extends Spider {
                     // 地区筛选
                     if (d.has("districtList") && d.getAsJsonArray("districtList").size() > 0) {
                         List<Filter.Value> areaValues = new ArrayList<>();
-                        JSONArray areaList = d.getAsJsonArray("districtList");
+                        JsonArray areaList = d.getAsJsonArray("districtList");
                         for (int i = 0; i < areaList.size(); i++) {
-                            JSONObject areaItem = areaList.get(i).getAsJsonObject();
+                            JsonObject areaItem = areaList.get(i).getAsJsonObject();
                             String itemText = areaItem.has("itemText") ? areaItem.get("itemText").getAsString() : "";
                             areaValues.add(new Filter.Value(itemText, itemText));
                         }
@@ -132,9 +132,9 @@ public class jpys extends Spider {
                     // 年份筛选
                     if (d.has("yearList") && d.getAsJsonArray("yearList").size() > 0) {
                         List<Filter.Value> yearValues = new ArrayList<>();
-                        JSONArray yearList = d.getAsJsonArray("yearList");
+                        JsonArray yearList = d.getAsJsonArray("yearList");
                         for (int i = 0; i < yearList.size(); i++) {
-                            JSONObject yearItem = yearList.get(i).getAsJsonObject();
+                            JsonObject yearItem = yearList.get(i).getAsJsonObject();
                             String itemText = yearItem.has("itemText") ? yearItem.get("itemText").getAsString() : "";
                             yearValues.add(new Filter.Value(itemText, itemText));
                         }
@@ -144,9 +144,9 @@ public class jpys extends Spider {
                     // 语言筛选
                     if (d.has("languageList") && d.getAsJsonArray("languageList").size() > 0) {
                         List<Filter.Value> langValues = new ArrayList<>();
-                        JSONArray langList = d.getAsJsonArray("languageList");
+                        JsonArray langList = d.getAsJsonArray("languageList");
                         for (int i = 0; i < langList.size(); i++) {
-                            JSONObject langItem = langList.get(i).getAsJsonObject();
+                            JsonObject langItem = langList.get(i).getAsJsonObject();
                             String itemText = langItem.has("itemText") ? langItem.get("itemText").getAsString() : "";
                             langValues.add(new Filter.Value(itemText, itemText));
                         }
@@ -173,22 +173,22 @@ public class jpys extends Spider {
             // 获取首页推荐数据
             String homeUrl = host + "/api/mw-movie/anonymous/v1/home/all/list";
             String homeJson = OkHttp.string(homeUrl, getHeaders(null));
-            JSONObject homeData = Json.parse(homeJson).getAsJsonObject();
+            JsonObject homeData = Json.parse(homeJson).getAsJsonObject();
 
             // 获取热门搜索数据
             String hotSearchUrl = host + "/api/mw-movie/anonymous/home/hotSearch";
             String hotSearchJson = OkHttp.string(hotSearchUrl, getHeaders(null));
-            JSONObject hotSearchData = Json.parse(hotSearchJson).getAsJsonObject();
+            JsonObject hotSearchData = Json.parse(hotSearchJson).getAsJsonObject();
 
             List<Vod> vods = new ArrayList<Vod>();
 
             // 处理首页数据
             if (homeData.has("data") && homeData.get("data").isJsonObject()) {
-                JSONObject dataObj = homeData.getAsJsonObject("data");
+                JsonObject dataObj = homeData.getAsJsonObject("data");
                 for (String key : dataObj.keySet()) {
-                    JSONObject listObj = dataObj.getAsJsonObject(key);
+                    JsonObject listObj = dataObj.getAsJsonObject(key);
                     if (listObj.has("list") && listObj.getAsJsonArray("list").size() > 0) {
-                        JSONArray listArray = listObj.getAsJsonArray("list");
+                        JsonArray listArray = listObj.getAsJsonArray("list");
                         vods.addAll(parseVodList(listArray));
                     }
                 }
@@ -196,7 +196,7 @@ public class jpys extends Spider {
 
             // 处理热门搜索数据
             if (hotSearchData.has("data") && hotSearchData.get("data").isJsonArray()) {
-                JSONArray hotList = hotSearchData.getAsJsonArray("data");
+                JsonArray hotList = hotSearchData.getAsJsonArray("data");
                 vods.addAll(parseVodList(hotList));
             }
 
@@ -226,18 +226,18 @@ public class jpys extends Spider {
 
             String url = host + "/api/mw-movie/anonymous/video/list?" + buildParams(params);
             String json = OkHttp.string(url, getHeaders(params));
-            JSONObject data = Json.parse(json).getAsJsonObject();
+            JsonObject data = Json.parse(json).getAsJsonObject();
 
             List<Vod> vods = new ArrayList<Vod>();
             if (data.has("data") && data.get("data").isJsonObject()) {
-                JSONObject dataObj = data.getAsJsonObject("data");
+                JsonObject dataObj = data.getAsJsonObject("data");
                 if (dataObj.has("list") && dataObj.getAsJsonArray("list").size() > 0) {
-                    JSONArray listArray = dataObj.getAsJsonArray("list");
+                    JsonArray listArray = dataObj.getAsJsonArray("list");
                     vods.addAll(parseVodList(listArray));
                 }
             }
 
-            return Result.get().vod(vods).page(pg, "9999", "90", "999999").string();
+            return Result.get().vod(vods).page(Integer.parseInt(pg), 9999, 90, 999999).string();
         } catch (Exception e) {
             e.printStackTrace();
             return "";
@@ -251,21 +251,21 @@ public class jpys extends Spider {
             Map<String, String> params = new HashMap<>();
             params.put("id", ids.get(0));
             String json = OkHttp.string(url, getHeaders(params));
-            JSONObject data = Json.parse(json).getAsJsonObject();
+            JsonObject data = Json.parse(json).getAsJsonObject();
 
             List<Vod> vods = new ArrayList<Vod>();
             if (data.has("data") && data.get("data").isJsonObject()) {
-                JSONObject dataObj = data.getAsJsonObject("data");
+                JsonObject dataObj = data.getAsJsonObject("data");
                 Vod vod = parseVod(dataObj);
                 vod.setVodPlayFrom("金牌");
                 
                 if (dataObj.has("episodelist")) {
-                    JSONArray episodes = dataObj.getAsJsonArray("episodelist");
+                    JsonArray episodes = dataObj.getAsJsonArray("episodelist");
                     List<String> playList = new ArrayList<>();
-                    for (int i = 0; i < episodes.length(); i++) {
-                        JSONObject ep = episodes.getJSONObject(i);
-                        String name = ep.has("name") ? ep.getString("name") : "第" + (i+1) + "集";
-                        String nid = ep.has("nid") ? ep.getString("nid") : String.valueOf(i+1);
+                    for (int i = 0; i < episodes.size(); i++) {
+                        JsonObject ep = episodes.get(i).getAsJsonObject();
+                        String name = ep.has("name") ? ep.get("name").getAsString() : "第" + (i+1) + "集";
+                        String nid = ep.has("nid") ? ep.get("nid").getAsString() : String.valueOf(i+1);
                         // 格式：第1集$ID@@NID
                         playList.add(name + "$" + ids.get(0) + "@@" + nid);
                     }
@@ -299,18 +299,18 @@ public class jpys extends Spider {
 
             String url = host + "/api/mw-movie/anonymous/video/searchByWord?" + buildParams(params);
             String json = OkHttp.string(url, getHeaders(params));
-            JSONObject data = Json.parse(json).getAsJsonObject();
+            JsonObject data = Json.parse(json).getAsJsonObject();
 
             List<Vod> vods = new ArrayList<Vod>();
             if (data.has("data") && data.get("data").isJsonObject()) {
-                JSONObject resultObj = data.getAsJsonObject("data").getAsJsonObject("result");
+                JsonObject resultObj = data.getAsJsonObject("data").getAsJsonObject("result");
                 if (resultObj.has("list") && resultObj.getAsJsonArray("list").size() > 0) {
-                    JSONArray listArray = resultObj.getAsJsonArray("list");
+                    JsonArray listArray = resultObj.getAsJsonArray("list");
                     vods.addAll(parseVodList(listArray));
                 }
             }
 
-            return Result.get().vod(vods).page(pg, "9999", "90", "999999").string();
+            return Result.get().vod(vods).page(Integer.parseInt(pg), 9999, 90, 999999).string();
         } catch (Exception e) {
             e.printStackTrace();
             return "";
@@ -329,16 +329,15 @@ public class jpys extends Spider {
             params.put("nid", ids[1]);
             
             String json = OkHttp.string(url, getHeaders(params));
-            JSONObject data = Json.parse(json).getAsJsonObject();
+            JsonObject data = Json.parse(json).getAsJsonObject();
 
             if (data.has("data") && data.get("data").isJsonObject()) {
-                JSONObject dataObj = data.getAsJsonObject("data");
+                JsonObject dataObj = data.getAsJsonObject("data");
                 if (dataObj.has("list") && dataObj.getAsJsonArray("list").size() > 0) {
-                    JSONArray listArray = dataObj.getAsJsonArray("list");
+                    JsonArray listArray = dataObj.getAsJsonArray("list");
                     if (listArray.size() > 0) {
-                        // Python 版本返回的是 [resolutionName, url, resolutionName, url, ...] 格式的列表
                         // Java 版本取第一个视频链接
-                        JSONObject firstItem = listArray.get(0).getAsJsonObject();
+                        JsonObject firstItem = listArray.get(0).getAsJsonObject();
                         String videoUrl = firstItem.has("url") ? firstItem.get("url").getAsString() : "";
                         
                         // 设置请求头，包含必要的 Referer 和 Origin
@@ -396,12 +395,12 @@ public class jpys extends Spider {
         return headers;
     }
 
-    private List<Vod> parseVodList(JSONArray jsonArray) {
+    private List<Vod> parseVodList(JsonArray jsonArray) {
         List<Vod> vods = new ArrayList<Vod>();
-        for (int i = 0; i < jsonArray.length(); i++) {
+        for (int i = 0; i < jsonArray.size(); i++) {
             try {
-                JSONObject item = jsonArray.getJSONObject(i);
-                Vod vod = parseVod(item);
+                JsonElement item = jsonArray.get(i);
+                Vod vod = parseVod(item.getAsJsonObject());
                 vods.add(vod);
             } catch (Exception e) {
                 e.printStackTrace();
@@ -410,48 +409,48 @@ public class jpys extends Spider {
         return vods;
     }
     
-    private Vod parseVod(JSONObject item) {
+    private Vod parseVod(JsonObject item) {
         Vod vod = new Vod();
         
         try {
             // 映射字段
             if (item.has("vod_id") || item.has("id")) {
-                vod.setVodId(item.has("vod_id") ? item.getString("vod_id") : item.getString("id"));
+                vod.setVodId(item.has("vod_id") ? item.get("vod_id").getAsString() : item.get("id").getAsString());
             }
             if (item.has("vod_name") || item.has("name")) {
-                vod.setVodName(item.has("vod_name") ? item.getString("vod_name") : item.getString("name"));
+                vod.setVodName(item.has("vod_name") ? item.get("vod_name").getAsString() : item.get("name").getAsString());
             }
             if (item.has("vod_pic") || item.has("pic") || item.has("cover")) {
                 String pic = "";
-                if (item.has("vod_pic")) pic = item.getString("vod_pic");
-                else if (item.has("pic")) pic = item.getString("pic");
-                else if (item.has("cover")) pic = item.getString("cover");
+                if (item.has("vod_pic")) pic = item.get("vod_pic").getAsString();
+                else if (item.has("pic")) pic = item.get("pic").getAsString();
+                else if (item.has("cover")) pic = item.get("cover").getAsString();
                 if (!pic.startsWith("http")) {
                     pic = host + pic;
                 }
                 vod.setVodPic(pic);
             }
             if (item.has("vod_remarks") || item.has("remarks") || item.has("score")) {
-                vod.setVodRemarks(item.has("vod_remarks") ? item.getString("vod_remarks") : 
-                                item.has("remarks") ? item.getString("remarks") : 
-                                item.getString("score"));
+                vod.setVodRemarks(item.has("vod_remarks") ? item.get("vod_remarks").getAsString() : 
+                                item.has("remarks") ? item.get("remarks").getAsString() : 
+                                item.get("score").getAsString());
             }
             if (item.has("vod_year") || item.has("year")) {
-                vod.setVodYear(item.has("vod_year") ? item.getString("vod_year") : item.getString("year"));
+                vod.setVodYear(item.has("vod_year") ? item.get("vod_year").getAsString() : item.get("year").getAsString());
             }
             if (item.has("vod_area") || item.has("area")) {
-                vod.setVodArea(item.has("vod_area") ? item.getString("vod_area") : item.getString("area"));
+                vod.setVodArea(item.has("vod_area") ? item.get("vod_area").getAsString() : item.get("area").getAsString());
             }
             if (item.has("vod_actor") || item.has("actor")) {
-                vod.setVodActor(item.has("vod_actor") ? item.getString("vod_actor") : item.getString("actor"));
+                vod.setVodActor(item.has("vod_actor") ? item.get("vod_actor").getAsString() : item.get("actor").getAsString());
             }
             if (item.has("vod_director") || item.has("director")) {
-                vod.setVodDirector(item.has("vod_director") ? item.getString("vod_director") : item.getString("director"));
+                vod.setVodDirector(item.has("vod_director") ? item.get("vod_director").getAsString() : item.get("director").getAsString());
             }
             if (item.has("vod_content") || item.has("content") || item.has("descript")) {
-                vod.setVodContent(item.has("vod_content") ? item.getString("vod_content") : 
-                                item.has("content") ? item.getString("content") : 
-                                item.getString("descript"));
+                vod.setVodContent(item.has("vod_content") ? item.get("vod_content").getAsString() : 
+                                item.has("content") ? item.get("content").getAsString() : 
+                                item.get("descript").getAsString());
             }
         } catch (Exception e) {
             e.printStackTrace();
