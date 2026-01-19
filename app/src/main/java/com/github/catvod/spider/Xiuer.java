@@ -17,7 +17,7 @@ import java.util.Map;
 
 /**
  * 秀儿影视 Java 爬虫
- * 参考 xiuer.js 和 xiuer.py 实现
+ * 修复搜索逻辑，适配 Result/Vod 规范
  */
 public class Xiuer extends Spider {
 
@@ -38,7 +38,9 @@ public class Xiuer extends Spider {
         for (int i = 0; i < names.length; i++) {
             classes.add(new Class(ids[i], names[i]));
         }
-        return Result.string(classes, parseList(OkHttp.string(siteUrl, getHeader()), false));
+        // 首页推荐数据
+        String html = OkHttp.string(siteUrl, getHeader());
+        return Result.string(classes, parseList(html, false));
     }
 
     @Override
@@ -49,6 +51,7 @@ public class Xiuer extends Spider {
 
     @Override
     public String categoryContent(String tid, String pg, boolean filter, HashMap<String, String> extend) throws Exception {
+        // 对应 URL: /show/fyclass/page/fypage.html
         String url = siteUrl + "/show/" + tid + "/page/" + pg + ".html";
         String html = OkHttp.string(url, getHeader());
         return Result.string(parseList(html, false));
@@ -64,7 +67,7 @@ public class Xiuer extends Spider {
         vod.setVodId(ids.get(0));
         vod.setVodName(doc.selectFirst("h1").text());
 
-        // 图片提取
+        // 图片提取 (data-src 优先)
         Element picTag = doc.selectFirst(".video-cover img, .module-item-pic img");
         if (picTag != null) {
             String pic = picTag.attr("data-src");
@@ -72,26 +75,24 @@ public class Xiuer extends Spider {
             vod.setVodPic(pic.startsWith("http") ? pic : siteUrl + pic);
         }
 
-        // 详情信息
+        // 备注与内容
         Element aux = doc.selectFirst(".video-info-aux");
         if (aux != null) vod.setVodRemarks(aux.text());
-        
         Element content = doc.selectFirst(".video-info-content");
         if (content != null) vod.setVodContent(content.text());
 
-        // 对应 JS 索引：主演(0), 导演(1), 年份(3)
+        // 详情索引：演员(0), 导演(1), 年份(3)
         Elements infoItems = doc.select(".video-info-items");
         vod.setVodActor(getInfoByIndex(infoItems, 0));
         vod.setVodDirector(getInfoByIndex(infoItems, 1));
         vod.setVodYear(getInfoByIndex(infoItems, 3));
 
-        // 播放列表
+        // 播放列表解析
         Elements tabs = doc.select(".module-tab-item");
         Elements lists = doc.select(".module-player-list");
         
-        // 使用 Vod.java 中的 Builder 模式(如果可用)或手动拼接
-        List<String> froms = new ArrayList<>();
-        List<String> urls = new ArrayList<>();
+        List<String> fromList = new ArrayList<>();
+        List<String> urlList = new ArrayList<>();
 
         for (int i = 0; i < tabs.size(); i++) {
             String tabName = tabs.get(i).text();
@@ -103,35 +104,43 @@ public class Xiuer extends Spider {
                 vodItems.add(link.text() + "$" + link.attr("href"));
             }
             if (!vodItems.isEmpty()) {
-                froms.add(tabName);
-                urls.add(join("#", vodItems));
+                fromList.add(tabName);
+                urlList.add(join("#", vodItems));
             }
         }
-        vod.setVodPlayFrom(join("$$$", froms));
-        vod.setVodPlayUrl(join("$$$", urls));
+        vod.setVodPlayFrom(join("$$$", fromList));
+        vod.setVodPlayUrl(join("$$$", urlList));
 
         return Result.string(vod);
     }
 
+    /**
+     * 修复后的搜索功能
+     */
     @Override
     public String searchContent(String key, boolean quick) throws Exception {
-        String url = siteUrl + "/vod/search/wd/" + key + ".html";
+        // 对应 searchUrl: /vod/search/wd/**.html
+        String url = siteUrl + "/vod/search/wd/" + OkHttp.urlEncode(key) + ".html";
         String html = OkHttp.string(url, getHeader());
         return Result.string(parseList(html, true));
     }
 
     @Override
     public String playerContent(String flag, String id, List<String> vipFlags) throws Exception {
-        // 参考 JS 的 play_parse: true，这里返回解析模式
+        // 对应 JS 的 play_parse: true
         String videoUrl = id.startsWith("http") ? id : siteUrl + id;
         return Result.get().url(videoUrl).parse().header(getHeader()).string();
     }
 
-    // --- 内部解析工具 ---
-
+    /**
+     * 统一列表解析逻辑
+     * @param isSearch 是否为搜索模式（搜索页与列表页选择器不同）
+     */
     private List<Vod> parseList(String html, boolean isSearch) {
         List<Vod> list = new ArrayList<>();
         Document doc = Jsoup.parse(html);
+        
+        // 修复：搜索页使用 .module-search-item，普通页使用 .module-item
         String selector = isSearch ? ".module-search-item" : ".module-item";
         Elements items = doc.select(selector);
 
@@ -141,8 +150,12 @@ public class Xiuer extends Spider {
 
             Vod vod = new Vod();
             vod.setVodId(a.attr("href"));
-            vod.setVodName(isSearch ? item.selectFirst("h3").text() : a.attr("title"));
+            
+            // 修复：搜索页标题在 h3，普通页在 a 的 title
+            String name = isSearch ? item.selectFirst("h3").text() : a.attr("title");
+            vod.setVodName(name);
 
+            // 图片提取
             Element img = item.selectFirst("img");
             if (img != null) {
                 String pic = img.attr("data-src");
@@ -150,6 +163,7 @@ public class Xiuer extends Spider {
                 vod.setVodPic(pic.startsWith("http") ? pic : siteUrl + pic);
             }
 
+            // 备注提取
             Element remark = item.selectFirst(".video-serial, .module-item-text, .module-item-note");
             if (remark != null) vod.setVodRemarks(remark.text());
 
