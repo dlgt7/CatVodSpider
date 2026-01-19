@@ -80,9 +80,10 @@ public class HpTv extends Spider {
 
                 if (a == null || nameEl == null) continue;
 
-                String pic = img != null ? (img.attr("src").isEmpty() ? img.attr("data-original") : img.attr("src")) : "";
+                String pic = img != null ? (img.attr("data-src").isEmpty() ? (img.attr("src").isEmpty() ? img.attr("data-original") : img.attr("src")) : img.attr("data-src")) : "";
                 if (pic.startsWith("//")) pic = "https:" + pic;
                 else if (pic.startsWith("/")) pic = siteUrl + pic;
+                else if (!pic.startsWith("http")) pic = siteUrl + pic;
 
                 String href = a.attr("href");
                 String name = nameEl.text();
@@ -120,9 +121,10 @@ public class HpTv extends Spider {
 
                 if (a == null || nameEl == null) continue;
 
-                String pic = img != null ? (img.attr("src").isEmpty() ? img.attr("data-original") : img.attr("src")) : "";
+                String pic = img != null ? (img.attr("data-src").isEmpty() ? (img.attr("src").isEmpty() ? img.attr("data-original") : img.attr("src")) : img.attr("data-src")) : "";
                 if (pic.startsWith("//")) pic = "https:" + pic;
                 else if (pic.startsWith("/")) pic = siteUrl + pic;
+                else if (!pic.startsWith("http")) pic = siteUrl + pic;
 
                 String href = a.attr("href");
                 String name = nameEl.text();
@@ -157,9 +159,10 @@ public class HpTv extends Spider {
 
             Element picEl = doc.selectFirst("a.mo-situ-pics img");
             if (picEl != null) {
-                String pic = picEl.attr("src");
+                String pic = picEl.attr("data-src").isEmpty() ? (picEl.attr("src").isEmpty() ? picEl.attr("data-original") : picEl.attr("src")) : picEl.attr("data-src");
                 if (pic.startsWith("//")) pic = "https:" + pic;
                 else if (pic.startsWith("/")) pic = siteUrl + pic;
+                else if (!pic.startsWith("http")) pic = siteUrl + pic;
                 vod.setVodPic(pic);
             }
 
@@ -231,9 +234,10 @@ public class HpTv extends Spider {
 
                 if (a == null || nameEl == null) continue;
 
-                String pic = img != null ? (img.attr("src").isEmpty() ? img.attr("data-original") : img.attr("src")) : "";
+                String pic = img != null ? (img.attr("data-src").isEmpty() ? (img.attr("src").isEmpty() ? img.attr("data-original") : img.attr("src")) : img.attr("data-src")) : "";
                 if (pic.startsWith("//")) pic = "https:" + pic;
                 else if (pic.startsWith("/")) pic = siteUrl + pic;
+                else if (!pic.startsWith("http")) pic = siteUrl + pic;
 
                 String href = a.attr("href");
                 String name = nameEl.text();
