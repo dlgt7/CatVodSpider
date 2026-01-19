@@ -11,6 +11,8 @@ import java.security.PublicKey;
 import java.security.spec.AlgorithmParameterSpec;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
+import java.security.interfaces.RSAPrivateKey;
+import java.security.interfaces.RSAPublicKey;
 
 import javax.crypto.Cipher;
 import javax.crypto.spec.IvParameterSpec;
@@ -103,7 +105,7 @@ public class Crypto {
         
         // 分段加密
         byte[] dataBytes = data.getBytes(DEFAULT_CHARSET);
-        int keyLength = publicKey.getModulus().bitLength();
+        int keyLength = ((RSAPublicKey) publicKey).getModulus().bitLength();
         int blockSize = keyLength / 8 - 11; // PKCS1Padding 需要 11 字节
         
         StringBuilder result = new StringBuilder();
@@ -131,7 +133,7 @@ public class Crypto {
         String[] blocks = encryptedData.split("\\|");
         StringBuilder result = new StringBuilder();
         
-        int keyLength = privateKey.getModulus().bitLength();
+        int keyLength = ((RSAPrivateKey) privateKey).getModulus().bitLength();
         int blockSize = keyLength / 8; // RSA 解密块大小
         
         for (String block : blocks) {
