@@ -171,7 +171,7 @@ public class OkHttp {
             Response response = chain.proceed(request);
             ResponseBody body = response.body();
             if (body != null) {
-                return response.newBuilder().body(new ProgressResponseBody(body)).build();
+                return response.newBuilder().body(new ProgressResponseBody(body, null)).build();
             }
             return response;
         };
@@ -202,7 +202,7 @@ public class OkHttp {
     }
 
     public static ResponseBody getProgressResponseBody(RequestBody requestBody) {
-        return ProgressResponseBody.create(requestBody, null);
+        return new ProgressResponseBody(requestBody, null);
     }
 
     public static OkResult get(String url, Map<String, String> header) {
@@ -286,7 +286,7 @@ public class OkHttp {
     }
 
     public static String urlEncode(String str) {
-        return Util.urlEncode(str);
+        return Util.urlEncode(str); // 需要在Util类中实现此方法
     }
 
     public static String getBaseUrl(String url) {
@@ -309,5 +309,18 @@ public class OkHttp {
 
     public interface ProgressCallback {
         void onProgress(long current, long total);
+    }
+
+    // 为兼容旧代码添加的方法
+    public static void cancel(String tag) {
+        // 当前版本不支持按标签取消请求
+    }
+    
+    public static Response newCall(String url, String tag) {
+        try {
+            return getClient().newCall(new okhttp3.Request.Builder().url(url).build()).execute();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 }
