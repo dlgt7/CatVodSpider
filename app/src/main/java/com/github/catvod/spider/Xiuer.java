@@ -388,8 +388,9 @@ public class Xiuer extends Spider {
      */
     private String tryDecodeBase64(String str) {
         try {
-            // 检查是否是Base64编码的字符串
-            if (android.util.Base64.isBase64(str.getBytes())) {
+            // 简单检查是否可能是Base64编码的字符串
+            // Base64字符串通常只包含字母、数字、+、/和=字符
+            if (str.matches("^[A-Za-z0-9+/]*={0,2}$")) {
                 byte[] decodedBytes = android.util.Base64.decode(str, android.util.Base64.DEFAULT);
                 return new String(decodedBytes);
             }
