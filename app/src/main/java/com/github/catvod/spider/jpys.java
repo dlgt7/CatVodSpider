@@ -180,7 +180,7 @@ public class jpys extends Spider {
             String hotSearchJson = OkHttp.string(hotSearchUrl, getHeaders(null));
             JSONObject hotSearchData = Json.parse(hotSearchJson).getAsJsonObject();
 
-            List<Vod> vods = new ArrayList>();
+            List<Vod> vods = new ArrayList<Vod>();
 
             // 处理首页数据
             if (homeData.has("data") && homeData.get("data").isJsonObject()) {
@@ -228,7 +228,7 @@ public class jpys extends Spider {
             String json = OkHttp.string(url, getHeaders(params));
             JSONObject data = Json.parse(json).getAsJsonObject();
 
-            List<Vod> vods = new ArrayList<>();
+            List<Vod> vods = new ArrayList<Vod>();
             if (data.has("data") && data.get("data").isJsonObject()) {
                 JSONObject dataObj = data.getAsJsonObject("data");
                 if (dataObj.has("list") && dataObj.getAsJsonArray("list").size() > 0) {
@@ -253,7 +253,7 @@ public class jpys extends Spider {
             String json = OkHttp.string(url, getHeaders(params));
             JSONObject data = Json.parse(json).getAsJsonObject();
 
-            List<Vod> vods = new ArrayList<>();
+            List<Vod> vods = new ArrayList<Vod>();
             if (data.has("data") && data.get("data").isJsonObject()) {
                 JSONObject dataObj = data.getAsJsonObject("data");
                 Vod vod = parseVod(dataObj);
@@ -301,7 +301,7 @@ public class jpys extends Spider {
             String json = OkHttp.string(url, getHeaders(params));
             JSONObject data = Json.parse(json).getAsJsonObject();
 
-            List<Vod> vods = new ArrayList<>();
+            List<Vod> vods = new ArrayList<Vod>();
             if (data.has("data") && data.get("data").isJsonObject()) {
                 JSONObject resultObj = data.getAsJsonObject("data").getAsJsonObject("result");
                 if (resultObj.has("list") && resultObj.getAsJsonArray("list").size() > 0) {
@@ -397,7 +397,7 @@ public class jpys extends Spider {
     }
 
     private List<Vod> parseVodList(JSONArray jsonArray) {
-        List<Vod> vods = new ArrayList<>();
+        List<Vod> vods = new ArrayList<Vod>();
         for (int i = 0; i < jsonArray.length(); i++) {
             try {
                 JSONObject item = jsonArray.getJSONObject(i);
