@@ -197,8 +197,8 @@ public class OkHttp {
      */
     private static String[] getRandomCipherSuites() {
         int index = (int) (Math.random() * TLS_FINGERPRINTS.size());
-        List<String> cipherSuiteList = TLS_FINGERPRINTS.get(index);
-        return cipherSuiteList.toArray(new String[0]);
+        String[] cipherSuiteArray = TLS_FINGERPRINTS.get(index);
+        return cipherSuiteArray;
     }
 
     public static ResponseBody getProgressResponseBody(RequestBody requestBody) {
@@ -219,6 +219,15 @@ public class OkHttp {
     }
 
     public static String getString(String url) {
+        return getString(url, null);
+    }
+
+    // 保留兼容性的string方法
+    public static String string(String url, Map<String, String> header) {
+        return getString(url, header);
+    }
+
+    public static String string(String url) {
         return getString(url, null);
     }
 

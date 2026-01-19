@@ -48,6 +48,10 @@ class OkRequest {
         }
     });
 
+    OkRequest(String method, String url, Map<String, String> header) {
+        this(method, url, (Map<String, String>)null, null, header);
+    }
+
     OkRequest(String method, String url, Map<String, String> params, Map<String, String> header) {
         this(method, url, params, null, header);
     }
