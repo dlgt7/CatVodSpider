@@ -98,7 +98,8 @@ public class Xiuer extends Spider {
             List<String> fromList = new ArrayList<>();
             List<String> urlList = new ArrayList<>();
 
-            for (int i = 0; i < tabs.size(); i++) {
+            int size = Math.min(tabs.size(), lists.size());
+            for (int i = 0; i < size; i++) {
                 String from = tabs.get(i).text().trim();
                 
                 Elements eps = lists.get(i).select("a");
@@ -133,8 +134,9 @@ public class Xiuer extends Spider {
     @Override
     public String searchContent(String key, boolean quick) {
         try {
-            // 路径匹配：/vod/search/wd/**.html
-            String url = HOST + "/vod/search/wd/" + key + ".html";
+            // 路径匹配：/vod/search/wd/**.html，对搜索关键词进行URL编码
+            String encodedKey = java.net.URLEncoder.encode(key, "UTF-8");
+            String url = HOST + "/vod/search/wd/" + encodedKey + ".html";
             String html = fetchContent(url, null);
             Document doc = Jsoup.parse(html);
             List<Vod> list = new ArrayList<>();
@@ -160,14 +162,39 @@ public class Xiuer extends Spider {
             }
             return Result.string(list);
         } catch (Exception e) {
+            SpiderDebug.log(e);
             return Result.get().vod(new ArrayList<>()).string();
         }
     }
 
     @Override
     public String playerContent(String flag, String id, List<String> vipFlags) {
-        // 这里的 id 是 /play/ 后面那一串，壳子会自动尝试解析该 HTML 页面里的播放地址
-        return Result.get().url(HOST + "/play/" + id + ".html").parse(1).header(getHeaders()).string();
+        try {
+            // 解析播放页面以获取真实播放地址
+            String playUrl = HOST + "/play/" + id + ".html";
+            String html = fetchContent(playUrl, getHeaders());
+            
+            if (TextUtils.isEmpty(html)) {
+                return Result.get().url("").string();
+            }
+            
+            // 尝试从页面中提取播放地址
+            Document doc = Jsoup.parse(html);
+            
+            // 查找播放器相关的元素
+            String videoUrl = extractVideoUrl(doc, html);
+            
+            if (!TextUtils.isEmpty(videoUrl)) {
+                // 如果找到真实播放地址，返回该地址
+                return Result.get().url(videoUrl).parse(0).header(getHeaders()).string();
+            } else {
+                // 如果没找到真实播放地址，返回页面地址让前端解析
+                return Result.get().url(playUrl).parse(1).header(getHeaders()).string();
+            }
+        } catch (Exception e) {
+            SpiderDebug.log(e);
+            return Result.get().url("").string();
+        }
     }
 
     private List<Vod> parseVodList(Document doc) {
@@ -246,5 +273,139 @@ public class Xiuer extends Spider {
             SpiderDebug.log("OkHttp获取失败: " + e.getMessage());
             return "";
         }
+    }
+    
+    /**
+     * 从播放页面中提取视频URL
+     */
+    private String extractVideoUrl(Document doc, String html) {
+        // 方法1: 尝试从script标签中提取视频地址
+        Elements scripts = doc.select("script");
+        for (Element script : scripts) {
+            String scriptContent = script.html();
+            if (!TextUtils.isEmpty(scriptContent)) {
+                // 查找常见的视频URL模式
+                java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("(https?:\\/\\/[^"]*?\\.(mp4|m3u8|flv|avi|mov|wmv|webm)[^"']*)");
+                java.util.regex.Matcher matcher = pattern.matcher(scriptContent);
+                if (matcher.find()) {
+                    return matcher.group(1).replace("\\", "");
+                }
+                
+                // 查找player配置
+                java.util.regex.Pattern playerPattern = java.util.regex.Pattern.compile("var\\s+(player_[^=]+=[^;]+)");
+                java.util.regex.Matcher playerMatcher = playerPattern.matcher(scriptContent);
+                if (playerMatcher.find()) {
+                    String playerConfig = playerMatcher.group(1);
+                    // 查找url字段
+                    java.util.regex.Pattern urlPattern = java.util.regex.Pattern.compile("url\\s*:\\s*[\"']([^\"']+)");
+                    java.util.regex.Matcher urlMatcher = urlPattern.matcher(playerConfig);
+                    if (urlMatcher.find()) {
+                        return urlMatcher.group(1);
+                    }
+                    
+                    // 查找mac_url字段（常见于苹果CMS系统）
+                    java.util.regex.Pattern macUrlPattern = java.util.regex.Pattern.compile("mac_url\\s*:\\s*[\"']([^\"']+)");
+                    java.util.regex.Matcher macUrlMatcher = macUrlPattern.matcher(playerConfig);
+                    if (macUrlMatcher.find()) {
+                        String encodedUrl = macUrlMatcher.group(1);
+                        // 尝试Base64解码
+                        String decodedUrl = tryDecodeBase64(encodedUrl);
+                        if (!TextUtils.isEmpty(decodedUrl) && isValidVideoUrl(decodedUrl)) {
+                            return decodedUrl;
+                        }
+                        return encodedUrl;
+                    }
+                }
+                
+                // 查找可能包含Base64编码的视频地址
+                java.util.regex.Pattern base64Pattern = java.util.regex.Pattern.compile("([A-Za-z0-9+/]{20,}={0,2})");
+                java.util.regex.Matcher base64Matcher = base64Pattern.matcher(scriptContent);
+                while (base64Matcher.find()) {
+                    String base64Str = base64Matcher.group(1);
+                    String decodedUrl = tryDecodeBase64(base64Str);
+                    if (!TextUtils.isEmpty(decodedUrl) && isValidVideoUrl(decodedUrl)) {
+                        return decodedUrl;
+                    }
+                }
+            }
+        }
+        
+        // 方法2: 查找video标签
+        Elements videos = doc.select("video source[src]");
+        if (!videos.isEmpty()) {
+            return videos.first().attr("src");
+        }
+        
+        // 方法3: 查找带有播放类名的元素
+        Elements playerElements = doc.select(".player video, #player video, .play-video video, .video-player video");
+        for (Element elem : playerElements) {
+            String src = elem.attr("src");
+            if (!TextUtils.isEmpty(src) && isValidVideoUrl(src)) {
+                return fixUrl(src);
+            }
+            
+            // 检查source子元素
+            Elements sources = elem.select("source");
+            if (!sources.isEmpty()) {
+                String sourceSrc = sources.first().attr("src");
+                if (!TextUtils.isEmpty(sourceSrc)) {
+                    return fixUrl(sourceSrc);
+                }
+            }
+        }
+        
+        // 方法4: 从数据属性中查找
+        Elements dataElements = doc.select("[data-original*=.mp4], [data-original*=.m3u8], [data-src*=.mp4], [data-src*=.m3u8], [src*=.mp4], [src*=.m3u8]");
+        for (Element elem : dataElements) {
+            String src = elem.attr("src");
+            if (isValidVideoUrl(src)) {
+                return fixUrl(src);
+            }
+            
+            String dataOriginal = elem.attr("data-original");
+            if (isValidVideoUrl(dataOriginal)) {
+                return fixUrl(dataOriginal);
+            }
+            
+            String dataSrc = elem.attr("data-src");
+            if (isValidVideoUrl(dataSrc)) {
+                return fixUrl(dataSrc);
+            }
+        }
+        
+        // 方法5: 尝试从页面HTML文本中直接查找视频URL
+        java.util.regex.Pattern directUrlPattern = java.util.regex.Pattern.compile("(https?:\\/\\/[^"]*?\\.(mp4|m3u8|flv|avi|mov|wmv|webm)[^"'&]*)");
+        java.util.regex.Matcher directMatcher = directUrlPattern.matcher(html);
+        if (directMatcher.find()) {
+            return directMatcher.group(1);
+        }
+        
+        return "";
+    }
+    
+    /**
+     * 尝试Base64解码
+     */
+    private String tryDecodeBase64(String str) {
+        try {
+            // 检查是否是Base64编码的字符串
+            if (android.util.Base64.isBase64(str.getBytes())) {
+                byte[] decodedBytes = android.util.Base64.decode(str, android.util.Base64.DEFAULT);
+                return new String(decodedBytes);
+            }
+        } catch (Exception e) {
+            SpiderDebug.log("Base64解码失败: " + e.getMessage());
+        }
+        return str;
+    }
+    
+    /**
+     * 检查是否为有效的视频URL
+     */
+    private boolean isValidVideoUrl(String url) {
+        if (TextUtils.isEmpty(url)) return false;
+        return url.contains(".mp4") || url.contains(".m3u8") || url.contains(".flv") || 
+               url.contains(".avi") || url.contains(".mov") || url.contains(".wmv") || 
+               url.contains(".webm");
     }
 }
