@@ -80,7 +80,7 @@ public class HpTv extends Spider {
 
                 if (a == null || nameEl == null) continue;
 
-                String pic = getImageUrl(img);
+                String pic = getImageUrl(a, img); // 使用改进后的图片获取方法
                 String href = a.attr("href");
                 String name = nameEl.text();
                 String remark = remarkEl != null ? remarkEl.text() : "";
@@ -117,7 +117,7 @@ public class HpTv extends Spider {
 
                 if (a == null || nameEl == null) continue;
 
-                String pic = getImageUrl(img);
+                String pic = getImageUrl(a, img); // 使用改进后的图片获取方法
                 String href = a.attr("href");
                 String name = nameEl.text();
                 String remark = remarkEl != null ? remarkEl.text() : "";
@@ -149,9 +149,11 @@ public class HpTv extends Spider {
             Element titleEl = doc.selectFirst("h1 a");
             if (titleEl != null) vod.setVodName(titleEl.text().trim());
 
-            Element picEl = doc.selectFirst("a.mo-situ-pics img");
-            if (picEl != null) {
-                String pic = getImageUrl(picEl);
+            Element picContainer = doc.selectFirst("a.mo-situ-pics"); // 先尝试从容器获取
+            Element picImg = doc.selectFirst("a.mo-situ-pics img"); // 再尝试从图片标签获取
+            
+            if (picContainer != null) {
+                String pic = getImageUrl(picContainer, picImg);
                 vod.setVodPic(pic);
             }
 
@@ -223,7 +225,7 @@ public class HpTv extends Spider {
 
                 if (a == null || nameEl == null) continue;
 
-                String pic = getImageUrl(img);
+                String pic = getImageUrl(a, img); // 使用改进后的图片获取方法
                 String href = a.attr("href");
                 String name = nameEl.text();
                 String remark = remarkEl != null ? remarkEl.text() : "";
@@ -256,33 +258,59 @@ public class HpTv extends Spider {
     }
     
     /**
-     * 获取图片URL，处理懒加载和各种图片属性
+     * 改进后的图片获取逻辑
      */
-    private String getImageUrl(Element img) {
-        if (img == null) return "";
-        
-        // 按优先级尝试获取图片URL
+    private String getImageUrl(Element container, Element img) {
         String pic = "";
         
-        // 优先级1: data-lazy-src (某些懒加载场景)
-        if (pic.isEmpty()) pic = img.attr("data-lazy-src");
-        // 优先级2: data-src (常见懒加载属性)
-        if (pic.isEmpty()) pic = img.attr("data-src");
-        // 优先级3: data-original (常见懒加载属性)
-        if (pic.isEmpty()) pic = img.attr("data-original");
-        // 优先级4: data-lazysrc (某些站点的自定义懒加载属性)
-        if (pic.isEmpty()) pic = img.attr("data-lazysrc");
-        // 优先级5: src (正常图片属性)
-        if (pic.isEmpty()) pic = img.attr("src");
+        // 1. 尝试从容器 (a标签) 获取懒加载属性
+        if (container != null) {
+            pic = container.attr("data-original");
+            if (pic.isEmpty()) pic = container.attr("data-src");
+            
+            // 2. 针对某些通过 style 加载背景图的情况
+            if (pic.isEmpty()) {
+                String style = container.attr("style");
+                if (style.contains("url(")) {
+                    Matcher m = Pattern.compile("url\\(['\"]?(.*?)['\"]?\\)").matcher(style);
+                    if (m.find()) pic = m.group(1);
+                }
+            }
+        }
         
-        // 处理相对路径和协议相对路径
+        // 3. 尝试从 img 标签获取
+        if (pic.isEmpty() && img != null) {
+            pic = img.attr("data-original");
+            if (pic.isEmpty()) pic = img.attr("data-src");
+            if (pic.isEmpty()) pic = img.attr("src");
+        }
+        
+        return formatImageUrl(pic);
+    }
+    
+    /**
+     * 格式化图片URL，解决双斜杠和相对路径问题
+     */
+    private String formatImageUrl(String pic) {
+        if (pic == null || pic.isEmpty() || pic.contains("base64,")) {
+            return "";
+        }
+        
+        pic = pic.trim();
+        
         if (pic.startsWith("//")) {
-            pic = "https:" + pic;
-        } else if (pic.startsWith("/")) {
-            pic = siteUrl + pic;
-        } else if (!pic.isEmpty() && !pic.startsWith("http")) {
-            // 如果是相对路径，则拼接站点URL
-            pic = siteUrl + "/" + pic;
+            return "https:" + pic;
+        } 
+        
+        if (pic.startsWith("/")) {
+            // 确保只有一个斜杠
+            String base = siteUrl.endsWith("/") ? siteUrl.substring(0, siteUrl.length() - 1) : siteUrl;
+            return base + pic;
+        } 
+        
+        if (!pic.startsWith("http")) {
+            String base = siteUrl.endsWith("/") ? siteUrl : siteUrl + "/";
+            return base + pic;
         }
         
         return pic;
