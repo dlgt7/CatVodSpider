@@ -1,5 +1,6 @@
 package com.github.catvod.bean;
 
+import com.github.catvod.utils.Json;
 import com.google.gson.Gson;
 import com.google.gson.annotations.SerializedName;
 
@@ -37,8 +38,14 @@ public class Vod {
     private Style style;
 
     public static Vod objectFrom(String str) {
-        Vod item = new Gson().fromJson(str, Vod.class);
-        return item == null ? new Vod() : item;
+        try {
+            Vod item = Json.getGson().fromJson(str, Vod.class);
+            return item == null ? new Vod() : item;
+        } catch (Exception e) {
+            // 记录异常但不影响程序运行
+            e.printStackTrace();
+            return new Vod();
+        }
     }
 
     public static Vod action(String action) {
@@ -96,68 +103,120 @@ public class Vod {
         setVodTag(folder ? "folder" : "file");
     }
 
+    public String getTypeName() {
+        return typeName != null ? typeName : "";
+    }
+
     public void setTypeName(String typeName) {
         this.typeName = typeName;
+    }
+
+    public String getVodId() {
+        return vodId != null ? vodId : "";
     }
 
     public void setVodId(String vodId) {
         this.vodId = vodId;
     }
 
+    public String getVodName() {
+        return vodName != null ? vodName : "";
+    }
+
     public void setVodName(String vodName) {
         this.vodName = vodName;
+    }
+
+    public String getVodPic() {
+        return vodPic != null ? vodPic : "";
     }
 
     public void setVodPic(String vodPic) {
         this.vodPic = vodPic;
     }
 
+    public String getVodRemarks() {
+        return vodRemarks != null ? vodRemarks : "";
+    }
+
     public void setVodRemarks(String vodRemarks) {
         this.vodRemarks = vodRemarks;
+    }
+
+    public String getVodYear() {
+        return vodYear != null ? vodYear : "";
     }
 
     public void setVodYear(String vodYear) {
         this.vodYear = vodYear;
     }
 
+    public String getVodArea() {
+        return vodArea != null ? vodArea : "";
+    }
+
     public void setVodArea(String vodArea) {
         this.vodArea = vodArea;
+    }
+
+    public String getVodActor() {
+        return vodActor != null ? vodActor : "";
     }
 
     public void setVodActor(String vodActor) {
         this.vodActor = vodActor;
     }
 
+    public String getVodDirector() {
+        return vodDirector != null ? vodDirector : "";
+    }
+
     public void setVodDirector(String vodDirector) {
         this.vodDirector = vodDirector;
+    }
+
+    public String getVodContent() {
+        return vodContent != null ? vodContent : "";
     }
 
     public void setVodContent(String vodContent) {
         this.vodContent = vodContent;
     }
 
-    public String getVodContent() {
-        return vodContent;
+    public String getVodPlayFrom() {
+        return vodPlayFrom != null ? vodPlayFrom : "";
     }
 
     public void setVodPlayFrom(String vodPlayFrom) {
         this.vodPlayFrom = vodPlayFrom;
     }
 
+    public String getVodPlayUrl() {
+        return vodPlayUrl != null ? vodPlayUrl : "";
+    }
+
     public void setVodPlayUrl(String vodPlayUrl) {
         this.vodPlayUrl = vodPlayUrl;
     }
 
-    public String getVodPlayUrl() {
-        return vodPlayUrl;
+    public String getVodTag() {
+        return vodTag != null ? vodTag : "";
     }
 
     public void setVodTag(String vodTag) {
         this.vodTag = vodTag;
     }
 
+    public String getAction() {
+        return action != null ? action : "";
+    }
+
     public void setAction(String action) {
         this.action = action;
+    }
+
+    public Style getStyle() {
+        return style;
     }
 
     public void setStyle(Style style) {
@@ -197,6 +256,22 @@ public class Vod {
 
         public Style(String type, Float ratio) {
             this.type = type;
+            this.ratio = ratio;
+        }
+
+        public String getType() {
+            return type != null ? type : "";
+        }
+
+        public void setType(String type) {
+            this.type = type;
+        }
+
+        public Float getRatio() {
+            return ratio;
+        }
+
+        public void setRatio(Float ratio) {
             this.ratio = ratio;
         }
     }
