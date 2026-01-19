@@ -285,29 +285,29 @@ public class Xiuer extends Spider {
             String scriptContent = script.html();
             if (!TextUtils.isEmpty(scriptContent)) {
                 // 查找常见的视频URL模式
-                java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("(https?:\\/\\/[^"]*?\\.(mp4|m3u8|flv|avi|mov|wmv|webm)[^"']*)");
+                java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("(https?:\\/\\/[^\\\"]*?\\.(mp4|m3u8|flv|avi|mov|wmv|webm)[^\\\"']*)");
                 java.util.regex.Matcher matcher = pattern.matcher(scriptContent);
                 if (matcher.find()) {
                     return matcher.group(1).replace("\\", "");
                 }
                 
                 // 查找player配置
-                java.util.regex.Pattern playerPattern = java.util.regex.Pattern.compile("var\\s+(player_[^=]+=[^;]+)");
+                java.util.regex.Pattern playerPattern = java.util.regex.Pattern.compile("var\\s+\\(player_[^=]+=[^;]+\\)");
                 java.util.regex.Matcher playerMatcher = playerPattern.matcher(scriptContent);
                 if (playerMatcher.find()) {
                     String playerConfig = playerMatcher.group(1);
                     // 查找url字段
-                    java.util.regex.Pattern urlPattern = java.util.regex.Pattern.compile("url\\s*:\\s*[\"']([^\"']+)");
-                    java.util.regex.Matcher urlMatcher = urlPattern.matcher(playerConfig);
-                    if (urlMatcher.find()) {
-                        return urlMatcher.group(1);
+                    java.util.regex.Pattern simpleUrlPattern = java.util.regex.Pattern.compile("url\\s*:\\s*['\"]([^'\"]+)['\"]");
+                    java.util.regex.Matcher simpleUrlMatcher = simpleUrlPattern.matcher(playerConfig);
+                    if (simpleUrlMatcher.find()) {
+                        return simpleUrlMatcher.group(1);
                     }
                     
                     // 查找mac_url字段（常见于苹果CMS系统）
-                    java.util.regex.Pattern macUrlPattern = java.util.regex.Pattern.compile("mac_url\\s*:\\s*[\"']([^\"']+)");
-                    java.util.regex.Matcher macUrlMatcher = macUrlPattern.matcher(playerConfig);
-                    if (macUrlMatcher.find()) {
-                        String encodedUrl = macUrlMatcher.group(1);
+                    java.util.regex.Pattern simpleMacUrlPattern = java.util.regex.Pattern.compile("mac_url\\s*:\\s*['\"]([^'\"]+)['\"]");
+                    java.util.regex.Matcher simpleMacUrlMatcher = simpleMacUrlPattern.matcher(playerConfig);
+                    if (simpleMacUrlMatcher.find()) {
+                        String encodedUrl = simpleMacUrlMatcher.group(1);
                         // 尝试Base64解码
                         String decodedUrl = tryDecodeBase64(encodedUrl);
                         if (!TextUtils.isEmpty(decodedUrl) && isValidVideoUrl(decodedUrl)) {
@@ -374,7 +374,7 @@ public class Xiuer extends Spider {
         }
         
         // 方法5: 尝试从页面HTML文本中直接查找视频URL
-        java.util.regex.Pattern directUrlPattern = java.util.regex.Pattern.compile("(https?:\\/\\/[^"]*?\\.(mp4|m3u8|flv|avi|mov|wmv|webm)[^"'&]*)");
+        java.util.regex.Pattern directUrlPattern = java.util.regex.Pattern.compile("(https?:\\/\\/[^\\\"]*?\\.(mp4|m3u8|flv|avi|mov|wmv|webm)[^\\\"'&]*)");
         java.util.regex.Matcher directMatcher = directUrlPattern.matcher(html);
         if (directMatcher.find()) {
             return directMatcher.group(1);
