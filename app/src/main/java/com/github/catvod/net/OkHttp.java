@@ -317,11 +317,6 @@ public class OkHttp {
     public interface ProgressCallback {
         void onProgress(long current, long total);
     }
-
-    // 修复 Config.java:52 的 int 参数报错
-    public static String string(String url, int timeout) {
-        return string(url);
-    }
     
     // 修复 Market.java 的 cancel 报错
     public static void cancel(String tag) {
