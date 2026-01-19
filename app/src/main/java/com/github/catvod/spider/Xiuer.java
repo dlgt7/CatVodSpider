@@ -6,6 +6,7 @@ import com.github.catvod.bean.Result;
 import com.github.catvod.bean.Vod;
 import com.github.catvod.crawler.Spider;
 import com.github.catvod.crawler.SpiderDebug;
+import com.github.catvod.net.OkHttp;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
@@ -27,7 +28,7 @@ public class Xiuer extends Spider {
     public String homeContent(boolean filter) {
         try {
             // 这里假设 AntiCrawlerEnhancer 是你环境中的反爬增强类
-            String html = AntiCrawlerEnhancer.get().enhancedGet(HOST, null);
+            String html = fetchContent(HOST, null);
             if (TextUtils.isEmpty(html)) return Result.get().msg("首页加载失败").string();
             Document doc = Jsoup.parse(html);
 
@@ -51,7 +52,7 @@ public class Xiuer extends Spider {
         try {
             // URL 格式：/show/tid/page/pg.html
             String url = HOST + "/show/" + tid + "/page/" + pg + ".html";
-            String html = AntiCrawlerEnhancer.get().enhancedGet(url, null);
+            String html = fetchContent(url, null);
             return Result.get().page(Integer.parseInt(pg), 100, 24, 2400).vod(parseVodList(Jsoup.parse(html))).string();
         } catch (Exception e) {
             return Result.get().vod(new ArrayList<>()).string();
@@ -63,7 +64,7 @@ public class Xiuer extends Spider {
         try {
             String id = ids.get(0);
             String url = HOST + "/detail/" + id + ".html";
-            String html = AntiCrawlerEnhancer.get().enhancedGet(url, null);
+            String html = fetchContent(url, null);
             Document doc = Jsoup.parse(html);
 
             Vod vod = new Vod();
@@ -134,7 +135,7 @@ public class Xiuer extends Spider {
         try {
             // 路径匹配：/vod/search/wd/**.html
             String url = HOST + "/vod/search/wd/" + key + ".html";
-            String html = AntiCrawlerEnhancer.get().enhancedGet(url, null);
+            String html = fetchContent(url, null);
             Document doc = Jsoup.parse(html);
             List<Vod> list = new ArrayList<>();
             
@@ -208,5 +209,42 @@ public class Xiuer extends Spider {
         if (url.startsWith("//")) return "https:" + url;
         if (url.startsWith("/")) return HOST + url;
         return url;
+    }
+    
+    /**
+     * 安全获取网页内容，优先使用AntiCrawlerEnhancer，失败时回退到OkHttp
+     */
+    private String fetchContent(String url, HashMap<String, String> headers) {
+        try {
+            // 首先尝试使用AntiCrawlerEnhancer
+            // 检查AntiCrawlerEnhancer是否可用
+            AntiCrawlerEnhancer enhancer = null;
+            try {
+                enhancer = AntiCrawlerEnhancer.get();
+            } catch (Exception e) {
+                SpiderDebug.log("AntiCrawlerEnhancer不可用: " + e.getMessage());
+            }
+            
+            if (enhancer != null) {
+                try {
+                    String content = enhancer.enhancedGet(url, headers);
+                    if (!TextUtils.isEmpty(content)) {
+                        return content;
+                    }
+                } catch (Exception e) {
+                    SpiderDebug.log("AntiCrawlerEnhancer获取失败: " + e.getMessage());
+                }
+            }
+        } catch (Exception e) {
+            SpiderDebug.log("AntiCrawlerEnhancer获取失败: " + e.getMessage());
+        }
+        
+        try {
+            // 回退到OkHttp
+            return OkHttp.string(url, headers != null ? headers : getHeaders());
+        } catch (Exception e) {
+            SpiderDebug.log("OkHttp获取失败: " + e.getMessage());
+            return "";
+        }
     }
 }
