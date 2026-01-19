@@ -77,4 +77,12 @@ public class Util {
         manager.setPrimaryClip(ClipData.newPlainText("fongmi", text));
         Notify.show("已複製 " + text);
     }
+    
+    public static String urlEncode(String str) {
+        try {
+            return java.net.URLEncoder.encode(str, "UTF-8");
+        } catch (Exception e) {
+            return str;
+        }
+    }
 }
