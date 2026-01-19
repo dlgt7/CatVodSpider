@@ -52,6 +52,8 @@ public class HMDJ extends Spider {
     @Override
     public void init(Context context) throws Exception {
         super.init(context);
+        // 初始化反爬虫增强器
+        AntiCrawlerEnhancer.get().init(context);
     }
 
     @Override
@@ -255,74 +257,166 @@ public class HMDJ extends Spider {
         result.put("pagecount", 1);
         result.put("limit", 20);
         result.put("total", 0);
-            
+        
         List<Vod> videos = new ArrayList<>();
         String searchUrl = siteUrl + "/search?searchValue=" + URLEncoder.encode(key, "UTF-8");
-            
-        Map<String, String> response = fetch(searchUrl);
+        
+        // 预热网站以通过可能的反爬虫挑战
+        warmupSite(searchUrl);
+        
+        Map<String, String> response = fetchWithAntiCrawler(searchUrl);
         if (response == null || !response.containsKey("body")) {
             result.put("list", new JSONArray());
             return result.toString();
         }
-            
+        
         String htmlContent = response.get("body");
+        
+        // 尝试从页面中提取搜索结果，先检查Next.js数据结构
         Pattern pattern = Pattern.compile("<script id=\"__NEXT_DATA__\" type=\"application/json\">(.*?)</script>", Pattern.DOTALL);
         Matcher matcher = pattern.matcher(htmlContent);
-        if (!matcher.find()) {
-            result.put("list", new JSONArray());
-            return result.toString();
-        }
-            
-        try {
-            JSONObject nextDataJson = new JSONObject(matcher.group(1));
-            JSONObject pageProps = nextDataJson.optJSONObject("props").optJSONObject("pageProps");
+        
+        // 优先检查Next.js数据结构
+        if (matcher.find()) {
+            try {
+                JSONObject nextDataJson = new JSONObject(matcher.group(1));
+                JSONObject pageProps = nextDataJson.optJSONObject("props").optJSONObject("pageProps");
                 
-            // 根据页面结构，搜索结果可能在不同字段下
-            JSONArray bookList = null;
-            if (pageProps.has("dataList")) {
-                bookList = pageProps.optJSONArray("dataList");
-            } else if (pageProps.has("list")) {
-                bookList = pageProps.optJSONArray("list");
-            } else if (pageProps.has("bookList")) {
-                bookList = pageProps.optJSONArray("bookList");
-            }
+                // 检查是否有搜索结果数据
+                JSONArray bookList = null;
+                if (pageProps.has("dataList")) {
+                    bookList = pageProps.optJSONArray("dataList");
+                } else if (pageProps.has("list")) {
+                    bookList = pageProps.optJSONArray("list");
+                } else if (pageProps.has("bookList")) {
+                    bookList = pageProps.optJSONArray("bookList");
+                } else if (pageProps.has("searchResultList")) {
+                    bookList = pageProps.optJSONArray("searchResultList");
+                } else if (pageProps.has("resultList")) {
+                    bookList = pageProps.optJSONArray("resultList");
+                }
                 
-            if (bookList != null) {
-                for (int i = 0; i < bookList.length(); i++) {
-                    JSONObject book = bookList.getJSONObject(i);
-                    if (book.has("bookId") || book.has("id")) {
-                        String bookId = !book.optString("bookId", "").isEmpty() ? book.optString("bookId", "") : book.optString("id", "");
-                        if (!bookId.isEmpty()) {
-                            Vod vod = new Vod();
-                            vod.setVodId("/drama/" + bookId);
-                            vod.setVodName(!book.optString("bookName", "").isEmpty() ? book.optString("bookName", "") : (!book.optString("name", "").isEmpty() ? book.optString("name", "") : book.optString("title", "")));
-                            vod.setVodPic(!book.optString("coverWap", "").isEmpty() ? book.optString("coverWap", "") : (!book.optString("cover", "").isEmpty() ? book.optString("cover", "") : (!book.optString("pic", "").isEmpty() ? book.optString("pic", "") : book.optString("image", ""))));
-                            String status = !book.optString("statusDesc", "").isEmpty() ? book.optString("statusDesc", "") : (!book.optString("status", "").isEmpty() ? book.optString("status", "") : book.optString("desc", ""));
-                            String chapters = !book.optString("totalChapterNum", "").isEmpty() ? book.optString("totalChapterNum", "") : (!book.optString("chapters", "").isEmpty() ? book.optString("chapters", "") : book.optString("total", ""));
-                            vod.setVodRemarks((status + " " + chapters + "集").trim());
-                            videos.add(vod);
+                if (bookList != null) {
+                    for (int i = 0; i < bookList.length(); i++) {
+                        JSONObject book = bookList.getJSONObject(i);
+                        if (book.has("bookId") || book.has("id")) {
+                            String bookId = !book.optString("bookId", "").isEmpty() ? book.optString("bookId", "") : book.optString("id", "");
+                            if (!bookId.isEmpty()) {
+                                Vod vod = new Vod();
+                                vod.setVodId("/drama/" + bookId);
+                                vod.setVodName(!book.optString("bookName", "").isEmpty() ? book.optString("bookName", "") : (!book.optString("name", "").isEmpty() ? book.optString("name", "") : book.optString("title", "")));
+                                vod.setVodPic(!book.optString("coverWap", "").isEmpty() ? book.optString("coverWap", "") : (!book.optString("cover", "").isEmpty() ? book.optString("cover", "") : (!book.optString("pic", "").isEmpty() ? book.optString("pic", "") : book.optString("image", ""))));
+                                String status = !book.optString("statusDesc", "").isEmpty() ? book.optString("statusDesc", "") : (!book.optString("status", "").isEmpty() ? book.optString("status", "") : book.optString("desc", ""));
+                                String chapters = !book.optString("totalChapterNum", "").isEmpty() ? book.optString("totalChapterNum", "") : (!book.optString("chapters", "").isEmpty() ? book.optString("chapters", "") : book.optString("total", ""));
+                                vod.setVodRemarks((status + " " + chapters + "集").trim());
+                                videos.add(vod);
+                            }
                         }
                     }
                 }
-            }
                 
-            result.put("pagecount", 1);
-            result.put("total", videos.size());
-                
-            JSONArray listArray = new JSONArray();
-            for (Vod vod : videos) {
-                JSONObject vodObj = new JSONObject();
-                vodObj.put("vod_id", vod.getVodId());
-                vodObj.put("vod_name", vod.getVodName());
-                vodObj.put("vod_pic", vod.getVodPic());
-                vodObj.put("vod_remarks", vod.getVodRemarks());
-                listArray.put(vodObj);
+                // 如果没找到列表，尝试从其他可能的数据结构中查找
+                if (videos.isEmpty() && pageProps.has("data")) {
+                    JSONObject dataObj = pageProps.optJSONObject("data");
+                    if (dataObj.has("list")) {
+                        bookList = dataObj.optJSONArray("list");
+                        if (bookList != null) {
+                            for (int i = 0; i < bookList.length(); i++) {
+                                JSONObject book = bookList.getJSONObject(i);
+                                if (book.has("bookId") || book.has("id")) {
+                                    String bookId = !book.optString("bookId", "").isEmpty() ? book.optString("bookId", "") : book.optString("id", "");
+                                    if (!bookId.isEmpty()) {
+                                        Vod vod = new Vod();
+                                        vod.setVodId("/drama/" + bookId);
+                                        vod.setVodName(!book.optString("bookName", "").isEmpty() ? book.optString("bookName", "") : (!book.optString("name", "").isEmpty() ? book.optString("name", "") : book.optString("title", "")));
+                                        vod.setVodPic(!book.optString("coverWap", "").isEmpty() ? book.optString("coverWap", "") : (!book.optString("cover", "").isEmpty() ? book.optString("cover", "") : (!book.optString("pic", "").isEmpty() ? book.optString("pic", "") : book.optString("image", ""))));
+                                        String status = !book.optString("statusDesc", "").isEmpty() ? book.optString("statusDesc", "") : (!book.optString("status", "").isEmpty() ? book.optString("status", "") : book.optString("desc", ""));
+                                        String chapters = !book.optString("totalChapterNum", "").isEmpty() ? book.optString("totalChapterNum", "") : (!book.optString("chapters", "").isEmpty() ? book.optString("chapters", "") : book.optString("total", ""));
+                                        vod.setVodRemarks((status + " " + chapters + "集").trim());
+                                        videos.add(vod);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
             }
-            result.put("list", listArray);
-        } catch (Exception e) {
-            e.printStackTrace();
         }
+        
+        // 如果Next.js数据中没有找到，尝试从页面中查找其他可能的JSON数据
+        if (videos.isEmpty()) {
+            // 查找其他可能包含数据的script标签
+            Pattern otherJsonPattern = Pattern.compile("<script[^>]*>.*?(window\\.[a-zA-Z]+\\s*=\\s*\\{.*?\\}|var\\s+[a-zA-Z]+\\s*=\\s*\\[.*?\\]).*?</script>", Pattern.DOTALL);
+            Matcher otherJsonMatcher = otherJsonPattern.matcher(htmlContent);
+            while (otherJsonMatcher.find() && videos.isEmpty()) {
+                String scriptContent = otherJsonMatcher.group(1);
+                // 尝试从这里解析数据
+            }
+        }
+        
+        // 如果仍找不到数据，可能需要尝试直接API调用
+        if (videos.isEmpty()) {
+            // 尝试使用可能的API端点进行搜索
+            String apiSearchUrl = siteUrl + "/api/search?searchValue=" + URLEncoder.encode(key, "UTF-8");
+            try {
+                Map<String, String> apiResponse = fetchWithAntiCrawler(apiSearchUrl);
+                if (apiResponse != null && apiResponse.containsKey("body")) {
+                    String apiBody = apiResponse.get("body");
+                    // 尝试解析API响应
+                    try {
+                        JSONObject apiResult = new JSONObject(apiBody);
+                        JSONArray apiBookList = null;
+                        if (apiResult.has("dataList")) {
+                            apiBookList = apiResult.optJSONArray("dataList");
+                        } else if (apiResult.has("list")) {
+                            apiBookList = apiResult.optJSONArray("list");
+                        } else if (apiResult.has("data") && apiResult.getJSONObject("data").has("list")) {
+                            apiBookList = apiResult.getJSONObject("data").optJSONArray("list");
+                        }
+                        
+                        if (apiBookList != null) {
+                            for (int i = 0; i < apiBookList.length(); i++) {
+                                JSONObject book = apiBookList.getJSONObject(i);
+                                if (book.has("bookId") || book.has("id")) {
+                                    String bookId = !book.optString("bookId", "").isEmpty() ? book.optString("bookId", "") : book.optString("id", "");
+                                    if (!bookId.isEmpty()) {
+                                        Vod vod = new Vod();
+                                        vod.setVodId("/drama/" + bookId);
+                                        vod.setVodName(!book.optString("bookName", "").isEmpty() ? book.optString("bookName", "") : (!book.optString("name", "").isEmpty() ? book.optString("name", "") : book.optString("title", "")));
+                                        vod.setVodPic(!book.optString("coverWap", "").isEmpty() ? book.optString("coverWap", "") : (!book.optString("cover", "").isEmpty() ? book.optString("cover", "") : (!book.optString("pic", "").isEmpty() ? book.optString("pic", "") : book.optString("image", ""))));
+                                        String status = !book.optString("statusDesc", "").isEmpty() ? book.optString("statusDesc", "") : (!book.optString("status", "").isEmpty() ? book.optString("status", "") : book.optString("desc", ""));
+                                        String chapters = !book.optString("totalChapterNum", "").isEmpty() ? book.optString("totalChapterNum", "") : (!book.optString("chapters", "").isEmpty() ? book.optString("chapters", "") : book.optString("total", ""));
+                                        vod.setVodRemarks((status + " " + chapters + "集").trim());
+                                        videos.add(vod);
+                                    }
+                                }
+                            }
+                        }
+                    } catch (Exception apiException) {
+                        // API解析失败，忽略错误
+                    }
+                }
+            } catch (Exception apiException) {
+                // API调用失败，忽略错误
+            }
+        }
+        
+        result.put("pagecount", 1);
+        result.put("total", videos.size());
             
+        JSONArray listArray = new JSONArray();
+        for (Vod vod : videos) {
+            JSONObject vodObj = new JSONObject();
+            vodObj.put("vod_id", vod.getVodId());
+            vodObj.put("vod_name", vod.getVodName());
+            vodObj.put("vod_pic", vod.getVodPic());
+            vodObj.put("vod_remarks", vod.getVodRemarks());
+            listArray.put(vodObj);
+        }
+        result.put("list", listArray);
+        
         return result.toString();
     }
 
@@ -595,6 +689,27 @@ public class HMDJ extends Spider {
         }
         return null;
     }
+    
+    /**
+     * 使用反爬虫增强器的请求方法
+     */
+    private Map<String, String> fetchWithAntiCrawler(String url) throws Exception {
+        Map<String, String> result = new HashMap<>();
+        
+        // 使用反爬虫增强器
+        String response = AntiCrawlerEnhancer.get().enhancedGet(url, headers);
+        result.put("body", response);
+        return result;
+    }
+    
+    /**
+     * 预热网站以通过反爬虫挑战
+     */
+    public void warmupSite(String url) {
+        // 使用WebView预热网站，通过JavaScript挑战
+        AntiCrawlerEnhancer.get().warmupChallenge(url);
+    }
+    
     @Override
     public boolean manualVideoCheck() throws Exception {
         return false;
