@@ -32,8 +32,12 @@ public class jpys extends Spider {
     private String host = "";
     private List<String> hostList = new ArrayList<>();
 
-    @Override
     public void init(String extend) {
+        init(null, extend); // 调用父类方法
+    }
+    
+    @Override
+    public void init(android.content.Context context, String extend) {
         if (!TextUtils.isEmpty(extend)) {
             try {
                 JsonObject extObj = Json.parse(extend).getAsJsonObject();
@@ -65,7 +69,7 @@ public class jpys extends Spider {
             JsonObject filterData = Json.parse(filterJson).getAsJsonObject();
 
             List<Class> classes = new ArrayList<>();
-            Map<String, List<Filter>> filters = new LinkedHashMap<>();
+            java.util.LinkedHashMap<String, List<Filter>> filters = new LinkedHashMap<>();
 
             // 解析分类
             if (categoryData.has("data") && categoryData.get("data").isJsonArray()) {
