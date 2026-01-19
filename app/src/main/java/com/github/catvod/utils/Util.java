@@ -23,7 +23,14 @@ public class Util {
     }
 
     public static boolean isTorrent(String url) {
-        return !url.startsWith("magnet") && url.split(";")[0].endsWith(".torrent");
+        if (url == null || url.startsWith("magnet")) return false;
+        String cleanUrl = url.split(";")[0];
+        int lastDotIndex = cleanUrl.lastIndexOf('.');
+        if (lastDotIndex == -1) return false;
+        String ext = cleanUrl.substring(lastDotIndex + 1);
+        // 处理可能带查询参数的情况，如 file.torrent?v=1
+        if (ext.startsWith("torrent")) return true;
+        return cleanUrl.toLowerCase().endsWith(".torrent");
     }
 
     public static boolean isSub(String text) {
@@ -35,18 +42,39 @@ public class Util {
     }
 
     public static String getExt(String name) {
-        return name.contains(".") ? name.substring(name.lastIndexOf(".") + 1).toLowerCase() : name.toLowerCase();
+        if (name == null) return "";
+        // 先提取文件名（去掉路径部分）
+        int lastSlashIndex = Math.max(name.lastIndexOf('/'), name.lastIndexOf('\\'));
+        String fileName = lastSlashIndex >= 0 ? name.substring(lastSlashIndex + 1) : name;
+        return fileName.contains(".") ? fileName.substring(fileName.lastIndexOf(".") + 1).toLowerCase() : fileName.toLowerCase();
     }
 
     public static String getSize(double size) {
         if (size <= 0) return "";
         String[] units = new String[]{"bytes", "KB", "MB", "GB", "TB"};
-        int digitGroups = (int) (Math.log10(size) / Math.log10(1024));
+        int digitGroups = 0;
+        double currentSize = size;
+        while (currentSize >= 1024 && digitGroups < units.length - 1) {
+            currentSize /= 1024;
+            digitGroups++;
+        }
+        // 确保不会越界
+        digitGroups = Math.min(digitGroups, units.length - 1);
         return new DecimalFormat("#,##0.#").format(size / Math.pow(1024, digitGroups)) + " " + units[digitGroups];
     }
 
     public static String removeExt(String text) {
-        return text.contains(".") ? text.substring(0, text.lastIndexOf(".")) : text;
+        if (text == null) return text;
+        // 先提取文件名（去掉路径部分）
+        int lastSlashIndex = Math.max(text.lastIndexOf('/'), text.lastIndexOf('\\'));
+        int lastDotIndex = text.lastIndexOf('.');
+        
+        // 如果点在最后一个斜杠之后，则表示是扩展名
+        if (lastDotIndex > lastSlashIndex) {
+            return text.substring(0, lastDotIndex);
+        } else {
+            return text; // 没有扩展名或路径中有点的情况
+        }
     }
 
     public static String substring(String text) {
@@ -67,8 +95,14 @@ public class Util {
     }
 
     private static String checkVar(String var) {
-        if (var.contains("'")) return var.split("'")[1];
-        if (var.contains("\"")) return var.split("\"")[1];
+        if (var.contains("'")) {
+            String[] parts = var.split("'");
+            if (parts.length >= 2) return parts[1];
+        }
+        if (var.contains("\"")) {
+            String[] parts = var.split("\"");
+            if (parts.length >= 2) return parts[1];
+        }
         return "";
     }
 
@@ -85,4 +119,5 @@ public class Util {
             return str;
         }
     }
+    
 }
