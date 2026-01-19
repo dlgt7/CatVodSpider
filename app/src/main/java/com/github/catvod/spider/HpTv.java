@@ -80,11 +80,7 @@ public class HpTv extends Spider {
 
                 if (a == null || nameEl == null) continue;
 
-                String pic = img != null ? (img.attr("data-src").isEmpty() ? (img.attr("src").isEmpty() ? img.attr("data-original") : img.attr("src")) : img.attr("data-src")) : "";
-                if (pic.startsWith("//")) pic = "https:" + pic;
-                else if (pic.startsWith("/")) pic = siteUrl + pic;
-                else if (!pic.startsWith("http")) pic = siteUrl + pic;
-
+                String pic = getImageUrl(img);
                 String href = a.attr("href");
                 String name = nameEl.text();
                 String remark = remarkEl != null ? remarkEl.text() : "";
@@ -121,11 +117,7 @@ public class HpTv extends Spider {
 
                 if (a == null || nameEl == null) continue;
 
-                String pic = img != null ? (img.attr("data-src").isEmpty() ? (img.attr("src").isEmpty() ? img.attr("data-original") : img.attr("src")) : img.attr("data-src")) : "";
-                if (pic.startsWith("//")) pic = "https:" + pic;
-                else if (pic.startsWith("/")) pic = siteUrl + pic;
-                else if (!pic.startsWith("http")) pic = siteUrl + pic;
-
+                String pic = getImageUrl(img);
                 String href = a.attr("href");
                 String name = nameEl.text();
                 String remark = remarkEl != null ? remarkEl.text() : "";
@@ -159,10 +151,7 @@ public class HpTv extends Spider {
 
             Element picEl = doc.selectFirst("a.mo-situ-pics img");
             if (picEl != null) {
-                String pic = picEl.attr("data-src").isEmpty() ? (picEl.attr("src").isEmpty() ? picEl.attr("data-original") : picEl.attr("src")) : picEl.attr("data-src");
-                if (pic.startsWith("//")) pic = "https:" + pic;
-                else if (pic.startsWith("/")) pic = siteUrl + pic;
-                else if (!pic.startsWith("http")) pic = siteUrl + pic;
+                String pic = getImageUrl(picEl);
                 vod.setVodPic(pic);
             }
 
@@ -234,11 +223,7 @@ public class HpTv extends Spider {
 
                 if (a == null || nameEl == null) continue;
 
-                String pic = img != null ? (img.attr("data-src").isEmpty() ? (img.attr("src").isEmpty() ? img.attr("data-original") : img.attr("src")) : img.attr("data-src")) : "";
-                if (pic.startsWith("//")) pic = "https:" + pic;
-                else if (pic.startsWith("/")) pic = siteUrl + pic;
-                else if (!pic.startsWith("http")) pic = siteUrl + pic;
-
+                String pic = getImageUrl(img);
                 String href = a.attr("href");
                 String name = nameEl.text();
                 String remark = remarkEl != null ? remarkEl.text() : "";
@@ -268,5 +253,38 @@ public class HpTv extends Spider {
         } catch (Exception e) {
             return Result.error("播放失败: " + e.getMessage());
         }
+    }
+    
+    /**
+     * 获取图片URL，处理懒加载和各种图片属性
+     */
+    private String getImageUrl(Element img) {
+        if (img == null) return "";
+        
+        // 按优先级尝试获取图片URL
+        String pic = "";
+        
+        // 优先级1: data-lazy-src (某些懒加载场景)
+        if (pic.isEmpty()) pic = img.attr("data-lazy-src");
+        // 优先级2: data-src (常见懒加载属性)
+        if (pic.isEmpty()) pic = img.attr("data-src");
+        // 优先级3: data-original (常见懒加载属性)
+        if (pic.isEmpty()) pic = img.attr("data-original");
+        // 优先级4: data-lazysrc (某些站点的自定义懒加载属性)
+        if (pic.isEmpty()) pic = img.attr("data-lazysrc");
+        // 优先级5: src (正常图片属性)
+        if (pic.isEmpty()) pic = img.attr("src");
+        
+        // 处理相对路径和协议相对路径
+        if (pic.startsWith("//")) {
+            pic = "https:" + pic;
+        } else if (pic.startsWith("/")) {
+            pic = siteUrl + pic;
+        } else if (!pic.isEmpty() && !pic.startsWith("http")) {
+            // 如果是相对路径，则拼接站点URL
+            pic = siteUrl + "/" + pic;
+        }
+        
+        return pic;
     }
 }
