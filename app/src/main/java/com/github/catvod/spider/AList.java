@@ -172,7 +172,7 @@ public class AList extends Spider {
             JSONObject params = new JSONObject();
             params.put("username", drive.getLogin().getUsername());
             params.put("password", drive.getLogin().getPassword());
-            String response = OkHttp.post(drive.loginApi(), params.toString()).getBody();
+            String response = OkHttp.postString(drive.loginApi(), params.toString());
             drive.setToken(new JSONObject(response).getJSONObject("data").getString("token"));
             return true;
         } catch (Exception e) {
