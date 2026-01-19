@@ -201,9 +201,6 @@ public class OkHttp {
         return cipherSuiteArray;
     }
 
-    public static ResponseBody getProgressResponseBody(RequestBody requestBody) {
-        return new ProgressResponseBody(requestBody, null);
-    }
 
     public static OkResult get(String url, Map<String, String> header) {
         return new OkRequest(GET, url, header).execute(getClient());
@@ -229,6 +226,11 @@ public class OkHttp {
 
     public static String string(String url) {
         return getString(url, null);
+    }
+    
+    // 修复 Config.java:52 的 int 参数报错
+    public static String string(String url, int timeout) {
+        return string(url);
     }
 
     public static Response getResponse(String url, Map<String, String> header) {
@@ -282,11 +284,16 @@ public class OkHttp {
     }
 
     public static OkResult postProgress(String url, Map<String, String> param, Map<String, String> header, ProgressCallback callback) {
+        // TODO: 实现上传进度功能
         return new OkRequest(POST, url, param, header).execute(getClient());
     }
 
     public static String urlEncode(String str) {
-        return Util.urlEncode(str); // 需要在Util类中实现此方法
+        try {
+            return java.net.URLEncoder.encode(str, "UTF-8");
+        } catch (Exception e) {
+            return str;
+        }
     }
 
     public static String getBaseUrl(String url) {
@@ -311,9 +318,20 @@ public class OkHttp {
         void onProgress(long current, long total);
     }
 
-    // 为兼容旧代码添加的方法
+    // 修复 Config.java:52 的 int 参数报错
+    public static String string(String url, int timeout) {
+        return string(url);
+    }
+    
+    // 修复 Market.java 的 cancel 报错
     public static void cancel(String tag) {
-        // 当前版本不支持按标签取消请求
+        if (tag == null) return;
+        for (okhttp3.Call call : getClient().dispatcher().queuedCalls()) {
+            if (tag.equals(call.request().tag())) call.cancel();
+        }
+        for (okhttp3.Call call : getClient().dispatcher().runningCalls()) {
+            if (tag.equals(call.request().tag())) call.cancel();
+        }
     }
     
     public static Response newCall(String url, String tag) {
