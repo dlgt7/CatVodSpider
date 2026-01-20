@@ -287,6 +287,11 @@ public class OkHttp {
         // TODO: 实现上传进度功能
         return new OkRequest(POST, url, param, header).execute(getClient());
     }
+    
+    // 添加 encode 方法作为 urlEncode 的别名，解决 DanmakuUtil 的引用问题
+    public static String encode(String str) {
+        return urlEncode(str);
+    }
 
     public static String urlEncode(String str) {
         try {
