@@ -5,12 +5,10 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * 强化版弹幕实体类
- * [实战用法参考]：
- * 1. 自动匹配B站: DanmakuUtil.appendBili(title, duration, list);
- * 2. 多源合并: Result.get().danmaku(DanmakuUtil.merge(list1, list2));
- * * [内容去重建议]:
- * 不建议在此层级下载XML比对。请在播放器端拉取解析后，使用 Map<Long, String> (时间戳->内容MD5) 过滤。
+ * 弹幕实体类 - 最终优化版
+ * [集成建议]:
+ * 1. 自动匹配: DanmakuUtil.appendBili(title, duration, list);
+ * 2. 合并去重: DanmakuUtil.merge(list1, list2);
  */
 public class Danmaku {
     @SerializedName("name") private String name;
@@ -22,53 +20,42 @@ public class Danmaku {
     @SerializedName("priority") private Integer priority = 0;
     @SerializedName("headers") private Map<String, String> headers;
 
-    public Danmaku() {}
+    public static Danmaku create() { return new Danmaku(); }
 
-    public static Danmaku create() {
-        return new Danmaku();
-    }
-
-    // --- 预设工厂方法 (内置Header防止403) ---
+    // --- 预设源工厂 ---
 
     public static Danmaku bilibili(String oid) {
-        return new Danmaku()
-                .name("Bilibili")
-                .source("bilibili")
+        return new Danmaku().name("Bilibili").source("bilibili").priority(10)
                 .url("https://api.bilibili.com/x/v1/dm/list.so?oid=" + oid)
-                .header("Referer", "https://www.bilibili.com/")
-                .header("User-Agent", "Mozilla/5.0")
-                .priority(10);
+                .header("Referer", "https://www.bilibili.com/").header("User-Agent", "Mozilla/5.0");
+    }
+
+    public static Danmaku dandan(String danId) {
+        return new Danmaku().name("弹弹Play").source("dandanplay").priority(8)
+                .url("https://api.dandanplay.net/api/v2/comment/" + danId + "?withRelated=true")
+                .type("json");
     }
 
     // --- 链式配置 ---
-
-    public Danmaku name(String name) { this.name = name; return this; }
-    public Danmaku url(String url) { this.url = url; return this; }
-    public Danmaku source(String source) { this.source = source; return this; }
-    public Danmaku type(String type) { this.type = type; return this; }
-    public Danmaku priority(int priority) { this.priority = priority; return this; }
+    public Danmaku name(String n) { this.name = n; return this; }
+    public Danmaku url(String u) { this.url = u; return this; }
+    public Danmaku source(String s) { this.source = s; return this; }
+    public Danmaku priority(int p) { this.priority = p; return this; }
     public Danmaku header(String k, String v) {
         if (headers == null) headers = new HashMap<>();
         headers.put(k, v);
         return this;
     }
 
-    public boolean isValid() {
-        return url != null && url.startsWith("http") && (enabled == null || enabled);
-    }
-
+    public boolean isValid() { return url != null && url.startsWith("http") && (enabled == null || enabled); }
     public String getUrl() { return url; }
     public int getPriority() { return priority == null ? 0 : priority; }
 
     @Override
     public Danmaku clone() {
         Danmaku copy = new Danmaku();
-        copy.name = name;
-        copy.url = url;
-        copy.source = source;
-        copy.type = type;
-        copy.enabled = enabled;
-        copy.delay = delay;
+        copy.name = name; copy.url = url; copy.source = source;
+        copy.type = type; copy.enabled = enabled; copy.delay = delay;
         copy.priority = priority;
         if (headers != null) copy.headers = new HashMap<>(headers);
         return copy;
