@@ -1,52 +1,35 @@
 package com.github.catvod.bean;
 
-import com.google.gson.Gson;
 import com.google.gson.annotations.SerializedName;
-import com.google.gson.reflect.TypeToken;
-import java.lang.reflect.Type;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 /**
- * 弹幕实体类 - 支持多源集成与智能配置
- * * [实战举例]：
- * 1. 基础用法：
- * Danmaku dm = Danmaku.create().name("官方").url("http://x.com/dm.xml").priority(20);
- * * 2. 多源集成 (在 Spider 的 playerContent 中使用):
- * List<Danmaku> dms = new ArrayList<>();
- * dms.add(Danmaku.create().name("网站原生").url("http://site.com/api").priority(20)); // 高优先级
- * dms.add(Danmaku.bilibili("1234567")); // 自动带上B站Header, 优先级10
- * * // 最后返回结果
- * return Result.get().url(playUrl).danmaku(DanmakuUtil.merge(dms)).string();
+ * 强化版弹幕实体类
+ * [实战用法参考]：
+ * 1. 自动匹配B站: DanmakuUtil.appendBili(title, duration, list);
+ * 2. 多源合并: Result.get().danmaku(DanmakuUtil.merge(list1, list2));
+ * * [内容去重建议]:
+ * 不建议在此层级下载XML比对。请在播放器端拉取解析后，使用 Map<Long, String> (时间戳->内容MD5) 过滤。
  */
 public class Danmaku {
+    @SerializedName("name") private String name;
+    @SerializedName("url") private String url;
+    @SerializedName("source") private String source;
+    @SerializedName("type") private String type = "xml";
+    @SerializedName("enabled") private Boolean enabled = true;
+    @SerializedName("delay") private Integer delay = 0;
+    @SerializedName("priority") private Integer priority = 0;
+    @SerializedName("headers") private Map<String, String> headers;
 
-    @SerializedName("name")
-    private String name;           // 弹幕源名称 (如: B站、A站、官方)
-    @SerializedName("url")
-    private String url;            // 弹幕API接口地址
-    @SerializedName("source")
-    private String source;         // 来源标识
-    @SerializedName("type")
-    private String type = "xml";   // 弹幕格式: xml (默认), json, ass
-    @SerializedName("enabled")
-    private Boolean enabled = true; 
-    @SerializedName("delay")
-    private Integer delay = 0;     // 偏移量(毫秒)
-    @SerializedName("priority")
-    private Integer priority = 0;  // 优先级 (数字越大越靠前)
-    @SerializedName("headers")
-    private Map<String, String> headers; // 请求头 (用于绕过防盗链)
-    @SerializedName("extra")
-    private String extra;          // 扩展信息
+    public Danmaku() {}
 
     public static Danmaku create() {
         return new Danmaku();
     }
 
-    // 快捷创建 B 站弹幕配置
+    // --- 预设工厂方法 (内置Header防止403) ---
+
     public static Danmaku bilibili(String oid) {
         return new Danmaku()
                 .name("Bilibili")
@@ -57,17 +40,16 @@ public class Danmaku {
                 .priority(10);
     }
 
-    // --- 链式调用方法 ---
+    // --- 链式配置 ---
+
     public Danmaku name(String name) { this.name = name; return this; }
     public Danmaku url(String url) { this.url = url; return this; }
     public Danmaku source(String source) { this.source = source; return this; }
     public Danmaku type(String type) { this.type = type; return this; }
     public Danmaku priority(int priority) { this.priority = priority; return this; }
-    public Danmaku enabled(boolean enabled) { this.enabled = enabled; return this; }
-    
-    public Danmaku header(String key, String value) {
-        if (this.headers == null) this.headers = new HashMap<>();
-        this.headers.put(key, value);
+    public Danmaku header(String k, String v) {
+        if (headers == null) headers = new HashMap<>();
+        headers.put(k, v);
         return this;
     }
 
@@ -81,14 +63,14 @@ public class Danmaku {
     @Override
     public Danmaku clone() {
         Danmaku copy = new Danmaku();
-        copy.name = this.name;
-        copy.url = this.url;
-        copy.source = this.source;
-        copy.type = this.type;
-        copy.enabled = this.enabled;
-        copy.delay = this.delay;
-        copy.priority = this.priority;
-        if (this.headers != null) copy.headers = new HashMap<>(this.headers);
+        copy.name = name;
+        copy.url = url;
+        copy.source = source;
+        copy.type = type;
+        copy.enabled = enabled;
+        copy.delay = delay;
+        copy.priority = priority;
+        if (headers != null) copy.headers = new HashMap<>(headers);
         return copy;
     }
 }
