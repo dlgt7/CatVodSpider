@@ -21,6 +21,12 @@ public class Danmaku {
     @SerializedName("headers") private Map<String, String> headers;
 
     public static Danmaku create() { return new Danmaku(); }
+    
+    // 添加缺失的方法
+    public Danmaku type(String t) {
+        this.type = t;
+        return this;
+    }
 
     // --- 预设源工厂 ---
 
@@ -28,6 +34,11 @@ public class Danmaku {
         return new Danmaku().name("Bilibili").source("bilibili").priority(10)
                 .url("https://api.bilibili.com/x/v1/dm/list.so?oid=" + oid)
                 .header("Referer", "https://www.bilibili.com/").header("User-Agent", "Mozilla/5.0");
+    }
+
+    // 添加缺失的 createBilibiliDanmaku 方法，以兼容 DanmakuUtil.java
+    public static Danmaku createBilibiliDanmaku(String oid) {
+        return bilibili(oid);
     }
 
     public static Danmaku dandan(String danId) {
