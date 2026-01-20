@@ -25,12 +25,12 @@ public class DanmakuUtil {
         String cachedCid = SEARCH_CACHE.get(cacheKey);
         
         if (cachedCid != null) {
-            list.add(Danmaku.bilibili(cachedCid).name("B站(Cache)"));
+            list.add(Danmaku.createBilibiliDanmaku(cachedCid).name("B站(Cache)"));
             return;
         }
 
         try {
-            String searchUrl = "https://api.bilibili.com/x/web-interface/search/type?search_type=video&keyword=" + OkHttp.encode(keyword);
+            String searchUrl = "https://api.bilibili.com/x/web-interface/search/type?search_type=video&keyword=" + OkHttp.urlEncode(keyword);
             OkResult searchRes = OkHttp.get(searchUrl, getBiliHeaders());
             JsonObject json = JsonParser.parseString(searchRes.getBody()).getAsJsonObject();
             if (json.get("code").getAsInt() != 0) return;
@@ -74,7 +74,7 @@ public class DanmakuUtil {
                 if (cidJson.get("code").getAsInt() == 0) {
                     String cid = cidJson.getAsJsonArray("data").get(0).getAsJsonObject().get("cid").getAsString();
                     SEARCH_CACHE.put(cacheKey, cid);
-                    list.add(Danmaku.bilibili(cid).name("B站:" + bestMatch.get("title").getAsString().replaceAll("<em.*?/em>", "")));
+                    list.add(Danmaku.createBilibiliDanmaku(cid).name("B站:" + bestMatch.get("title").getAsString().replaceAll("<em.*?/em>", "")));
                 }
             }
         } catch (Exception e) {
