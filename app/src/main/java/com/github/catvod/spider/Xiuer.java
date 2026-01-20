@@ -5,6 +5,7 @@ import com.github.catvod.bean.Danmaku;
 import com.github.catvod.bean.Result;
 import com.github.catvod.bean.Vod;
 import com.github.catvod.crawler.Spider;
+import com.github.catvod.crawler.SpiderDebug;
 import com.github.catvod.net.OkHttp;
 import com.github.catvod.utils.DanmakuUtil;
 import org.jsoup.Jsoup;
@@ -93,12 +94,9 @@ public class Xiuer extends Spider {
         
         // 尝试获取视频时长
         String durationStr = getInfoByIndex(infoItems, 2); // 假设时长在第三个位置
+        Long durationSeconds = null;
         if (durationStr != null && !durationStr.isEmpty()) {
-            Integer durationSeconds = parseDurationToSeconds(durationStr);
-            if (durationSeconds != null) {
-                // 将时长信息存储到vod的扩展信息中，方便后续播放时使用
-                vod.setVodTag("duration:" + durationSeconds); // 使用tag字段临时存储时长信息
-            }
+            durationSeconds = parseDurationToSeconds(durationStr);
         }
 
         // 播放列表解析
@@ -115,8 +113,18 @@ public class Xiuer extends Spider {
             Elements links = lists.get(i).select("a[href*=/play/]");
             List<String> vodItems = new ArrayList<>();
             for (Element link : links) {
-                // 将视频标题和URL结合，以便播放时获取标题
-                vodItems.add(link.text() + "$" + link.attr("href") + "#" + vod.getVodName());
+                // 改进ID拼接格式：将剧集标题、URL和总标题及可能的时长信息都包含进去
+                String episodeTitle = link.text(); // 如 "第1集" 或 "HD中字"
+                String episodeUrl = link.attr("href");
+                String seriesTitle = vod.getVodName(); // 如 "凡人修仙传"
+                
+                // 组合格式: "集数标题$播放URL#系列标题#时长秒数"
+                String combinedId = episodeTitle + "$" + episodeUrl + "#" + seriesTitle;
+                if (durationSeconds != null) {
+                    combinedId += "#" + durationSeconds;
+                }
+                
+                vodItems.add(combinedId);
             }
             if (!vodItems.isEmpty()) {
                 fromList.add(tabName);
@@ -139,139 +147,78 @@ public class Xiuer extends Spider {
 
     @Override
     public String playerContent(String flag, String id, List<String> vipFlags) throws Exception {
-        // 解析id参数，可能包含视频标题信息（格式：title#url 或 name$url#title）
+        // 改进ID解析逻辑，支持多段格式：episodeTitle$url#seriesTitle#durationSeconds
         String[] parts = id.split("#");
-        String videoTitle = "";
-        String videoUrl = id;
+        String episodeTitle = "";
+        String url = id; // 默认使用整个id作为url
+        String seriesTitle = "";
+        long durationSeconds = 0;
         
-        if (parts.length >= 2) {
-            // 如果id格式为 "name$url#title"，则第一部分是 name$url，第二部分是标题
+        if (parts.length >= 1) {
+            // 解析 "集数标题$播放URL" 部分
             String[] nameUrlParts = parts[0].split("\\$");
             if (nameUrlParts.length >= 2) {
-                videoUrl = nameUrlParts[1]; // 获取URL部分
-                videoTitle = parts[1]; // 获取标题
+                episodeTitle = nameUrlParts[0]; // 如 "第1集"
+                url = nameUrlParts[1]; // 播放URL
             } else {
-                // 如果是 "title#url" 格式
-                videoTitle = parts[0];
-                videoUrl = parts[1];
-            }
-        } else {
-            // 如果只有URL，尝试从URL中提取标题
-            String[] nameUrlParts = id.split("\\$");
-            if (nameUrlParts.length >= 2) {
-                videoTitle = nameUrlParts[0];
-                videoUrl = nameUrlParts[1];
-            } else {
-                videoUrl = id.startsWith("http") ? id : siteUrl + id;
-                // 尝试从详情页获取标题
-                videoTitle = extractTitleFromUrl(videoUrl);
+                url = nameUrlParts[0];
             }
         }
+        
+        if (parts.length >= 2) {
+            seriesTitle = parts[1]; // 系列标题，如 "凡人修仙传"
+        }
+        
+        if (parts.length >= 3) {
+            try {
+                durationSeconds = Long.parseLong(parts[2]); // 时长（秒）
+            } catch (NumberFormatException e) {
+                durationSeconds = 0;
+            }
+        }
+        
+        // 构建搜索标题：将系列标题和集数标题结合起来，提高匹配精度
+        String searchTitle = seriesTitle;
+        if (!episodeTitle.isEmpty() && !episodeTitle.equals(seriesTitle)) {
+            searchTitle = seriesTitle + " " + episodeTitle; // 如 "凡人修仙传 第1集"
+        }
 
-        // 构建播放结果
-        Result result = Result.get()
-                .url(videoUrl)
-                .parse()
-                .header(getHeader());
-        
-        // 尝试获取视频时长信息（如果有的话）
-        Integer durationSeconds = getDurationFromId(id);
-        
-        // 获取弹幕列表
-        List<Danmaku> danmakus = new ArrayList<>();
+        // 使用新版 DanmakuUtil 接口
+        List<Danmaku> dms = new ArrayList<>();
         try {
-            // 1. 获取站点原生弹幕（如果存在）
-            List<Danmaku> nativeDanmakus = getNativeDanmakus(id, videoTitle);
-            danmakus.addAll(nativeDanmakus);
-            
-            // 2. 获取B站等第三方弹幕，传入时长参数以提高匹配精度
-            List<Danmaku> externalDanmakus = DanmakuUtil.getDanmakuList(
-                id,                    // 视频ID
-                videoTitle,            // 视频标题
-                siteKey,              // 站点标识
-                siteUrl,              // 站点URL
-                new HashMap<>()       // 额外参数
-            );
-            
-            // 过滤有效弹幕
-            externalDanmakus = DanmakuUtil.filterValidDanmakus(externalDanmakus);
-            danmakus.addAll(externalDanmakus);
-            
-        } catch (Exception e) {
-            // 即使弹幕获取失败也不影响视频播放
-            System.err.println("弹幕加载失败: " + e.getMessage());
-        }
-        
-        // 如果有弹幕则添加到结果中
-        if (!danmakus.isEmpty()) {
-            result.danmaku(danmakus);
-        }
-        
-        return result.string();
-    }
-
-    /**
-     * 获取站点原生弹幕
-     */
-    private List<Danmaku> getNativeDanmakus(String id, String title) {
-        List<Danmaku> danmakus = new ArrayList<>();
-        // 检查是否存在原生弹幕API，这里只是一个示例
-        // 实际需要根据秀儿影视的具体API来实现
-        /*
-        String nativeDanmakuUrl = siteUrl + "/api/danmaku?id=" + extractVideoId(id);
-        if (!nativeDanmakuUrl.isEmpty()) {
-            danmakus.add(Danmaku.create()
-                    .name("原生弹幕")
-                    .url(nativeDanmakuUrl)
+            // 1. 尝试添加原生弹幕源（如果存在的话）
+            // 注意：这里只是示例，实际环境中需要确认秀儿是否有弹幕接口
+            /*
+            dms.add(Danmaku.create()
+                    .name("秀儿原生")
+                    .url(siteUrl + "/api/dm?id=" + url)
                     .source(siteKey)
-                    .type("xml")
-                    .priority(2)); // 原生弹幕优先级较高
+                    .priority(20));
+            */
+            
+            // 2. 自动匹配 B 站弹幕 (使用重构后的新方法)
+            // 传入改进后的标题和实际时长（秒转换为毫秒），dms 列表会被自动填充
+            DanmakuUtil.appendBili(searchTitle, durationSeconds * 1000, dms); // 转换为毫秒
+            
+        } catch (Exception e) {
+            SpiderDebug.log(e);
         }
-        */
-        return danmakus;
+
+        // 3. 合并、去重并排序 (使用重构后的新方法)
+        List<Danmaku> finalDms = DanmakuUtil.merge(dms);
+
+        return Result.get()
+                .url(url.startsWith("http") ? url : siteUrl + url)
+                .parse()
+                .danmaku(finalDms)
+                .header(getHeader())
+                .string();
     }
 
-    /**
-     * 从URL中提取视频标题
-     */
-    private String extractTitleFromUrl(String url) {
-        try {
-            if (url.contains("/play/")) {
-                // 从播放页获取标题
-                String playPageHtml = OkHttp.string(url.startsWith("http") ? url : siteUrl + url, getHeader());
-                Document doc = Jsoup.parse(playPageHtml);
-                
-                // 尝试从播放页面获取标题
-                Element titleElement = doc.selectFirst("title, h1, .video-title, .player-title");
-                if (titleElement != null) {
-                    String title = titleElement.text().trim();
-                    // 清理标题，移除网站名称等无关信息
-                    return cleanVideoTitle(title);
-                }
-            }
-        } catch (Exception e) {
-            System.err.println("从URL提取标题失败: " + e.getMessage());
-        }
-        return "";
-    }
-    
-    /**
-     * 从ID中尝试提取时长信息
-     */
-    private Integer getDurationFromId(String id) {
-        try {
-            // 这里可以尝试从URL或其它地方解析时长信息
-            // 暂时返回null，实际实现需要根据具体站点结构来定
-            return null;
-        } catch (Exception e) {
-            return null;
-        }
-    }
-    
     /**
      * 解析持续时间字符串为秒数
      */
-    private Integer parseDurationToSeconds(String durationStr) {
+    private Long parseDurationToSeconds(String durationStr) {
         if (durationStr == null || durationStr.isEmpty()) {
             return null;
         }
@@ -296,7 +243,7 @@ public class Xiuer extends Spider {
                     minutes = Integer.parseInt(matcher.group(4));
                 }
                 
-                return hours * 3600 + minutes * 60;
+                return (long) (hours * 3600 + minutes * 60);
             }
             
             // 尝试匹配纯数字分钟
@@ -306,9 +253,9 @@ public class Xiuer extends Spider {
                 int minutes = Integer.parseInt(numMatcher.group(1));
                 // 假设如果没有单位，默认是分钟
                 if (minutes < 600) { // 如果小于600，认为是分钟
-                    return minutes * 60;
+                    return (long) (minutes * 60);
                 } else {
-                    return minutes; // 否则是秒
+                    return (long) minutes; // 否则是秒
                 }
             }
         } catch (Exception e) {
@@ -316,59 +263,6 @@ public class Xiuer extends Spider {
         }
         
         return null;
-    }
-
-    /**
-     * 从详情页面获取视频标题
-     * @param id 视频ID（播放页面的URL）
-     * @return 视频标题
-     */
-    private String getVideoTitleFromDetailPage(String id) {
-        try {
-            // 如果id是播放页面URL，需要先跳转到详情页面获取标题
-            // 这里假设播放页面URL格式是 /play/...，详情页面URL格式是 /detail/...
-            String detailUrl = id;
-            if (id.contains("/play/")) {
-                // 从播放URL推断详情URL（这取决于站点的实际URL结构）
-                // 这里提供一个通用方法，尝试从播放页面解析标题
-                String playPageHtml = OkHttp.string(detailUrl.startsWith("http") ? detailUrl : siteUrl + detailUrl, getHeader());
-                Document doc = Jsoup.parse(playPageHtml);
-                
-                // 尝试从播放页面获取标题
-                Element titleElement = doc.selectFirst("title, h1, .video-title");
-                if (titleElement != null) {
-                    String title = titleElement.text().trim();
-                    // 清理标题，移除网站名称等无关信息
-                    return cleanVideoTitle(title);
-                }
-            }
-            
-            // 如果无法从播放页面获取，尝试其他方法
-            return "";
-        } catch (Exception e) {
-            e.printStackTrace();
-            return "";
-        }
-    }
-    
-    /**
-     * 清理视频标题
-     * @param title 原始标题
-     * @return 清理后的标题
-     */
-    private String cleanVideoTitle(String title) {
-        if (title == null) return "";
-        
-        // 移除常见的后缀
-        title = title.replaceAll("-\\s*秀儿影视", "")
-                    .replaceAll("-\\s*在线观看", "")
-                    .replaceAll("\\|.*$", "")  // 移除 | 之后的内容
-                    .replaceAll("秀儿影视.*$", "")  // 移除秀儿影视之后的内容
-                    .replaceAll("\\(.*?\\)", "")  // 移除括号内容
-                    .replaceAll("【.*?】", "")     // 移除方括号内容
-                    .trim();
-        
-        return title;
     }
 
     /**
