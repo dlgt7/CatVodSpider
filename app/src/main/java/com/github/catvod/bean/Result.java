@@ -51,6 +51,8 @@ public class Result {
     @SerializedName("total")
     private Integer total;
 
+    // --- 静态构造方法 ---
+
     public static Result objectFrom(String str) {
         return new Gson().fromJson(str, Result.class);
     }
@@ -83,6 +85,7 @@ public class Result {
         return Result.get().classes(classes).vod(list).string();
     }
 
+    @SuppressWarnings("unchecked")
     public static String string(List<?> list) {
         if (list == null || list.isEmpty()) return "";
         if (list.get(0) instanceof Vod) return Result.get().vod((List<Vod>) list).string();
@@ -105,6 +108,8 @@ public class Result {
     public static Result get() {
         return new Result();
     }
+
+    // --- 链式调用方法 ---
 
     public Result classes(List<Class> classes) {
         this.classes = classes;
@@ -141,7 +146,7 @@ public class Result {
     }
 
     public Result header(Map<String, String> header) {
-        if (header.isEmpty()) return this;
+        if (header == null || header.isEmpty()) return this;
         this.header = new Gson().toJson(header);
         return this;
     }
