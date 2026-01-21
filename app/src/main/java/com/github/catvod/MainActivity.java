@@ -6,7 +6,6 @@ import android.os.Bundle;
 import com.github.catvod.crawler.Spider;
 import com.github.catvod.databinding.ActivityMainBinding;
 import com.github.catvod.spider.Init;
-import com.github.catvod.spider.PTT;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonParser;
@@ -33,10 +32,23 @@ public class MainActivity extends Activity {
         gson = new GsonBuilder().setPrettyPrinting().create();
         Logger.addLogAdapter(new AndroidLogAdapter());
         executor = Executors.newCachedThreadPool();
+        
+        // 动态加载爬虫类，避免因删除 PTT.java 导致的编译错误
+        initSpiderInstance();
+
         executor.execute(this::initSpider);
-        spider = new PTT();
         initView();
         initEvent();
+    }
+
+    private void initSpiderInstance() {
+        try {
+            // 你可以将下面的字符串替换为你项目中现有的任何爬虫类名，例如 "com.github.catvod.spider.Douban"
+            String className = "com.github.catvod.spider.Douban"; 
+            this.spider = (Spider) Class.forName(className).getDeclaredConstructor().newInstance();
+        } catch (Throwable e) {
+            Logger.e("未能加载指定的爬虫类，请检查类名是否正确");
+        }
     }
 
     private void initView() {
@@ -57,17 +69,24 @@ public class MainActivity extends Activity {
 
     private void initSpider() {
         try {
-            Init.init(getApplicationContext());
-            spider.init(this, "");
+            if (spider != null) {
+                Init.init(getApplicationContext());
+                spider.init(this, "");
+            }
         } catch (Throwable e) {
             e.printStackTrace();
         }
     }
 
+    private void updateUI(String result) {
+        Init.post(() -> binding.result.setText(result));
+    }
+
     public void homeContent() {
         try {
+            if (spider == null) return;
             String result = gson.toJson(JsonParser.parseString(spider.homeContent(true)));
-            Init.post(() -> binding.result.setText(result));
+            updateUI(result);
         } catch (Throwable e) {
             e.printStackTrace();
         }
@@ -75,8 +94,9 @@ public class MainActivity extends Activity {
 
     public void homeVideoContent() {
         try {
+            if (spider == null) return;
             String result = gson.toJson(JsonParser.parseString(spider.homeVideoContent()));
-            Init.post(() -> binding.result.setText(result));
+            updateUI(result);
         } catch (Throwable e) {
             e.printStackTrace();
         }
@@ -84,11 +104,12 @@ public class MainActivity extends Activity {
 
     public void categoryContent() {
         try {
+            if (spider == null) return;
             HashMap<String, String> extend = new HashMap<>();
             extend.put("c", "19");
             extend.put("year", "2024");
             String result = gson.toJson(JsonParser.parseString(spider.categoryContent("3", "2", true, extend)));
-            Init.post(() -> binding.result.setText(result));
+            updateUI(result);
         } catch (Throwable e) {
             e.printStackTrace();
         }
@@ -96,8 +117,9 @@ public class MainActivity extends Activity {
 
     public void detailContent() {
         try {
+            if (spider == null) return;
             String result = gson.toJson(JsonParser.parseString(spider.detailContent(List.of("78702"))));
-            Init.post(() -> binding.result.setText(result));
+            updateUI(result);
         } catch (Throwable e) {
             e.printStackTrace();
         }
@@ -105,8 +127,9 @@ public class MainActivity extends Activity {
 
     public void playerContent() {
         try {
+            if (spider == null) return;
             String result = gson.toJson(JsonParser.parseString(spider.playerContent("", "382044/1/78", new ArrayList<>())));
-            Init.post(() -> binding.result.setText(result));
+            updateUI(result);
         } catch (Throwable e) {
             e.printStackTrace();
         }
@@ -114,8 +137,9 @@ public class MainActivity extends Activity {
 
     public void searchContent() {
         try {
+            if (spider == null) return;
             String result = gson.toJson(JsonParser.parseString(spider.searchContent("我的人间烟火", false)));
-            Init.post(() -> binding.result.setText(result));
+            updateUI(result);
         } catch (Throwable e) {
             e.printStackTrace();
         }
@@ -123,8 +147,9 @@ public class MainActivity extends Activity {
 
     public void liveContent() {
         try {
+            if (spider == null) return;
             String result = gson.toJson(JsonParser.parseString(spider.liveContent("")));
-            Init.post(() -> binding.result.setText(result));
+            updateUI(result);
         } catch (Throwable e) {
             e.printStackTrace();
         }
@@ -132,8 +157,9 @@ public class MainActivity extends Activity {
 
     public void proxy() {
         try {
+            if (spider == null) return;
             Map<String, String> params = new HashMap<>();
-            Logger.t("liveContent").d(spider.proxy(params));
+            Logger.t("proxy").d(spider.proxy(params));
         } catch (Throwable e) {
             e.printStackTrace();
         }
