@@ -4,41 +4,44 @@ import android.util.Log;
 
 /**
  * 调试日志工具类
- * 修复：支持自动定位调用位置、严格过滤空白字符、提供多级别日志
+ * - 优化：支持调用位置追踪、多级别记录及严格字符串过滤
  */
 public class SpiderDebug {
 
     private static final String TAG = "SpiderDebug";
 
     /**
-     * 自动获取调用者的堆栈信息 (类名:行号)
+     * 获取调用者的类名、方法名及行号
      */
-    private static String getCallInfo() {
+    private static String getCallLocation() {
         StackTraceElement[] stackTrace = Thread.currentThread().getStackTrace();
         if (stackTrace.length > 4) {
-            StackTraceElement element = stackTrace[4];
-            return "[" + element.getFileName() + ":" + element.getLineNumber() + "] ";
+            StackTraceElement e = stackTrace[4];
+            return String.format("[%s:%d] ", e.getFileName(), e.getLineNumber());
         }
         return "";
     }
 
+    private static String format(String msg) {
+        return "[Thread-" + Thread.currentThread().getId() + "] " + getCallLocation() + msg;
+    }
+
     public static void log(Throwable e) {
         if (e == null) return;
-        Log.e(TAG, "[Thread-" + Thread.currentThread().getId() + "] " + getCallInfo(), e);
+        Log.e(TAG, format("Exception: " + e.getMessage()), e);
     }
 
     public static void log(String msg) {
         if (msg == null || msg.trim().isEmpty()) return;
-        Log.d(TAG, "[Thread-" + Thread.currentThread().getId() + "] " + getCallInfo() + msg);
+        Log.d(TAG, format(msg));
     }
 
     public static void info(String msg) {
         if (msg == null || msg.trim().isEmpty()) return;
-        Log.i(TAG, "[Thread-" + Thread.currentThread().getId() + "] " + getCallInfo() + msg);
+        Log.i(TAG, format(msg));
     }
 
-    public static void error(String msg) {
-        if (msg == null || msg.trim().isEmpty()) return;
-        Log.e(TAG, "[Thread-" + Thread.currentThread().getId() + "] " + getCallInfo() + msg);
+    public static void error(String msg, Throwable e) {
+        Log.e(TAG, format(msg), e);
     }
 }
