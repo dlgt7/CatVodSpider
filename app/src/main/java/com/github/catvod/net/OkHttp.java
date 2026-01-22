@@ -21,7 +21,7 @@ import okhttp3.Response;
 
 public class OkHttp {
 
-    private static final long DEFAULT_TIMEOUT = 15000; // 15s
+    private static final long DEFAULT_TIMEOUT = 15000; // 默认 15 秒
     public static final String POST = "POST";
     public static final String GET = "GET";
 
@@ -36,23 +36,42 @@ public class OkHttp {
         return Loader.INSTANCE;
     }
 
+    /**
+     * 获取全局通用的 OkHttpClient
+     */
     public static OkHttpClient client() {
         if (get().client == null) {
             synchronized (OkHttp.class) {
                 if (get().client == null) {
-                    get().client = build(true); // 默认忽略 SSL 以兼容老旧站点
+                    // 爬虫场景通常需要忽略 SSL 以兼容老旧站点，但请注意安全风险
+                    get().client = build(true); 
                 }
             }
         }
         return get().client;
     }
 
+    /**
+     * 性能优化：缓存禁用重定向的 Client 实例
+     */
+    private OkHttpClient getNoRedirectClient() {
+        if (noRedirectClient == null) {
+            noRedirectClient = client().newBuilder()
+                    .followRedirects(false)
+                    .followSslRedirects(false)
+                    .build();
+        }
+        return noRedirectClient;
+    }
+
     private static OkHttpClient build(boolean ignoreSSL) {
         try {
-            // 尝试获取 Spider 框架 client
+            // 尝试获取框架注入的 Client
             OkHttpClient spiderClient = Spider.client();
             if (spiderClient != null) return spiderClient;
-        } catch (Throwable ignored) {}
+        } catch (Throwable e) {
+            SpiderDebug.log(e);
+        }
 
         OkHttpClient.Builder builder = new OkHttpClient.Builder()
                 .dns(safeDns())
@@ -62,21 +81,12 @@ public class OkHttp {
                 .retryOnConnectionFailure(true)
                 .followRedirects(true);
 
+        // 如果开启忽略 SSL 验证 (警告：容易遭受中间人攻击)
         if (ignoreSSL) {
             builder.hostnameVerifier((hostname, session) -> true)
                    .sslSocketFactory(getSSLContext().getSocketFactory(), trustAllCertificates());
         }
         return builder.build();
-    }
-
-    private OkHttpClient getNoRedirectClient() {
-        if (noRedirectClient == null) {
-            noRedirectClient = client().newBuilder()
-                    .followRedirects(false)
-                    .followSslRedirects(false)
-                    .build();
-        }
-        return noRedirectClient;
     }
 
     // --- 静态调用接口 ---
@@ -124,7 +134,8 @@ public class OkHttp {
 
     private static Dns safeDns() {
         try {
-            return Spider.safeDns() != null ? Spider.safeDns() : Dns.SYSTEM;
+            Dns spiderDns = Spider.safeDns();
+            return spiderDns != null ? spiderDns : Dns.SYSTEM;
         } catch (Throwable e) {
             return Dns.SYSTEM;
         }
