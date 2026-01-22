@@ -14,9 +14,6 @@ import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/**
- * 终极 JS 爬虫引擎：整合 Hiker 语法兼容、LRU 文档缓存、增强型网络请求
- */
 public class JsSpiderEngine {
 
     private final QuickJSContext ctx;
@@ -25,7 +22,6 @@ public class JsSpiderEngine {
     private final Pattern JOIN_URL = Pattern.compile("(url|src|href|-original|-src|-play|-url|style)$|^(data-|url-|src-)", Pattern.MULTILINE | Pattern.CASE_INSENSITIVE);
     private final Pattern SPEC_URL = Pattern.compile("^(ftp|magnet|thunder|ws):", Pattern.MULTILINE | Pattern.CASE_INSENSITIVE);
 
-    // LRU 缓存：保持最近 10 个解析过的 Document 对象，防止频繁解析导致 CPU/内存飙升
     private final Map<Integer, Document> docCache = new LinkedHashMap<Integer, Document>(16, 0.75f, true) {
         @Override protected boolean removeEldestEntry(Map.Entry eldest) { return size() > 10; }
     };
@@ -36,15 +32,12 @@ public class JsSpiderEngine {
     }
 
     private void registerFunctions() {
-        // 绑定全局函数到 JS 环境
         ctx.getGlobalObject().setProperty("pdfh", args -> safeCall(() -> pdfh(args[0].toString(), args[1].toString())));
         ctx.getGlobalObject().setProperty("pdfa", args -> safeCall(() -> pdfa(args[0].toString(), args[1].toString())));
         ctx.getGlobalObject().setProperty("pd",   args -> safeCall(() -> pd(args[0].toString(), args[1].toString(), args.length > 2 ? args[2].toString() : "")));
         ctx.getGlobalObject().setProperty("pdfl", args -> safeCall(() -> pdfl(args[0].toString(), args[1].toString(), args[2].toString(), args[3].toString(), args.length > 4 ? args[4].toString() : "")));
         ctx.getGlobalObject().setProperty("request", args -> safeCall(() -> request(args)));
     }
-
-    // --- JS 接口的具体 Java 实现 ---
 
     private String pdfh(String html, String rule) {
         return parseDomForUrl(html, rule, "");
@@ -68,8 +61,6 @@ public class JsSpiderEngine {
         return array;
     }
 
-    // --- 核心解析引擎 (兼容 Hiker 语法) ---
-
     private String parseDomForUrl(String html, String rule, String baseUrl) {
         Document doc = getCachedDoc(html);
         if (rule.equalsIgnoreCase("body&&Text") || rule.equalsIgnoreCase("Text")) return doc.text();
@@ -82,16 +73,13 @@ public class JsSpiderEngine {
             rule = rule.substring(0, lastIndex);
         }
 
-        // 核心转换：将 Hiker 简写语法转为标准的 JSoup 选择器串联
         rule = parseHikerToJq(rule, true);
         Elements elements = selectElements(doc, rule);
-        
         if (elements.isEmpty()) return "";
         if (option.isEmpty()) return elements.outerHtml();
         if (option.equalsIgnoreCase("Text")) return elements.text().trim();
         if (option.equalsIgnoreCase("Html")) return elements.html();
 
-        // 提取属性并处理相对 URL
         String result = "";
         for (String opt : option.split("\\|\\|")) {
             result = elements.attr(opt);
@@ -128,8 +116,6 @@ public class JsSpiderEngine {
         return items;
     }
 
-    // --- 逻辑支撑工具 ---
-
     private String parseHikerToJq(String parse, boolean first) {
         String[] parses = parse.split("&&");
         List<String> items = new ArrayList<>();
@@ -138,7 +124,6 @@ public class JsSpiderEngine {
             if (NO_ADD.matcher(str).find()) {
                 items.add(str);
             } else {
-                // 如果是第一级或强制单选，补全 :eq(0)
                 if (!first && i >= parses.length - 1) items.add(str);
                 else items.add(str + ":eq(0)");
             }
@@ -151,13 +136,10 @@ public class JsSpiderEngine {
         for (String part : rule.split(" ")) {
             String cleanRule = part;
             int index = 0;
-            // 处理索引选择器 :eq(n)
             if (part.contains(":eq(")) {
                 cleanRule = part.substring(0, part.indexOf(":eq("));
                 index = Integer.parseInt(part.substring(part.indexOf("(") + 1, part.indexOf(")")));
             }
-            
-            // 处理排除逻辑 (-- 语法)
             String selectRule = cleanRule;
             List<String> excludes = new ArrayList<>();
             if (cleanRule.contains("--")) {
@@ -165,10 +147,7 @@ public class JsSpiderEngine {
                 selectRule = split[0];
                 excludes.addAll(Arrays.asList(split).subList(1, split.length));
             }
-
-            elements = (elements.isEmpty() || elements.size() == 0 && elements.get(0) instanceof Document) 
-                       ? doc.select(selectRule) : elements.select(selectRule);
-
+            elements = (elements.isEmpty()) ? doc.select(selectRule) : elements.select(selectRule);
             if (part.contains(":eq(")) {
                 int realIdx = index < 0 ? elements.size() + index : index;
                 elements = (realIdx >= 0 && realIdx < elements.size()) ? new Elements(elements.get(realIdx)) : new Elements();
@@ -186,10 +165,19 @@ public class JsSpiderEngine {
 
         if (args.length > 1 && args[1] instanceof JSObject) {
             JSObject opt = (JSObject) args[1];
-            method = opt.getProperty("method").toString().toUpperCase();
-            Object bodyObj = opt.getProperty("body");
-            if (bodyObj != null) body = bodyObj.toString();
-            // 提示：Header 的遍历取决于 QuickJS Wrapper 是否支持 getKeys()
+            Object m = opt.getProperty("method");
+            if (m != null) method = m.toString().toUpperCase();
+            Object b = opt.getProperty("body");
+            if (b != null) body = b.toString();
+            
+            JSObject jsHeaders = (JSObject) opt.getProperty("headers");
+            if (jsHeaders != null) {
+                JSArray keys = jsHeaders.getNames();
+                for (int i = 0; i < keys.length(); i++) {
+                    String key = keys.get(i).toString();
+                    headers.put(key, jsHeaders.getProperty(key).toString());
+                }
+            }
         }
         return OkHttpUtil.execute(url, method, headers, body);
     }
