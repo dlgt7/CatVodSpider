@@ -2,6 +2,7 @@ package com.github.catvod.spider;
 
 import com.github.catvod.net.OkHttp;
 import com.github.catvod.crawler.SpiderDebug;
+import android.util.Log;
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
@@ -10,6 +11,15 @@ public class Proxy {
 
     private static volatile int port = -1;
     private static volatile String host = "http://127.0.0.1";
+    private static volatile String baseUrlPrefix = null;
+
+    private static void log(Object msg) {
+        try {
+            SpiderDebug.log(msg.toString());
+        } catch (Throwable ignored) {
+            Log.d("Proxy", msg.toString()); // 极简壳子 fallback
+        }
+    }
 
     public static Object[] proxy(Map<String, String> params) {
         try {
@@ -18,7 +28,7 @@ public class Proxy {
                     new ByteArrayInputStream("ok".getBytes(StandardCharsets.UTF_8))};
             }
         } catch (Exception e) {
-            SpiderDebug.log(e);
+            log(e);
         }
         return null;
     }
@@ -26,14 +36,14 @@ public class Proxy {
     public static void init() {
         if (port > 0) return;
         
-        // 1. 扩充 2025 常见类名路径
+        // 2026 高频变体路径补全
         String[] possibleClasses = {
-            "com.github.catvod.Proxy",
-            "com.github.catvod.ProxyServer",
-            "com.catvod.Proxy",
-            "com.fongmi.android.tv.utils.Proxy", 
-            "tv.fongmi.android.Proxy",
-            "com.github.catvod.server.Proxy"
+            "com.fongmi.android.tv.utils.Proxy", // FongMi 最新版
+            "com.github.catvod.Proxy",           // 经典 TVBox
+            "com.github.catvod.ProxyServer",     // 改版分支
+            "tv.fongmi.android.Proxy",           // 某些特定分支
+            "com.github.catvod.server.Proxy",    // Server 独立版
+            "com.catvod.Proxy"
         };
 
         for (String clzName : possibleClasses) {
@@ -41,20 +51,23 @@ public class Proxy {
                 Class<?> clz = Class.forName(clzName);
                 port = (int) clz.getMethod("getPort").invoke(null);
                 if (port > 0) {
-                    checkHost(); // 确定端口后，探测是 IPv4 还是 IPv6
-                    SpiderDebug.log("识别代理: " + host + ":" + port + " (" + clzName + ")");
+                    checkHost(); // 验证是 127.0.0.1 还是 [::1]
+                    log("已通过反射识别代理: " + getBasePrefix() + " (" + clzName + ")");
                     return;
                 }
             } catch (Throwable ignored) {}
         }
 
-        // 2. 如果反射失败，启动快速探测
         findPort();
     }
 
-    /**
-     * 探测当前环境支持的 Loopback 地址 (IPv4 vs IPv6)
-     */
+    private static String getBasePrefix() {
+        if (baseUrlPrefix != null) return baseUrlPrefix;
+        if (port <= 0) return null;
+        baseUrlPrefix = host + ":" + port;
+        return baseUrlPrefix;
+    }
+
     private static void checkHost() {
         String[] hosts = {"http://127.0.0.1", "http://[::1]"};
         for (String h : hosts) {
@@ -69,26 +82,30 @@ public class Proxy {
     }
 
     public static String getUrl(String siteKey, String param) {
-        if (port <= 0) {
-            init();
-            if (port <= 0) return null; // 兜底：返回 null 防止上游拼接错误 URL
+        if (port <= 0) init();
+        String prefix = getBasePrefix();
+        if (prefix == null) {
+            log("警告：代理端口不可用，无法生成链接");
+            return null; 
         }
         String connector = (param == null || param.isEmpty() || param.startsWith("?") || param.startsWith("&")) ? "" : "?";
-        return host + ":" + port + "/proxy?do=csp&siteKey=" + siteKey + connector + (param != null ? param : "");
+        return prefix + "/proxy?do=csp&siteKey=" + siteKey + connector + (param != null ? param : "");
     }
 
     public static String getUrl() {
-        return port > 0 ? host + ":" + port + "/proxy" : null;
+        if (port <= 0) init();
+        String prefix = getBasePrefix();
+        return prefix != null ? prefix + "/proxy" : null;
+    }
+
+    public static int getPort() {
+        return port;
     }
 
     private static void findPort() {
-        // 优先探测已知壳子的默认端口，加快启动速度
-        int[] commonPorts = {9978, 8964, 10001, 19964};
+        // 9978 优先级最高 (FongMi 2025-2026 默认端口)
+        int[] commonPorts = {9978, 8964, 10001, 19964, 18964};
         for (int p : commonPorts) {
-            if (tryPort(p)) return;
-        }
-        // 范围扫描 (缩小范围至 100 个常用端口)
-        for (int p = 8964; p < 9064; p++) {
             if (tryPort(p)) return;
         }
     }
