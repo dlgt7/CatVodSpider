@@ -1,86 +1,220 @@
 package com.github.catvod.utils;
 
 import android.text.TextUtils;
+
 import androidx.annotation.Nullable;
-import java.net.URI;
 
 /**
- * 整合版 URI 工具类
- * 包含高效的索引计算逻辑与可靠的相对路径解析
+ * Utility methods for manipulating URIs.
  */
 public final class UriUtil {
 
+    /**
+     * The length of arrays returned by {@link #getUriIndices(String)}.
+     */
     private static final int INDEX_COUNT = 4;
-    private static final int SCHEME_COLON = 0;
-    private static final int PATH = 1;
-    private static final int QUERY = 2;
-    private static final int FRAGMENT = 3;
-
-    private UriUtil() {
-    }
 
     /**
-     * 将相对路径解析为绝对路径
-     * @param base 基准地址 (例如 https://abc.com/folder/)
-     * @param relative 相对地址 (例如 ../test.mp4)
-     * @return 完整地址
+     * An index into an array returned by {@link #getUriIndices(String)}.
+     *
+     * <p>The value at this position in the array is the index of the ':' after the scheme. Equals -1
+     * if the URI is a relative reference (no scheme). The hier-part starts at (schemeColon + 1),
+     * including when the URI has no scheme.
      */
-    public static String resolve(String base, String relative) {
-        if (TextUtils.isEmpty(base)) return relative;
-        if (TextUtils.isEmpty(relative)) return base;
-        try {
-            // 处理特殊的 // 开头路径 (根据基准地址补全协议)
-            if (relative.startsWith("//")) {
-                int[] baseIndices = getUriIndices(base);
-                if (baseIndices[SCHEME_COLON] != -1) {
-                    return base.substring(0, baseIndices[SCHEME_COLON] + 1) + relative;
-                }
-            }
-            // 使用标准库进行路径合并
-            URI baseUri = new URI(base);
-            return baseUri.resolve(relative).toString();
-        } catch (Exception e) {
-            return relative;
+    private static final int SCHEME_COLON = 0;
+
+    /**
+     * An index into an array returned by {@link #getUriIndices(String)}.
+     *
+     * <p>The value at this position in the array is the index of the path part. Equals (schemeColon +
+     * 1) if no authority part, (schemeColon + 3) if the authority part consists of just "//", and
+     * (query) if no path part. The characters starting at this index can be "//" only if the
+     * authority part is non-empty (in this case the double-slash means the first segment is empty).
+     */
+    private static final int PATH = 1;
+
+    /**
+     * An index into an array returned by {@link #getUriIndices(String)}.
+     *
+     * <p>The value at this position in the array is the index of the query part, including the '?'
+     * before the query. Equals fragment if no query part, and (fragment - 1) if the query part is a
+     * single '?' with no data.
+     */
+    private static final int QUERY = 2;
+
+    /**
+     * An index into an array returned by {@link #getUriIndices(String)}.
+     *
+     * <p>The value at this position in the array is the index of the fragment part, including the '#'
+     * before the fragment. Equal to the length of the URI if no fragment part, and (length - 1) if
+     * the fragment part is a single '#' with no data.
+     */
+    private static final int FRAGMENT = 3;
+
+    /**
+     * Performs relative resolution of a {@code referenceUri} with respect to a {@code baseUri}.
+     *
+     * <p>The resolution is performed as specified by RFC-3986.
+     *
+     * @param baseUri      The base URI.
+     * @param referenceUri The reference URI to resolve.
+     */
+    public static String resolve(@Nullable String baseUri, @Nullable String referenceUri) {
+        StringBuilder uri = new StringBuilder();
+
+        // Map null onto empty string, to make the following logic simpler.
+        baseUri = baseUri == null ? "" : baseUri;
+        referenceUri = referenceUri == null ? "" : referenceUri;
+
+        int[] refIndices = getUriIndices(referenceUri);
+        if (refIndices[SCHEME_COLON] != -1) {
+            // The reference is absolute. The target Uri is the reference.
+            uri.append(referenceUri);
+            removeDotSegments(uri, refIndices[PATH], refIndices[QUERY]);
+            return uri.toString();
+        }
+
+        int[] baseIndices = getUriIndices(baseUri);
+        if (refIndices[FRAGMENT] == 0) {
+            // The reference is empty or contains just the fragment part, then the target Uri is the
+            // concatenation of the base Uri without its fragment, and the reference.
+            return uri.append(baseUri, 0, baseIndices[FRAGMENT]).append(referenceUri).toString();
+        }
+
+        if (refIndices[QUERY] == 0) {
+            // The reference starts with the query part. The target is the base up to (but excluding) the
+            // query, plus the reference.
+            return uri.append(baseUri, 0, baseIndices[QUERY]).append(referenceUri).toString();
+        }
+
+        if (refIndices[PATH] != 0) {
+            // The reference has authority. The target is the base scheme plus the reference.
+            int baseLimit = baseIndices[SCHEME_COLON] + 1;
+            uri.append(baseUri, 0, baseLimit).append(referenceUri);
+            return removeDotSegments(uri, baseLimit + refIndices[PATH], baseLimit + refIndices[QUERY]);
+        }
+
+        if (referenceUri.charAt(refIndices[PATH]) == '/') {
+            // The reference path is rooted. The target is the base scheme and authority (if any), plus
+            // the reference.
+            uri.append(baseUri, 0, baseIndices[PATH]).append(referenceUri);
+            return removeDotSegments(uri, baseIndices[PATH], baseIndices[PATH] + refIndices[QUERY]);
+        }
+
+        // The target Uri is the concatenation of the base Uri up to (but excluding) the last segment,
+        // and the reference. This can be split into 2 cases:
+        if (baseIndices[SCHEME_COLON] + 2 < baseIndices[PATH] && baseIndices[PATH] == baseIndices[QUERY]) {
+            // Case 1: The base hier-part is just the authority, with an empty path. An additional '/' is
+            // needed after the authority, before appending the reference.
+            uri.append(baseUri, 0, baseIndices[PATH]).append('/').append(referenceUri);
+            return removeDotSegments(uri, baseIndices[PATH], baseIndices[PATH] + refIndices[QUERY] + 1);
+        } else {
+            // Case 2: Otherwise, find the last '/' in the base hier-part and append the reference after
+            // it. If base hier-part has no '/', it could only mean that it is completely empty or
+            // contains only one segment, in which case the whole hier-part is excluded and the reference
+            // is appended right after the base scheme colon without an added '/'.
+            int lastSlashIndex = baseUri.lastIndexOf('/', baseIndices[QUERY] - 1);
+            int baseLimit = lastSlashIndex == -1 ? baseIndices[PATH] : lastSlashIndex + 1;
+            uri.append(baseUri, 0, baseLimit).append(referenceUri);
+            return removeDotSegments(uri, baseIndices[PATH], baseLimit + refIndices[QUERY]);
         }
     }
 
     /**
-     * 高效获取 URI 各部分的索引位置
-     * @param uriString 待分析的 URI 字符串
-     * @return 包含四个关键索引位置的数组
+     * Removes dot segments from the path of a URI.
+     *
+     * @param uri    A {@link StringBuilder} containing the URI.
+     * @param offset The index of the start of the path in {@code uri}.
+     * @param limit  The limit (exclusive) of the path in {@code uri}.
      */
-    public static int[] getUriIndices(String uriString) {
+    private static String removeDotSegments(StringBuilder uri, int offset, int limit) {
+        if (offset >= limit) {
+            // Nothing to do.
+            return uri.toString();
+        }
+        if (uri.charAt(offset) == '/') {
+            // If the path starts with a /, always retain it.
+            offset++;
+        }
+        // The first character of the current path segment.
+        int segmentStart = offset;
+        int i = offset;
+        while (i <= limit) {
+            int nextSegmentStart;
+            if (i == limit) {
+                nextSegmentStart = i;
+            } else if (uri.charAt(i) == '/') {
+                nextSegmentStart = i + 1;
+            } else {
+                i++;
+                continue;
+            }
+            // We've encountered the end of a segment or the end of the path. If the final segment was
+            // "." or "..", remove the appropriate segments of the path.
+            if (i == segmentStart + 1 && uri.charAt(segmentStart) == '.') {
+                // Given "abc/def/./ghi", remove "./" to get "abc/def/ghi".
+                uri.delete(segmentStart, nextSegmentStart);
+                limit -= nextSegmentStart - segmentStart;
+                i = segmentStart;
+            } else if (i == segmentStart + 2 && uri.charAt(segmentStart) == '.' && uri.charAt(segmentStart + 1) == '.') {
+                // Given "abc/def/../ghi", remove "def/../" to get "abc/ghi".
+                int prevSegmentStart = uri.lastIndexOf("/", segmentStart - 2) + 1;
+                int removeFrom = Math.max(prevSegmentStart, offset);
+                uri.delete(removeFrom, nextSegmentStart);
+                limit -= nextSegmentStart - removeFrom;
+                segmentStart = prevSegmentStart;
+                i = prevSegmentStart;
+            } else {
+                i++;
+                segmentStart = i;
+            }
+        }
+        return uri.toString();
+    }
+
+    /**
+     * Calculates indices of the constituent components of a URI.
+     *
+     * @param uriString The URI as a string.
+     * @return The corresponding indices.
+     */
+    private static int[] getUriIndices(String uriString) {
         int[] indices = new int[INDEX_COUNT];
         if (TextUtils.isEmpty(uriString)) {
             indices[SCHEME_COLON] = -1;
             return indices;
         }
 
+        // Determine outer structure from right to left.
+        // Uri = scheme ":" hier-part [ "?" query ] [ "#" fragment ]
+        int length = uriString.length();
         int fragmentIndex = uriString.indexOf('#');
         if (fragmentIndex == -1) {
-            fragmentIndex = uriString.length();
+            fragmentIndex = length;
         }
         int queryIndex = uriString.indexOf('?');
         if (queryIndex == -1 || queryIndex > fragmentIndex) {
+            // '#' before '?': '?' is within the fragment.
             queryIndex = fragmentIndex;
         }
-        
+        // Slashes are allowed only in hier-part so any colon after the first slash is part of the
+        // hier-part, not the scheme colon separator.
         int schemeIndexLimit = uriString.indexOf('/');
         if (schemeIndexLimit == -1 || schemeIndexLimit > queryIndex) {
             schemeIndexLimit = queryIndex;
         }
         int schemeIndex = uriString.indexOf(':');
         if (schemeIndex > schemeIndexLimit) {
+            // '/' before ':'
             schemeIndex = -1;
         }
 
-        boolean hasAuthority = schemeIndex + 2 < queryIndex 
-                && uriString.charAt(schemeIndex + 1) == '/' 
-                && uriString.charAt(schemeIndex + 2) == '/';
-        
+        // Determine hier-part structure: hier-part = "//" authority path / path
+        // This block can also cope with schemeIndex == -1.
+        boolean hasAuthority = schemeIndex + 2 < queryIndex && uriString.charAt(schemeIndex + 1) == '/' && uriString.charAt(schemeIndex + 2) == '/';
         int pathIndex;
         if (hasAuthority) {
-            pathIndex = uriString.indexOf('/', schemeIndex + 3);
+            pathIndex = uriString.indexOf('/', schemeIndex + 3); // find first '/' after "://"
             if (pathIndex == -1 || pathIndex > queryIndex) {
                 pathIndex = queryIndex;
             }
