@@ -15,107 +15,167 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * 终极 JS 爬虫运行时：整合了解析引擎、网络请求与内存缓存
+ * 终极 JS 爬虫引擎：整合 Hiker 语法兼容、LRU 文档缓存、增强型网络请求
  */
-public class JsSpiderRuntime {
+public class JsSpiderEngine {
 
     private final QuickJSContext ctx;
-    private final Pattern URL_IN_STYLE = Pattern.compile("url\\(['\"]?(.*?)['\"]?\\)");
-    
-    // LRU 缓存：保存最近解析过的 10 个 HTML 文档，避免重复解析
+    private final Pattern URL_RE = Pattern.compile("url\\((.*?)\\)", Pattern.MULTILINE | Pattern.DOTALL);
+    private final Pattern NO_ADD = Pattern.compile(":eq|:lt|:gt|:first|:last|:not|:even|:odd|:has|:contains|:matches|:empty|^body$|^#");
+    private final Pattern JOIN_URL = Pattern.compile("(url|src|href|-original|-src|-play|-url|style)$|^(data-|url-|src-)", Pattern.MULTILINE | Pattern.CASE_INSENSITIVE);
+    private final Pattern SPEC_URL = Pattern.compile("^(ftp|magnet|thunder|ws):", Pattern.MULTILINE | Pattern.CASE_INSENSITIVE);
+
+    // LRU 缓存：保持最近 10 个解析过的 Document 对象，防止频繁解析导致 CPU/内存飙升
     private final Map<Integer, Document> docCache = new LinkedHashMap<Integer, Document>(16, 0.75f, true) {
         @Override protected boolean removeEldestEntry(Map.Entry eldest) { return size() > 10; }
     };
 
-    public JsSpiderRuntime(QuickJSContext ctx) {
+    public JsSpiderEngine(QuickJSContext ctx) {
         this.ctx = ctx;
-        registerGlobalFunctions();
+        registerFunctions();
     }
 
-    private void registerGlobalFunctions() {
-        // 注册核心解析函数
+    private void registerFunctions() {
+        // 绑定全局函数到 JS 环境
         ctx.getGlobalObject().setProperty("pdfh", args -> safeCall(() -> pdfh(args[0].toString(), args[1].toString())));
         ctx.getGlobalObject().setProperty("pdfa", args -> safeCall(() -> pdfa(args[0].toString(), args[1].toString())));
         ctx.getGlobalObject().setProperty("pd",   args -> safeCall(() -> pd(args[0].toString(), args[1].toString(), args.length > 2 ? args[2].toString() : "")));
         ctx.getGlobalObject().setProperty("pdfl", args -> safeCall(() -> pdfl(args[0].toString(), args[1].toString(), args[2].toString(), args[3].toString(), args.length > 4 ? args[4].toString() : "")));
-        
-        // 注册增强网络请求函数 (方案 B)
         ctx.getGlobalObject().setProperty("request", args -> safeCall(() -> request(args)));
     }
 
-    // --- 核心解析逻辑 (重写自原 Parser.java) ---
+    // --- JS 接口的具体 Java 实现 ---
 
     private String pdfh(String html, String rule) {
-        Elements els = query(html, rule);
-        return extract(els, getOption(rule));
+        return parseDomForUrl(html, rule, "");
     }
 
     private JSArray pdfa(String html, String rule) {
-        Elements els = query(html, rule);
-        List<String> list = new ArrayList<>();
-        for (Element e : els) list.add(e.outerHtml());
-        return toJSArray(list);
+        List<String> items = parseDomForArray(html, rule);
+        JSArray array = ctx.createNewJSArray();
+        for (int i = 0; i < items.size(); i++) array.set(items.get(i), i);
+        return array;
     }
 
     private String pd(String html, String rule, String baseUrl) {
-        String option = getOption(rule);
-        if (option.isEmpty()) option = "href";
-        String val = extract(query(html, rule), option);
-        return UriUtil.resolve(baseUrl, val);
+        return parseDomForUrl(html, rule, baseUrl);
     }
 
-    private JSArray pdfl(String html, String rule, String textRule, String urlRule, String baseUrl) {
-        Elements listEls = query(html, rule);
-        List<String> results = new ArrayList<>();
-        for (Element el : listEls) {
-            String itemHtml = el.outerHtml();
-            String text = pdfh(itemHtml, textRule);
-            String url = pd(itemHtml, urlRule, baseUrl);
-            results.add(text + "$" + url);
-        }
-        return toJSArray(results);
+    private JSArray pdfl(String html, String rule, String texts, String urls, String baseUrl) {
+        List<String> results = parseDomForList(html, rule, texts, urls, baseUrl);
+        JSArray array = ctx.createNewJSArray();
+        for (int i = 0; i < results.size(); i++) array.set(results.get(i), i);
+        return array;
     }
 
-    // --- 内部处理工具 ---
+    // --- 核心解析引擎 (兼容 Hiker 语法) ---
 
-    private Elements query(String html, String rule) {
+    private String parseDomForUrl(String html, String rule, String baseUrl) {
         Document doc = getCachedDoc(html);
-        String selector = rule.split("&&")[0];
-        Elements current = new Elements(doc);
+        if (rule.equalsIgnoreCase("body&&Text") || rule.equalsIgnoreCase("Text")) return doc.text();
+        if (rule.equalsIgnoreCase("body&&Html") || rule.equalsIgnoreCase("Html")) return doc.html();
 
-        // 简化的 Hiker 规则处理：支持空格分割的多级选择与 :eq(n)
-        for (String part : selector.split(" ")) {
-            if (part.contains(":eq(")) {
-                String css = part.substring(0, part.indexOf(":eq"));
-                int idx = Integer.parseInt(part.substring(part.indexOf("(") + 1, part.indexOf(")")));
-                Elements selected = current.select(css);
-                int realIdx = idx < 0 ? selected.size() + idx : idx;
-                current = (realIdx >= 0 && realIdx < selected.size()) ? new Elements(selected.get(realIdx)) : new Elements();
-            } else {
-                current = current.select(part);
-            }
-            if (current.isEmpty()) break;
+        String option = "";
+        if (rule.contains("&&")) {
+            int lastIndex = rule.lastIndexOf("&&");
+            option = rule.substring(lastIndex + 2);
+            rule = rule.substring(0, lastIndex);
         }
-        return current;
-    }
 
-    private String extract(Elements els, String option) {
-        if (els.isEmpty()) return "";
-        if (option.equalsIgnoreCase("text")) return els.text().trim();
-        if (option.equalsIgnoreCase("html")) return els.html();
-        if (option.isEmpty()) return els.outerHtml();
+        // 核心转换：将 Hiker 简写语法转为标准的 JSoup 选择器串联
+        rule = parseHikerToJq(rule, true);
+        Elements elements = selectElements(doc, rule);
         
-        String val = els.attr(option);
-        if (option.toLowerCase().contains("style") && val.contains("url(")) {
-            Matcher m = URL_IN_STYLE.matcher(val);
-            if (m.find()) val = m.group(1).replaceAll("^['\"](.*)['\"]$", "$1");
+        if (elements.isEmpty()) return "";
+        if (option.isEmpty()) return elements.outerHtml();
+        if (option.equalsIgnoreCase("Text")) return elements.text().trim();
+        if (option.equalsIgnoreCase("Html")) return elements.html();
+
+        // 提取属性并处理相对 URL
+        String result = "";
+        for (String opt : option.split("\\|\\|")) {
+            result = elements.attr(opt);
+            if (opt.toLowerCase().contains("style") && result.contains("url(")) {
+                Matcher m = URL_RE.matcher(result);
+                if (m.find()) result = m.group(1).replaceAll("^['\"](.*)['\"]$", "$1");
+            }
+            if (!result.isEmpty() && !baseUrl.isEmpty()) {
+                if (JOIN_URL.matcher(opt).find() && !SPEC_URL.matcher(result).find()) {
+                    result = result.contains("http") ? result.substring(result.indexOf("http")) : UriUtil.resolve(baseUrl, result);
+                }
+            }
+            if (!result.isEmpty()) break;
         }
-        return val;
+        return result.trim();
     }
 
-    private String getOption(String rule) {
-        String[] parts = rule.split("&&");
-        return parts.length > 1 ? parts[parts.length - 1] : "";
+    private List<String> parseDomForArray(String html, String rule) {
+        rule = parseHikerToJq(rule, false);
+        Elements elements = selectElements(getCachedDoc(html), rule);
+        List<String> list = new ArrayList<>();
+        for (Element e : elements) list.add(e.outerHtml());
+        return list;
+    }
+
+    private List<String> parseDomForList(String html, String rule, String texts, String urls, String baseUrl) {
+        rule = parseHikerToJq(rule, false);
+        Elements elements = selectElements(getCachedDoc(html), rule);
+        List<String> items = new ArrayList<>();
+        for (Element e : elements) {
+            String itemHtml = e.outerHtml();
+            items.add(parseDomForUrl(itemHtml, texts, "").trim() + "$" + parseDomForUrl(itemHtml, urls, baseUrl));
+        }
+        return items;
+    }
+
+    // --- 逻辑支撑工具 ---
+
+    private String parseHikerToJq(String parse, boolean first) {
+        String[] parses = parse.split("&&");
+        List<String> items = new ArrayList<>();
+        for (int i = 0; i < parses.length; i++) {
+            String str = parses[i].trim();
+            if (NO_ADD.matcher(str).find()) {
+                items.add(str);
+            } else {
+                // 如果是第一级或强制单选，补全 :eq(0)
+                if (!first && i >= parses.length - 1) items.add(str);
+                else items.add(str + ":eq(0)");
+            }
+        }
+        return String.join(" ", items);
+    }
+
+    private Elements selectElements(Document doc, String rule) {
+        Elements elements = new Elements(doc);
+        for (String part : rule.split(" ")) {
+            String cleanRule = part;
+            int index = 0;
+            // 处理索引选择器 :eq(n)
+            if (part.contains(":eq(")) {
+                cleanRule = part.substring(0, part.indexOf(":eq("));
+                index = Integer.parseInt(part.substring(part.indexOf("(") + 1, part.indexOf(")")));
+            }
+            
+            // 处理排除逻辑 (-- 语法)
+            String selectRule = cleanRule;
+            List<String> excludes = new ArrayList<>();
+            if (cleanRule.contains("--")) {
+                String[] split = cleanRule.split("--");
+                selectRule = split[0];
+                excludes.addAll(Arrays.asList(split).subList(1, split.length));
+            }
+
+            elements = (elements.isEmpty() || elements.size() == 0 && elements.get(0) instanceof Document) 
+                       ? doc.select(selectRule) : elements.select(selectRule);
+
+            if (part.contains(":eq(")) {
+                int realIdx = index < 0 ? elements.size() + index : index;
+                elements = (realIdx >= 0 && realIdx < elements.size()) ? new Elements(elements.get(realIdx)) : new Elements();
+            }
+            for (String ex : excludes) elements.select(ex).remove();
+        }
+        return elements;
     }
 
     private Object request(Object[] args) throws Exception {
@@ -127,7 +187,9 @@ public class JsSpiderRuntime {
         if (args.length > 1 && args[1] instanceof JSObject) {
             JSObject opt = (JSObject) args[1];
             method = opt.getProperty("method").toString().toUpperCase();
-            // 注意：此处需要根据具体的 QuickJS 桥接实现来转换 JSObject 内部属性
+            Object bodyObj = opt.getProperty("body");
+            if (bodyObj != null) body = bodyObj.toString();
+            // 提示：Header 的遍历取决于 QuickJS Wrapper 是否支持 getKeys()
         }
         return OkHttpUtil.execute(url, method, headers, body);
     }
@@ -136,15 +198,8 @@ public class JsSpiderRuntime {
         return docCache.computeIfAbsent(html.hashCode(), k -> Jsoup.parse(html));
     }
 
-    private JSArray toJSArray(List<String> list) {
-        JSArray array = ctx.createNewJSArray();
-        for (int i = 0; i < list.size(); i++) array.set(list.get(i), i);
-        return array;
-    }
-
     private Object safeCall(CallableAction action) {
-        try { return action.call(); } 
-        catch (Exception e) { return null; }
+        try { return action.call(); } catch (Exception e) { return ""; }
     }
 
     interface CallableAction { Object call() throws Exception; }
