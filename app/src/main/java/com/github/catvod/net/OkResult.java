@@ -1,7 +1,6 @@
 package com.github.catvod.net;
 
 import android.text.TextUtils;
-
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -34,5 +33,20 @@ public class OkResult {
 
     public Map<String, List<String>> getResp() {
         return resp;
+    }
+
+    // --- 新增功能 ---
+
+    public boolean isSuccessful() {
+        return code >= 200 && code < 300;
+    }
+
+    public String getHeader(String name) {
+        if (resp == null) return "";
+        List<String> values = resp.get(name);
+        if (values == null || values.isEmpty()) {
+            values = resp.get(name.toLowerCase()); // 兼容大小写
+        }
+        return (values == null || values.isEmpty()) ? "" : values.get(0);
     }
 }
