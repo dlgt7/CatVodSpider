@@ -15,6 +15,8 @@ public class OkHttpUtil {
 
     public static String execute(String url, String method, Map<String, String> headers, String body) throws Exception {
         Request.Builder builder = new Request.Builder().url(url);
+        
+        // 默认 UA
         builder.addHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
         
         if (headers != null) {
@@ -34,7 +36,10 @@ public class OkHttpUtil {
         }
 
         try (Response response = client.newCall(builder.build()).execute()) {
-            return (response.isSuccessful() && response.body() != null) ? response.body().string() : "";
+            if (response.isSuccessful() && response.body() != null) {
+                return response.body().string();
+            }
+            return "";
         }
     }
 }
