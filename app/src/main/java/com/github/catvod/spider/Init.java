@@ -4,6 +4,8 @@ import android.app.Application;
 import android.content.Context;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.Log;
+import com.github.catvod.crawler.SpiderDebug;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -24,7 +26,6 @@ public class Init {
 
     private Init() {
         this.handler = new Handler(Looper.getMainLooper());
-        // 核心线程数 5，适合 Spider 的 IO 密集型任务
         this.executor = Executors.newFixedThreadPool(5);
     }
 
@@ -34,10 +35,18 @@ public class Init {
 
     public static void init(Context context) {
         if (context == null) return;
-        // 确保持有的是全局 Application 上下文
         get().app = (Application) context.getApplicationContext();
-        // 异步执行代理初始化，防止启动时卡顿
-        execute(Proxy::init);
+        
+        execute(() -> {
+            Proxy.init();
+            // 初始化完成后打印日志，方便线上调试
+            String msg = "CatVodSpider 初始化完成 | 代理端口：" + Proxy.getPort();
+            try {
+                SpiderDebug.log(msg);
+            } catch (Throwable ignored) {
+                Log.i("Init", msg);
+            }
+        });
     }
 
     public static void execute(Runnable runnable) {
@@ -52,9 +61,6 @@ public class Init {
         get().handler.postDelayed(runnable, delay);
     }
 
-    /**
-     * 建议在 Spider 彻底销毁或壳子退出时调用
-     */
     public void shutdown() {
         try {
             executor.shutdown();
