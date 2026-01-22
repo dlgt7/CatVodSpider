@@ -14,7 +14,7 @@ public class Result {
     @SerializedName("class")
     private List<VodClass> classes; // 修改此处
     @SerializedName("list")
-    private List<Vod} list;
+    private List<Vod> list;
     @SerializedName("filters")
     private LinkedHashMap<String, List<Filter>> filters;
     @SerializedName("header")
