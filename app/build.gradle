@@ -50,7 +50,8 @@ android {
 dependencies {
     implementation 'com.squareup.okhttp3:okhttp:' + okhttpVersion
     implementation 'com.github.thegrizzlylabs:sardine-android:0.9'
-    implementation 'wang.harlon.quickjs:wrapper-android:3.2.3'
+   // JS 引擎
+    implementation 'com.github.whvcse:QuickJS-Android:x.x.x'
     implementation 'com.google.code.gson:gson:2.13.2'
     implementation 'com.hierynomus:smbj:0.14.0'
     implementation 'com.orhanobut:logger:2.2.0'
