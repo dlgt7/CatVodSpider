@@ -21,7 +21,7 @@ import okhttp3.Response;
 
 public class OkHttp {
 
-    private static final long DEFAULT_TIMEOUT = 15000; // 默认 15 秒
+    private static final long DEFAULT_TIMEOUT = 15000;
     public static final String POST = "POST";
     public static final String GET = "GET";
 
@@ -36,14 +36,10 @@ public class OkHttp {
         return Loader.INSTANCE;
     }
 
-    /**
-     * 获取全局通用的 OkHttpClient
-     */
     public static OkHttpClient client() {
         if (get().client == null) {
             synchronized (OkHttp.class) {
                 if (get().client == null) {
-                    // 爬虫场景通常需要忽略 SSL 以兼容老旧站点，但请注意安全风险
                     get().client = build(true); 
                 }
             }
@@ -51,9 +47,6 @@ public class OkHttp {
         return get().client;
     }
 
-    /**
-     * 性能优化：缓存禁用重定向的 Client 实例
-     */
     private OkHttpClient getNoRedirectClient() {
         if (noRedirectClient == null) {
             noRedirectClient = client().newBuilder()
@@ -66,7 +59,6 @@ public class OkHttp {
 
     private static OkHttpClient build(boolean ignoreSSL) {
         try {
-            // 尝试获取框架注入的 Client
             OkHttpClient spiderClient = Spider.client();
             if (spiderClient != null) return spiderClient;
         } catch (Throwable e) {
@@ -81,7 +73,6 @@ public class OkHttp {
                 .retryOnConnectionFailure(true)
                 .followRedirects(true);
 
-        // 如果开启忽略 SSL 验证 (警告：容易遭受中间人攻击)
         if (ignoreSSL) {
             builder.hostnameVerifier((hostname, session) -> true)
                    .sslSocketFactory(getSSLContext().getSocketFactory(), trustAllCertificates());
@@ -89,21 +80,23 @@ public class OkHttp {
         return builder.build();
     }
 
-    // --- 静态调用接口 ---
+    // --- 修复后的调用接口 ---
 
     public static String string(String url, Map<String, String> header) {
-        return new OkRequest(GET, url, null, header).execute(client()).getBody();
+        // 使用 OkRequest.create 明确指出这是普通请求，解决 null 歧义
+        return OkRequest.create(GET, url, null, header).execute(client()).getBody();
     }
 
     public static OkResult post(String url, Map<String, String> params, Map<String, String> header) {
-        return new OkRequest(POST, url, params, header).execute(client());
+        return OkRequest.create(POST, url, params, header).execute(client());
     }
 
     public static OkResult post(String url, String json, Map<String, String> header) {
-        return new OkRequest(POST, url, json, header).execute(client());
+        // 使用 OkRequest.createJson 明确指出这是 JSON 请求
+        return OkRequest.createJson(POST, url, json, header).execute(client());
     }
 
-    // --- 工具方法 ---
+    // --- 工具方法保持不变 ---
 
     public static String getLocation(String url, Map<String, String> header) throws IOException {
         Request.Builder builder = new Request.Builder().url(url);
