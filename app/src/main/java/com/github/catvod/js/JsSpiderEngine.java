@@ -22,7 +22,6 @@ public class JsSpiderEngine {
     private final Pattern JOIN_URL = Pattern.compile("(url|src|href|-original|-src|-play|-url|style)$|^(data-|url-|src-)", Pattern.MULTILINE | Pattern.CASE_INSENSITIVE);
     private final Pattern SPEC_URL = Pattern.compile("^(ftp|magnet|thunder|ws):", Pattern.MULTILINE | Pattern.CASE_INSENSITIVE);
 
-    // LRU 缓存，防止频繁解析 HTML 字符串 
     private final Map<Integer, Document> docCache = new LinkedHashMap<Integer, Document>(16, 0.75f, true) {
         @Override protected boolean removeEldestEntry(Map.Entry eldest) { return size() > 10; }
     };
@@ -74,7 +73,7 @@ public class JsSpiderEngine {
             rule = rule.substring(0, lastIndex);
         }
 
-        rule = parseHikerToJq(rule, true); // 还原 Hiker 语法处理 
+        rule = parseHikerToJq(rule, true);
         Elements elements = selectElements(doc, rule);
         if (elements.isEmpty()) return "";
         if (option.isEmpty()) return elements.outerHtml();
@@ -148,8 +147,10 @@ public class JsSpiderEngine {
                 selectRule = split[0];
                 excludes.addAll(Arrays.asList(split).subList(1, split.length));
             }
+            
             elements = (elements.isEmpty() || (elements.size() == 1 && elements.get(0) instanceof Document)) 
                        ? doc.select(selectRule) : elements.select(selectRule);
+            
             if (part.contains(":eq(")) {
                 int realIdx = index < 0 ? elements.size() + index : index;
                 elements = (realIdx >= 0 && realIdx < elements.size()) ? new Elements(elements.get(realIdx)) : new Elements();
@@ -160,7 +161,7 @@ public class JsSpiderEngine {
     }
 
     private Object request(Object[] args) throws Exception {
-        if (args.length == 0) return "";
+        if (args == null || args.length == 0) return "";
         String url = args[0].toString();
         Map<String, String> headers = new HashMap<>();
         String method = "GET";
@@ -170,6 +171,7 @@ public class JsSpiderEngine {
             JSObject opt = (JSObject) args[1];
             Object m = opt.getProperty("method");
             if (m != null && !m.toString().equals("undefined")) method = m.toString().toUpperCase();
+            
             Object b = opt.getProperty("body");
             if (b != null && !b.toString().equals("undefined")) body = b.toString();
             
@@ -183,7 +185,7 @@ public class JsSpiderEngine {
                 }
             }
         }
-        return OkHttpUtil.execute(url, method, headers, body); // 调用 OkHttpUtil [cite: 6]
+        return OkHttpUtil.execute(url, method, headers, body);
     }
 
     private Document getCachedDoc(String html) {
