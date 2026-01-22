@@ -2,23 +2,14 @@ package com.github.catvod.bean;
 
 import com.google.gson.Gson;
 import com.google.gson.annotations.SerializedName;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
 
 import java.io.Serializable;
 import java.util.Objects;
-import java.util.Optional;
 
 /**
- * CatVod 视频实体类 (2025-2026 增强版)
- * 适配 TVBox, FongMi, CatVodSpider 等主流生态
+ * CatVod 视频实体类 (原生兼容版)
+ * 移除 Lombok 依赖，确保 Gradle 编译通过
  */
-@Data
-@Builder
-@NoArgsConstructor
-@AllArgsConstructor
 public class Vod implements Serializable {
 
     private static final long serialVersionUID = 1L;
@@ -41,7 +32,7 @@ public class Vod implements Serializable {
     @SerializedName("vod_lang")
     private String vodLang;           // 语言
     @SerializedName("vod_state")
-    private String vodState;          // 状态 (如: 连载中)
+    private String vodState;          // 状态
     @SerializedName("vod_actor")
     private String vodActor;
     @SerializedName("vod_director")
@@ -49,13 +40,13 @@ public class Vod implements Serializable {
     @SerializedName("vod_content")
     private String vodContent;
     @SerializedName("vod_play_from")
-    private String vodPlayFrom;       // 播放源 (如: qq$$$youku)
+    private String vodPlayFrom;       // 播放源
     @SerializedName("vod_play_url")
     private String vodPlayUrl;        // 播放地址
     @SerializedName("vod_play_note")
     private String vodPlayNote;       // 播放备注
     @SerializedName("vod_sub")
-    private String vodSub;            // 副标题/别名
+    private String vodSub;            // 副标题
     @SerializedName("vod_score")
     private String vodScore;          // 评分
     @SerializedName("vod_duration")
@@ -67,22 +58,28 @@ public class Vod implements Serializable {
     @SerializedName("style")
     private Style style;
 
-    // --- 静态解析与快速构建 ---
+    // --- 静态解析方法 ---
 
     public static Vod objectFrom(String str) {
         try {
             if (str == null || str.trim().isEmpty()) return new Vod();
-            return Optional.ofNullable(GSON.fromJson(str, Vod.class)).orElseGet(Vod::new);
+            Vod vod = GSON.fromJson(str, Vod.class);
+            return vod == null ? new Vod() : vod;
         } catch (Exception e) {
             return new Vod();
         }
     }
 
     public static Vod action(String action) {
-        return Vod.builder().action(action).build();
+        Vod vod = new Vod();
+        vod.setAction(action);
+        return vod;
     }
 
-    // --- 传统构造器兼容 (手动保留以支持旧代码直接 new) ---
+    // --- 构造函数 ---
+
+    public Vod() {
+    }
 
     public Vod(String vodId, String vodName, String vodPic) {
         this.vodId = vodId;
@@ -100,7 +97,7 @@ public class Vod implements Serializable {
         this.vodTag = folder ? "folder" : "file";
     }
 
-    // --- 业务逻辑方法 ---
+    // --- 业务方法 ---
 
     public boolean isFolder() {
         return "folder".equals(vodTag);
@@ -111,7 +108,7 @@ public class Vod implements Serializable {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         Vod vod = (Vod) o;
-        return Objects.equals(vodId, vod.vodId); // 以 vodId 作为唯一标识
+        return Objects.equals(vodId, vod.vodId);
     }
 
     @Override
@@ -119,21 +116,95 @@ public class Vod implements Serializable {
         return Objects.hash(vodId);
     }
 
+    // --- Getter & Setter ---
+
+    public String getTypeName() { return typeName; }
+    public void setTypeName(String typeName) { this.typeName = typeName; }
+
+    public String getVodId() { return vodId; }
+    public void setVodId(String vodId) { this.vodId = vodId; }
+
+    public String getVodName() { return vodName; }
+    public void setVodName(String vodName) { this.vodName = vodName; }
+
+    public String getVodPic() { return vodPic; }
+    public void setVodPic(String vodPic) { this.vodPic = vodPic; }
+
+    public String getVodRemarks() { return vodRemarks; }
+    public void setVodRemarks(String vodRemarks) { this.vodRemarks = vodRemarks; }
+
+    public String getVodYear() { return vodYear; }
+    public void setVodYear(String vodYear) { this.vodYear = vodYear; }
+
+    public String getVodArea() { return vodArea; }
+    public void setVodArea(String vodArea) { this.vodArea = vodArea; }
+
+    public String getVodLang() { return vodLang; }
+    public void setVodLang(String vodLang) { this.vodLang = vodLang; }
+
+    public String getVodState() { return vodState; }
+    public void setVodState(String vodState) { this.vodState = vodState; }
+
+    public String getVodActor() { return vodActor; }
+    public void setVodActor(String vodActor) { this.vodActor = vodActor; }
+
+    public String getVodDirector() { return vodDirector; }
+    public void setVodDirector(String vodDirector) { this.vodDirector = vodDirector; }
+
+    public String getVodContent() { return vodContent; }
+    public void setVodContent(String vodContent) { this.vodContent = vodContent; }
+
+    public String getVodPlayFrom() { return vodPlayFrom; }
+    public void setVodPlayFrom(String vodPlayFrom) { this.vodPlayFrom = vodPlayFrom; }
+
+    public String getVodPlayUrl() { return vodPlayUrl; }
+    public void setVodPlayUrl(String vodPlayUrl) { this.vodPlayUrl = vodPlayUrl; }
+
+    public String getVodPlayNote() { return vodPlayNote; }
+    public void setVodPlayNote(String vodPlayNote) { this.vodPlayNote = vodPlayNote; }
+
+    public String getVodSub() { return vodSub; }
+    public void setVodSub(String vodSub) { this.vodSub = vodSub; }
+
+    public String getVodScore() { return vodScore; }
+    public void setVodScore(String vodScore) { this.vodScore = vodScore; }
+
+    public String getVodDuration() { return vodDuration; }
+    public void setVodDuration(String vodDuration) { this.vodDuration = vodDuration; }
+
+    public String getVodTag() { return vodTag; }
+    public void setVodTag(String vodTag) { this.vodTag = vodTag; }
+
+    public String getAction() { return action; }
+    public void setAction(String action) { this.action = action; }
+
+    public Style getStyle() { return style; }
+    public void setStyle(Style style) { this.style = style; }
+
     // --- 内部 Style 类 ---
 
-    @Data
-    @NoArgsConstructor
-    @AllArgsConstructor
     public static class Style implements Serializable {
         @SerializedName("type")
         private String type;
         @SerializedName("ratio")
         private Float ratio;
 
+        public Style() {}
+
+        public Style(String type, Float ratio) {
+            this.type = type;
+            this.ratio = ratio;
+        }
+
         public static Style rect() { return rect(0.75f); }
         public static Style rect(float ratio) { return new Style("rect", ratio); }
         public static Style oval() { return new Style("oval", 1.0f); }
         public static Style full() { return new Style("full", null); }
         public static Style list() { return new Style("list", null); }
+
+        public String getType() { return type; }
+        public void setType(String type) { this.type = type; }
+        public Float getRatio() { return ratio; }
+        public void setRatio(Float ratio) { this.ratio = ratio; }
     }
 }
