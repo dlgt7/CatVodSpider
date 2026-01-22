@@ -4,7 +4,6 @@ import android.content.Context;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
-import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -14,24 +13,25 @@ import okhttp3.Dns;
 import okhttp3.OkHttpClient;
 
 /**
- * 爬虫核心抽象类
- * 修复：修复变量未使用逻辑、调整超时时间、增加默认调用日志
+ * 爬虫抽象基类
+ * 优化：DCL单例、高性能集合处理、默认行为日志追踪
  */
 public abstract class Spider {
 
     public String siteKey;
     private static volatile OkHttpClient mClient;
 
-    public void init(@NonNull Context context) throws Exception {
-        // 子类需实现初始化逻辑
-    }
-
+    /**
+     * 初始化爬虫环境
+     * @param context 非空 Android 上下文
+     * @param extend  可选的扩展参数（JSON 字符串或 Key-Value）
+     */
     public void init(@NonNull Context context, String extend) throws Exception {
-        init(context);
+        // 子类可根据需要解析 extend 参数
     }
 
     public String homeContent(boolean filter) throws Exception {
-        SpiderDebug.log("Default homeContent called (not overridden)");
+        SpiderDebug.log("Default homeContent: returning empty JSON");
         return "{}";
     }
 
@@ -40,10 +40,11 @@ public abstract class Spider {
     }
 
     /**
-     * @param extend 扩展参数，若子类需要使用，建议直接操作该 Map 或根据需求拷贝
+     * 获取分类内容
+     * @param extend 已在外部处理，子类直接读取即可
      */
     public String categoryContent(String tid, String pg, boolean filter, HashMap<String, String> extend) throws Exception {
-        SpiderDebug.log("Default categoryContent called (not overridden)");
+        SpiderDebug.log("Default categoryContent: returning empty JSON");
         return "{}";
     }
 
@@ -87,19 +88,22 @@ public abstract class Spider {
     }
 
     /**
-     * 资源销毁：强烈建议子类在此关闭自定义的网络连接、线程池或缓存
+     * 释放资源。子类必须在此关闭 IO 流、定时器或取消网络请求。
      */
     public void destroy() {
-        SpiderDebug.log("Spider destroy called");
+        SpiderDebug.info("Spider [" + siteKey + "] destroy called");
     }
 
+    /**
+     * 安全 DNS 接口，预留 DoH (DNS over HTTPS) 扩展位
+     */
     public static Dns safeDns() {
-        // 预留 DoH 扩展点，目前使用系统默认 DNS
         return Dns.SYSTEM;
     }
 
     /**
-     * 单例 OkHttpClient：将超时时间调整为 20s 以提高稳定性
+     * 获取单例 OkHttpClient
+     * 优化：统一 20s 超时时间，支持并发环境下的单例访问
      */
     public static OkHttpClient client() {
         if (mClient == null) {
@@ -109,6 +113,7 @@ public abstract class Spider {
                             .readTimeout(20, TimeUnit.SECONDS)
                             .writeTimeout(20, TimeUnit.SECONDS)
                             .connectTimeout(20, TimeUnit.SECONDS)
+                            .retryOnConnectionFailure(true)
                             .dns(safeDns())
                             .build();
                 }
