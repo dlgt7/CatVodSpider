@@ -4,6 +4,7 @@ import android.content.Context;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -13,25 +14,24 @@ import okhttp3.Dns;
 import okhttp3.OkHttpClient;
 
 /**
- * 爬虫抽象基类
- * 优化：DCL单例、高性能集合处理、默认行为日志追踪
+ * 爬虫基类
+ * 优化：防御性字段初始化、明确的方法契约、增强型单例管理
  */
 public abstract class Spider {
 
-    public String siteKey;
-    private static volatile OkHttpClient mClient;
+    // 默认初始化防止日志输出 null
+    public String siteKey = "";
 
     /**
-     * 初始化爬虫环境
-     * @param context 非空 Android 上下文
-     * @param extend  可选的扩展参数（JSON 字符串或 Key-Value）
+     * 初始化环境
+     * @param extend 若为 JSON，建议使用 JSONObject 解析
+     * @throws Exception 建议捕获并抛出特定的 IOException 或 ParseException
      */
     public void init(@NonNull Context context, String extend) throws Exception {
-        // 子类可根据需要解析 extend 参数
     }
 
     public String homeContent(boolean filter) throws Exception {
-        SpiderDebug.log("Default homeContent: returning empty JSON");
+        SpiderDebug.log("Default homeContent called: Overwrite this in subclasses");
         return "{}";
     }
 
@@ -39,12 +39,8 @@ public abstract class Spider {
         return "{}";
     }
 
-    /**
-     * 获取分类内容
-     * @param extend 已在外部处理，子类直接读取即可
-     */
     public String categoryContent(String tid, String pg, boolean filter, HashMap<String, String> extend) throws Exception {
-        SpiderDebug.log("Default categoryContent: returning empty JSON");
+        SpiderDebug.log("Default categoryContent called: Params [tid: %s, pg: %s]", tid, pg);
         return "{}";
     }
 
@@ -77,6 +73,10 @@ public abstract class Spider {
         return false;
     }
 
+    /**
+     * 代理回调
+     * @return Object[] 预期格式: [int code, String mimeType, InputStream content] 或 [int code, Map headers, String content]
+     */
     @Nullable
     public Object[] proxy(Map<String, String> params) throws Exception {
         return null;
@@ -88,22 +88,20 @@ public abstract class Spider {
     }
 
     /**
-     * 释放资源。子类必须在此关闭 IO 流、定时器或取消网络请求。
+     * 资源销毁
+     * 注意：必须在子类中覆盖此方法以关闭自定义线程池或 IO 流
      */
     public void destroy() {
-        SpiderDebug.info("Spider [" + siteKey + "] destroy called");
+        SpiderDebug.info("Spider [" + siteKey + "] destroyed");
     }
 
-    /**
-     * 安全 DNS 接口，预留 DoH (DNS over HTTPS) 扩展位
-     */
     public static Dns safeDns() {
         return Dns.SYSTEM;
     }
 
     /**
-     * 获取单例 OkHttpClient
-     * 优化：统一 20s 超时时间，支持并发环境下的单例访问
+     * 全局单例 OkHttpClient
+     * 若子类需要特定拦截器，请使用 client().newBuilder().addInterceptor(...).build()
      */
     public static OkHttpClient client() {
         if (mClient == null) {
@@ -121,4 +119,6 @@ public abstract class Spider {
         }
         return mClient;
     }
+
+    private static volatile OkHttpClient mClient;
 }
