@@ -5,23 +5,16 @@ import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.annotations.SerializedName;
 import com.google.gson.reflect.TypeToken;
-
 import org.json.JSONObject;
-
 import java.lang.reflect.Type;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class Result {
 
     @SerializedName("class")
-    private List<Class> classes;
+    private List<VodClass> classes; // 修改此处
     @SerializedName("list")
-    private List<Vod> list;
+    private List<Vod} list;
     @SerializedName("filters")
     private LinkedHashMap<String, List<Filter>> filters;
     @SerializedName("header")
@@ -51,37 +44,35 @@ public class Result {
     @SerializedName("total")
     private Integer total;
 
-    // --- 静态构造方法 ---
-
     public static Result objectFrom(String str) {
         return new Gson().fromJson(str, Result.class);
     }
 
-    public static String string(List<Class> classes, List<Vod> list, LinkedHashMap<String, List<Filter>> filters) {
+    public static String string(List<VodClass> classes, List<Vod> list, LinkedHashMap<String, List<Filter>> filters) {
         return Result.get().classes(classes).vod(list).filters(filters).string();
     }
 
-    public static String string(List<Class> classes, List<Vod> list, JSONObject filters) {
+    public static String string(List<VodClass> classes, List<Vod> list, JSONObject filters) {
         return Result.get().classes(classes).vod(list).filters(filters).string();
     }
 
-    public static String string(List<Class> classes, List<Vod> list, JsonElement filters) {
+    public static String string(List<VodClass> classes, List<Vod> list, JsonElement filters) {
         return Result.get().classes(classes).vod(list).filters(filters).string();
     }
 
-    public static String string(List<Class> classes, LinkedHashMap<String, List<Filter>> filters) {
+    public static String string(List<VodClass> classes, LinkedHashMap<String, List<Filter>> filters) {
         return Result.get().classes(classes).filters(filters).string();
     }
 
-    public static String string(List<Class> classes, JsonElement filters) {
+    public static String string(List<VodClass> classes, JsonElement filters) {
         return Result.get().classes(classes).filters(filters).string();
     }
 
-    public static String string(List<Class> classes, JSONObject filters) {
+    public static String string(List<VodClass> classes, JSONObject filters) {
         return Result.get().classes(classes).filters(filters).string();
     }
 
-    public static String string(List<Class> classes, List<Vod> list) {
+    public static String string(List<VodClass> classes, List<Vod> list) {
         return Result.get().classes(classes).vod(list).string();
     }
 
@@ -89,7 +80,7 @@ public class Result {
     public static String string(List<?> list) {
         if (list == null || list.isEmpty()) return "";
         if (list.get(0) instanceof Vod) return Result.get().vod((List<Vod>) list).string();
-        if (list.get(0) instanceof Class) return Result.get().classes((List<Class>) list).string();
+        if (list.get(0) instanceof VodClass) return Result.get().classes((List<VodClass>) list).string(); // 修改此处
         return "";
     }
 
@@ -109,9 +100,7 @@ public class Result {
         return new Result();
     }
 
-    // --- 链式调用方法 ---
-
-    public Result classes(List<Class> classes) {
+    public Result classes(List<VodClass> classes) { // 修改此处
         this.classes = classes;
         return this;
     }
