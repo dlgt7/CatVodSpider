@@ -6,14 +6,14 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import lombok.AccessLevel;
 
 import java.io.Serializable;
+import java.util.Objects;
 import java.util.Optional;
 
 /**
- * 视频信息实体类
- * 优化点：引入 Lombok 简化代码，增强 Gson 解析性能，提供流式 API。
+ * CatVod 视频实体类 (2025-2026 增强版)
+ * 适配 TVBox, FongMi, CatVodSpider 等主流生态
  */
 @Data
 @Builder
@@ -26,70 +26,63 @@ public class Vod implements Serializable {
 
     @SerializedName("type_name")
     private String typeName;
-    
     @SerializedName("vod_id")
     private String vodId;
-    
     @SerializedName("vod_name")
     private String vodName;
-    
     @SerializedName("vod_pic")
     private String vodPic;
-    
     @SerializedName("vod_remarks")
     private String vodRemarks;
-    
     @SerializedName("vod_year")
     private String vodYear;
-    
     @SerializedName("vod_area")
     private String vodArea;
-    
+    @SerializedName("vod_lang")
+    private String vodLang;           // 语言
+    @SerializedName("vod_state")
+    private String vodState;          // 状态 (如: 连载中)
     @SerializedName("vod_actor")
     private String vodActor;
-    
     @SerializedName("vod_director")
     private String vodDirector;
-    
     @SerializedName("vod_content")
     private String vodContent;
-    
     @SerializedName("vod_play_from")
-    private String vodPlayFrom;
-    
+    private String vodPlayFrom;       // 播放源 (如: qq$$$youku)
     @SerializedName("vod_play_url")
-    private String vodPlayUrl;
-    
+    private String vodPlayUrl;        // 播放地址
+    @SerializedName("vod_play_note")
+    private String vodPlayNote;       // 播放备注
+    @SerializedName("vod_sub")
+    private String vodSub;            // 副标题/别名
+    @SerializedName("vod_score")
+    private String vodScore;          // 评分
+    @SerializedName("vod_duration")
+    private String vodDuration;       // 时长
     @SerializedName("vod_tag")
-    private String vodTag;
-    
+    private String vodTag;            // folder / file
     @SerializedName("action")
     private String action;
-    
     @SerializedName("style")
     private Style style;
 
-    // --- 快速构建工具方法 ---
+    // --- 静态解析与快速构建 ---
 
-    /**
-     * 从 JSON 字符串解析对象，自带空安全处理
-     */
     public static Vod objectFrom(String str) {
         try {
+            if (str == null || str.trim().isEmpty()) return new Vod();
             return Optional.ofNullable(GSON.fromJson(str, Vod.class)).orElseGet(Vod::new);
         } catch (Exception e) {
             return new Vod();
         }
     }
 
-    /**
-     * 快速创建带动作的对象
-     */
     public static Vod action(String action) {
         return Vod.builder().action(action).build();
     }
 
-    // --- 兼容性构造器 (保留原代码逻辑，通过 Builder 实现) ---
+    // --- 传统构造器兼容 (手动保留以支持旧代码直接 new) ---
 
     public Vod(String vodId, String vodName, String vodPic) {
         this.vodId = vodId;
@@ -107,27 +100,40 @@ public class Vod implements Serializable {
         this.vodTag = folder ? "folder" : "file";
     }
 
-    // --- 内部样式类 ---
+    // --- 业务逻辑方法 ---
+
+    public boolean isFolder() {
+        return "folder".equals(vodTag);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Vod vod = (Vod) o;
+        return Objects.equals(vodId, vod.vodId); // 以 vodId 作为唯一标识
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(vodId);
+    }
+
+    // --- 内部 Style 类 ---
 
     @Data
     @NoArgsConstructor
-    @AllArgsConstructor(access = AccessLevel.PRIVATE)
+    @AllArgsConstructor
     public static class Style implements Serializable {
-        
         @SerializedName("type")
         private String type;
-        
         @SerializedName("ratio")
         private Float ratio;
 
         public static Style rect() { return rect(0.75f); }
-        
         public static Style rect(float ratio) { return new Style("rect", ratio); }
-        
         public static Style oval() { return new Style("oval", 1.0f); }
-        
         public static Style full() { return new Style("full", null); }
-        
         public static Style list() { return new Style("list", null); }
     }
 }
