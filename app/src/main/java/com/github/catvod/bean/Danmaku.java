@@ -1,35 +1,38 @@
 package com.github.catvod.bean;
 
-import com.google.gson.Gson;
 import com.google.gson.annotations.SerializedName;
-import com.google.gson.reflect.TypeToken;
 
-import java.lang.reflect.Type;
-import java.util.List;
-
-public class Danmaku {
-
-    @SerializedName("name")
-    private String name;
-    @SerializedName("url")
-    private String url;
-
-    public static List<Danmaku> arrayFrom(String str) {
-        Type listType = new TypeToken<List<Danmaku>>() {}.getType();
-        return new Gson().fromJson(str, listType);
+/**
+ * 弹幕实体类
+ * 使用 Record 自动实现 Getter (n(), v()), equals, hashCode, toString
+ */
+public record Danmaku(
+    @SerializedName("name") String name,
+    @SerializedName("url") String url
+) {
+    public static Builder create() {
+        return new Builder();
     }
 
-    public static Danmaku create() {
-        return new Danmaku();
-    }
+    /**
+     * 保持链式调用习惯的 Builder
+     */
+    public static class Builder {
+        private String name;
+        private String url;
 
-    public Danmaku name(String name) {
-        this.name = name;
-        return this;
-    }
+        public Builder name(String name) {
+            this.name = name;
+            return this;
+        }
 
-    public Danmaku url(String url) {
-        this.url = url;
-        return this;
+        public Builder url(String url) {
+            this.url = url;
+            return this;
+        }
+
+        public Danmaku build() {
+            return new Danmaku(name, url);
+        }
     }
 }
