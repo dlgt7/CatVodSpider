@@ -12,15 +12,13 @@ public class OkResult {
     private final Map<String, List<String>> resp;
 
     public OkResult() {
-        this.code = 500;
-        this.body = "";
-        this.resp = new HashMap<>();
+        this(500, "", new HashMap<>());
     }
 
     public OkResult(int code, String body, Map<String, List<String>> resp) {
         this.code = code;
         this.body = body;
-        this.resp = resp;
+        this.resp = resp != null ? resp : new HashMap<>();
     }
 
     public int getCode() {
@@ -35,18 +33,21 @@ public class OkResult {
         return resp;
     }
 
-    // --- 新增功能 ---
-
     public boolean isSuccessful() {
         return code >= 200 && code < 300;
     }
 
+    /**
+     * 完全不区分大小写的 Header 获取方式
+     */
     public String getHeader(String name) {
-        if (resp == null) return "";
-        List<String> values = resp.get(name);
-        if (values == null || values.isEmpty()) {
-            values = resp.get(name.toLowerCase()); // 兼容大小写
+        if (name == null) return "";
+        for (Map.Entry<String, List<String>> entry : resp.entrySet()) {
+            if (name.equalsIgnoreCase(entry.getKey())) {
+                List<String> values = entry.getValue();
+                return (values == null || values.isEmpty()) ? "" : values.get(0);
+            }
         }
-        return (values == null || values.isEmpty()) ? "" : values.get(0);
+        return "";
     }
 }
