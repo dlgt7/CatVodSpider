@@ -42,11 +42,11 @@ class OkRequest {
         }
 
         Request.Builder builder = new Request.Builder().url(url);
-        
-        // 1. 先注入默认 UA
-        builder.addHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
-        
-        // 2. 注入用户自定义 Header (如果是 UA 则会覆盖上面的默认值)
+
+        // 1. 注入默认 User-Agent
+        builder.header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+
+        // 2. 注入自定义 Header，如果是 UA 则会覆盖默认值
         if (header != null) {
             for (Map.Entry<String, String> entry : header.entrySet()) {
                 builder.header(entry.getKey(), entry.getValue());
@@ -56,7 +56,7 @@ class OkRequest {
         if (method.equals(OkHttp.POST)) {
             builder.post(getRequestBody());
         }
-        
+
         return builder.build();
     }
 
@@ -73,14 +73,21 @@ class OkRequest {
         return formBody.build();
     }
 
+    /**
+     * 核心修复：对 URL 参数进行 URLEncode 编码
+     */
     private void prepareGetUrl() {
         if (params == null || params.isEmpty()) return;
         StringBuilder sb = new StringBuilder(url);
-        sb.append(url.contains("?") ? "&" : "?");
-        
+        if (!url.contains("?")) {
+            sb.append("?");
+        } else if (!url.endsWith("?") && !url.endsWith("&")) {
+            sb.append("&");
+        }
+
         for (Map.Entry<String, String> entry : params.entrySet()) {
             try {
-                // 修复：对参数 Key 和 Value 进行 URL 编码
+                // 对 Key 和 Value 进行 UTF-8 编码，防止中文或特殊字符导致请求失败
                 sb.append(URLEncoder.encode(entry.getKey(), "UTF-8"))
                   .append("=")
                   .append(URLEncoder.encode(entry.getValue(), "UTF-8"))
@@ -95,8 +102,8 @@ class OkRequest {
     public OkResult execute(OkHttpClient client) {
         try (Response res = client.newCall(buildRequest()).execute()) {
             return new OkResult(res.code(), res.body().string(), res.headers().toMultimap());
-        } catch (IOException e) {
-            SpiderDebug.log(e);
+        } catch (Throwable e) {
+            SpiderDebug.log(e); // 捕获所有异常并记录日志
             return new OkResult();
         }
     }
