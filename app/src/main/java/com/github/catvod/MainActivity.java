@@ -2,7 +2,6 @@ package com.github.catvod;
 
 import android.app.Activity;
 import android.os.Bundle;
-
 import com.github.catvod.crawler.Spider;
 import com.github.catvod.databinding.ActivityMainBinding;
 import com.github.catvod.spider.Init;
@@ -11,7 +10,6 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonParser;
 import com.orhanobut.logger.AndroidLogAdapter;
 import com.orhanobut.logger.Logger;
-
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -33,7 +31,6 @@ public class MainActivity extends Activity {
         Logger.addLogAdapter(new AndroidLogAdapter());
         executor = Executors.newCachedThreadPool();
         
-        // 动态加载爬虫类，避免因删除 PTT.java 导致的编译错误
         initSpiderInstance();
 
         executor.execute(this::initSpider);
@@ -43,9 +40,9 @@ public class MainActivity extends Activity {
 
     private void initSpiderInstance() {
         try {
-            // 你可以将下面的字符串替换为你项目中现有的任何爬虫类名，例如 "com.github.catvod.spider.Douban"
             String className = "com.github.catvod.spider.Douban"; 
-            this.spider = (Spider) Class.forName(className).getDeclaredConstructor().newInstance();
+            // 注意：此处 java.lang.Class.forName 是原生的，不需要改
+            this.spider = (Spider) java.lang.Class.forName(className).getDeclaredConstructor().newInstance();
         } catch (Throwable e) {
             Logger.e("未能加载指定的爬虫类，请检查类名是否正确");
         }
