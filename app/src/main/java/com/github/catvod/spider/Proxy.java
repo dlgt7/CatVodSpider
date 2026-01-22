@@ -9,11 +9,8 @@ import java.util.Map;
 public class Proxy {
 
     private static volatile int port = -1;
-    private static String host = "http://127.0.0.1";
+    private static volatile String host = "http://127.0.0.1";
 
-    /**
-     * 核心代理入口，增加空指针和基础校验
-     */
     public static Object[] proxy(Map<String, String> params) {
         try {
             if (params != null && "ck".equals(params.get("do"))) {
@@ -26,17 +23,17 @@ public class Proxy {
         return null;
     }
 
-    /**
-     * 适配 TVBox 和 FongMi 的多路径反射逻辑
-     */
     public static void init() {
         if (port > 0) return;
         
-        // 依次尝试不同版本壳子的 Proxy 类名
+        // 1. 扩充 2025 常见类名路径
         String[] possibleClasses = {
-            "com.github.catvod.Proxy",       // 经典 TVBox
-            "com.github.catvod.ProxyServer", // FongMi 或部分新分支
-            "com.catvod.Proxy"               // 精简版分支
+            "com.github.catvod.Proxy",
+            "com.github.catvod.ProxyServer",
+            "com.catvod.Proxy",
+            "com.fongmi.android.tv.utils.Proxy", 
+            "tv.fongmi.android.Proxy",
+            "com.github.catvod.server.Proxy"
         };
 
         for (String clzName : possibleClasses) {
@@ -44,62 +41,70 @@ public class Proxy {
                 Class<?> clz = Class.forName(clzName);
                 port = (int) clz.getMethod("getPort").invoke(null);
                 if (port > 0) {
-                    SpiderDebug.log("已通过反射识别代理端口: " + port + " (" + clzName + ")");
+                    checkHost(); // 确定端口后，探测是 IPv4 还是 IPv6
+                    SpiderDebug.log("识别代理: " + host + ":" + port + " (" + clzName + ")");
                     return;
                 }
             } catch (Throwable ignored) {}
         }
 
-        // 如果反射全部失败，启动有限范围的快速扫描
+        // 2. 如果反射失败，启动快速探测
         findPort();
     }
 
-    public static int getPort() {
-        return port;
+    /**
+     * 探测当前环境支持的 Loopback 地址 (IPv4 vs IPv6)
+     */
+    private static void checkHost() {
+        String[] hosts = {"http://127.0.0.1", "http://[::1]"};
+        for (String h : hosts) {
+            try {
+                String res = OkHttp.string(h + ":" + port + "/proxy?do=ck", null);
+                if ("ok".equals(res != null ? res.trim() : "")) {
+                    host = h;
+                    return;
+                }
+            } catch (Exception ignored) {}
+        }
     }
 
-    /**
-     * 增强的 URL 生成逻辑，自动处理参数连接符
-     */
     public static String getUrl(String siteKey, String param) {
-        if (port <= 0) init(); // 延迟初始化检查
-        String connector = (param != null && (param.startsWith("&") || param.startsWith("?"))) ? "" : "?";
+        if (port <= 0) {
+            init();
+            if (port <= 0) return null; // 兜底：返回 null 防止上游拼接错误 URL
+        }
+        String connector = (param == null || param.isEmpty() || param.startsWith("?") || param.startsWith("&")) ? "" : "?";
         return host + ":" + port + "/proxy?do=csp&siteKey=" + siteKey + connector + (param != null ? param : "");
     }
 
     public static String getUrl() {
-        return host + ":" + port + "/proxy";
+        return port > 0 ? host + ":" + port + "/proxy" : null;
     }
 
-    /**
-     * 优化扫描逻辑：针对常用端口进行探测
-     */
     private static void findPort() {
-        // 8964:经典, 9978:FongMi常用, 10001:某些改版
-        int[] commonPorts = {8964, 9978, 10001, 19964};
+        // 优先探测已知壳子的默认端口，加快启动速度
+        int[] commonPorts = {9978, 8964, 10001, 19964};
         for (int p : commonPorts) {
-            if (check(p)) {
-                port = p;
-                SpiderDebug.log("探测到可用代理端口: " + port);
-                return;
-            }
+            if (tryPort(p)) return;
         }
-        // 最后的降级尝试
-        for (int p = 8964; p < 9000; p++) {
-            if (check(p)) {
-                port = p;
-                return;
-            }
+        // 范围扫描 (缩小范围至 100 个常用端口)
+        for (int p = 8964; p < 9064; p++) {
+            if (tryPort(p)) return;
         }
     }
 
-    private static boolean check(int p) {
-        try {
-            // 设置 500ms 超时，避免长时间挂起
-            String res = OkHttp.string(host + ":" + p + "/proxy?do=ck", null);
-            return "ok".equals(res != null ? res.trim() : "");
-        } catch (Exception e) {
-            return false;
+    private static boolean tryPort(int p) {
+        String[] hosts = {"http://127.0.0.1", "http://[::1]"};
+        for (String h : hosts) {
+            try {
+                String res = OkHttp.string(h + ":" + p + "/proxy?do=ck", null);
+                if ("ok".equals(res != null ? res.trim() : "")) {
+                    port = p;
+                    host = h;
+                    return true;
+                }
+            } catch (Exception ignored) {}
         }
+        return false;
     }
 }
