@@ -14,7 +14,6 @@ public class Init {
     private final ExecutorService executor;
     private final Handler handler;
 
-    // 使用静态内部类实现单例 (线程安全且延迟加载)
     private static class Loader {
         static final Init INSTANCE = new Init();
     }
@@ -25,7 +24,7 @@ public class Init {
 
     private Init() {
         this.handler = new Handler(Looper.getMainLooper());
-        // 核心线程数设为 5，最大程度兼顾性能与功耗
+        // 核心线程数 5，适合 Spider 的 IO 密集型任务
         this.executor = Executors.newFixedThreadPool(5);
     }
 
@@ -33,14 +32,11 @@ public class Init {
         return get().app;
     }
 
-    /**
-     * 初始化入口
-     */
     public static void init(Context context) {
         if (context == null) return;
-        // 确保获取的是 ApplicationContext，防止 Activity 泄露
+        // 确保持有的是全局 Application 上下文
         get().app = (Application) context.getApplicationContext();
-        // 异步执行代理初始化，避免阻塞主线程
+        // 异步执行代理初始化，防止启动时卡顿
         execute(Proxy::init);
     }
 
@@ -57,7 +53,7 @@ public class Init {
     }
 
     /**
-     * 释放资源 (可选：供壳子销毁时调用)
+     * 建议在 Spider 彻底销毁或壳子退出时调用
      */
     public void shutdown() {
         try {
