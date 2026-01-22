@@ -20,20 +20,23 @@ class OkRequest {
     private final String json;
     private String url;
 
-    OkRequest(String method, String url, Map<String, String> params, Map<String, String> header) {
-        this(method, url, params, null, header);
-    }
-
-    OkRequest(String method, String url, String json, Map<String, String> header) {
-        this(method, url, null, json, header);
-    }
-
+    // 将构造函数设为私有，统一内部初始化逻辑
     private OkRequest(String method, String url, Map<String, String> params, String json, Map<String, String> header) {
         this.url = url;
         this.json = json;
         this.method = method;
         this.params = params;
         this.header = header;
+    }
+
+    // 静态工厂方法：用于普通 GET 或 POST 表单请求
+    public static OkRequest create(String method, String url, Map<String, String> params, Map<String, String> header) {
+        return new OkRequest(method, url, params, null, header);
+    }
+
+    // 静态工厂方法：用于 JSON POST 请求
+    public static OkRequest createJson(String method, String url, String json, Map<String, String> header) {
+        return new OkRequest(method, url, null, json, header);
     }
 
     private Request buildRequest() {
@@ -43,10 +46,9 @@ class OkRequest {
 
         Request.Builder builder = new Request.Builder().url(url);
 
-        // 1. 注入默认 User-Agent
+        // 注入默认 User-Agent
         builder.header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
 
-        // 2. 注入自定义 Header，如果是 UA 则会覆盖默认值
         if (header != null) {
             for (Map.Entry<String, String> entry : header.entrySet()) {
                 builder.header(entry.getKey(), entry.getValue());
@@ -73,9 +75,6 @@ class OkRequest {
         return formBody.build();
     }
 
-    /**
-     * 核心修复：对 URL 参数进行 URLEncode 编码
-     */
     private void prepareGetUrl() {
         if (params == null || params.isEmpty()) return;
         StringBuilder sb = new StringBuilder(url);
@@ -87,7 +86,6 @@ class OkRequest {
 
         for (Map.Entry<String, String> entry : params.entrySet()) {
             try {
-                // 对 Key 和 Value 进行 UTF-8 编码，防止中文或特殊字符导致请求失败
                 sb.append(URLEncoder.encode(entry.getKey(), "UTF-8"))
                   .append("=")
                   .append(URLEncoder.encode(entry.getValue(), "UTF-8"))
@@ -103,7 +101,7 @@ class OkRequest {
         try (Response res = client.newCall(buildRequest()).execute()) {
             return new OkResult(res.code(), res.body().string(), res.headers().toMultimap());
         } catch (Throwable e) {
-            SpiderDebug.log(e); // 捕获所有异常并记录日志
+            SpiderDebug.log(e);
             return new OkResult();
         }
     }
