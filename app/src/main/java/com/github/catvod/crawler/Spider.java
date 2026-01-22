@@ -4,6 +4,7 @@ import android.content.Context;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -14,27 +15,23 @@ import okhttp3.OkHttpClient;
 
 /**
  * 爬虫核心抽象类
- * 优化：引入单例 OkHttpClient、参数预校验、高性能集合初始化
+ * 修复：修复变量未使用逻辑、调整超时时间、增加默认调用日志
  */
 public abstract class Spider {
 
     public String siteKey;
     private static volatile OkHttpClient mClient;
 
-    /**
-     * 初始化环境
-     */
     public void init(@NonNull Context context) throws Exception {
+        // 子类需实现初始化逻辑
     }
 
     public void init(@NonNull Context context, String extend) throws Exception {
         init(context);
     }
 
-    /**
-     * 首页内容：默认返回空 JSON 字符串，确保解析器不崩溃
-     */
     public String homeContent(boolean filter) throws Exception {
+        SpiderDebug.log("Default homeContent called (not overridden)");
         return "{}";
     }
 
@@ -43,21 +40,13 @@ public abstract class Spider {
     }
 
     /**
-     * 分类内容：优化 HashMap 初始化容量，减少 rehash 开销
+     * @param extend 扩展参数，若子类需要使用，建议直接操作该 Map 或根据需求拷贝
      */
     public String categoryContent(String tid, String pg, boolean filter, HashMap<String, String> extend) throws Exception {
-        if (extend != null) {
-            // 根据负载因子 0.75 计算初始容量
-            int capacity = (int) (extend.size() / 0.75F + 1.0F);
-            Map<String, String> safeExtend = new HashMap<>(capacity);
-            safeExtend.putAll(extend);
-        }
+        SpiderDebug.log("Default categoryContent called (not overridden)");
         return "{}";
     }
 
-    /**
-     * 详情内容：增加列表非空校验
-     */
     public String detailContent(List<String> ids) throws Exception {
         if (ids == null || ids.isEmpty()) return "{}";
         return "{}";
@@ -98,29 +87,28 @@ public abstract class Spider {
     }
 
     /**
-     * 显式资源释放：子类应在此关闭线程池或 IO 流
+     * 资源销毁：强烈建议子类在此关闭自定义的网络连接、线程池或缓存
      */
     public void destroy() {
+        SpiderDebug.log("Spider destroy called");
     }
 
-    /**
-     * 预留安全 DNS (DoH) 接口
-     */
     public static Dns safeDns() {
+        // 预留 DoH 扩展点，目前使用系统默认 DNS
         return Dns.SYSTEM;
     }
 
     /**
-     * 线程安全的单例 OkHttpClient
+     * 单例 OkHttpClient：将超时时间调整为 20s 以提高稳定性
      */
     public static OkHttpClient client() {
         if (mClient == null) {
             synchronized (Spider.class) {
                 if (mClient == null) {
                     mClient = new OkHttpClient.Builder()
-                            .readTimeout(10, TimeUnit.SECONDS)
-                            .writeTimeout(10, TimeUnit.SECONDS)
-                            .connectTimeout(10, TimeUnit.SECONDS)
+                            .readTimeout(20, TimeUnit.SECONDS)
+                            .writeTimeout(20, TimeUnit.SECONDS)
+                            .connectTimeout(20, TimeUnit.SECONDS)
                             .dns(safeDns())
                             .build();
                 }
