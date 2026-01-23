@@ -1,6 +1,6 @@
 package com.github.catvod.bean;
 
-import com.github.catvod.utils.Util;
+import com.github.catvod.utils.UriUtil;
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.annotations.SerializedName;
@@ -142,7 +142,7 @@ public class Result {
 
     public Result chrome() {
         Map<String, String> header = new HashMap<>();
-        header.put("User-Agent", Util.CHROME);
+        header.put("User-Agent", UriUtil.CHROME);
         header(header);
         return this;
     }
