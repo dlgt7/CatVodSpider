@@ -302,7 +302,7 @@ public class Market extends Spider {
         Vod vod = new Vod();
         vod.setVodId(item.getUrl());
         vod.setVodName(item.getName());
-        vod.setVodPic(item.getPic());
+        vod.setVodPic(item.getIcon());
         vod.setVodRemarks(item.getCopy());
         vod.setVodTag("file");
         return vod;

@@ -151,7 +151,7 @@ public class PTT extends Spider {
             
             Vod vod = new Vod();
             vod.setVodId(ids.get(0));
-            vod.setVodPlayFrom(Util.join("$$$", flags.values()));
+            vod.setVodPlayFrom(Util.join("$$$", new ArrayList<>(flags.values())));
             vod.setVodPlayUrl(Util.join("$$$", playUrls));
             return Result.string(vod);
         } catch (Exception e) {
