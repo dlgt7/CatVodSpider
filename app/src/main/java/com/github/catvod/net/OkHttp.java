@@ -91,7 +91,7 @@ public class OkHttp {
     }
 
     public static String delete(String url, Map<String, String> header) {
-        return new OkRequest(DELETE, url, null, header).execute(client()).getBody();
+        return new OkRequest(DELETE, url, (String) null, header).execute(client()).getBody();
     }
 
     public static String patch(String url, String json, Map<String, String> header) {
@@ -228,7 +228,7 @@ public class OkHttp {
     }
 
     private static Headers getHeaders(Map<String, String> header) {
-        if (header == null || header.isEmpty()) return new Headers();
+        if (header == null || header.isEmpty()) return new Headers.Builder().build();
         Headers.Builder builder = new Headers.Builder();
         for (Map.Entry<String, String> entry : header.entrySet()) {
             builder.add(entry.getKey(), entry.getValue());
