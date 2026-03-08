@@ -1,6 +1,7 @@
 package com.github.catvod.utils;
 
 import android.os.Environment;
+import android.text.TextUtils;
 
 import androidx.annotation.Nullable;
 
@@ -12,9 +13,13 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.List;
 
 public class Path {
@@ -43,6 +48,46 @@ public class Path {
         return new File(tv(), name);
     }
 
+    public static File cache() {
+        return mkdir(new File(tv(), "cache"));
+    }
+
+    public static File cache(String name) {
+        return new File(cache(), name);
+    }
+
+    public static File temp() {
+        return mkdir(new File(tv(), "temp"));
+    }
+
+    public static File temp(String name) {
+        return new File(temp(), name);
+    }
+
+    public static File log() {
+        return mkdir(new File(tv(), "log"));
+    }
+
+    public static File log(String name) {
+        return new File(log(), name);
+    }
+
+    public static File config() {
+        return mkdir(new File(tv(), "config"));
+    }
+
+    public static File config(String name) {
+        return new File(config(), name);
+    }
+
+    public static File plugin() {
+        return mkdir(new File(tv(), "plugin"));
+    }
+
+    public static File plugin(String name) {
+        return new File(plugin(), name);
+    }
+
     public static String read(File file) {
         try {
             return new String(readToByte(file), StandardCharsets.UTF_8);
@@ -60,13 +105,13 @@ public class Path {
         }
     }
 
-    private static byte[] readToByte(File file) throws IOException {
+    public static byte[] readToByte(File file) throws IOException {
         try (FileInputStream is = new FileInputStream(file)) {
             return readToByte(is);
         }
     }
 
-    private static byte[] readToByte(InputStream is) throws IOException {
+    public static byte[] readToByte(InputStream is) throws IOException {
         try (ByteArrayOutputStream bos = new ByteArrayOutputStream()) {
             int read;
             byte[] buffer = new byte[16384];
@@ -86,6 +131,27 @@ public class Path {
             e.printStackTrace();
             return file;
         }
+    }
+
+    public static File write(File file, String data) {
+        return write(file, data.getBytes(StandardCharsets.UTF_8));
+    }
+
+    public static File append(File file, byte[] data) {
+        try {
+            FileOutputStream fos = new FileOutputStream(file, true);
+            fos.write(data);
+            fos.flush();
+            fos.close();
+            return file;
+        } catch (IOException e) {
+            e.printStackTrace();
+            return file;
+        }
+    }
+
+    public static File append(File file, String data) {
+        return append(file, data.getBytes(StandardCharsets.UTF_8));
     }
 
     public static void move(File in, File out) {
@@ -121,6 +187,14 @@ public class Path {
         });
     }
 
+    public static void sortByTime(File[] files) {
+        Arrays.sort(files, (o1, o2) -> Long.compare(o2.lastModified(), o1.lastModified()));
+    }
+
+    public static void sortBySize(File[] files) {
+        Arrays.sort(files, (o1, o2) -> Long.compare(o2.length(), o1.length()));
+    }
+
     public static List<File> list(@Nullable File dir) {
         if (dir == null) return new ArrayList<>();
         File[] files = dir.listFiles();
@@ -128,10 +202,41 @@ public class Path {
         return files == null ? new ArrayList<>() : Arrays.asList(files);
     }
 
+    public static List<File> listFiles(File dir, String extension) {
+        List<File> result = new ArrayList<>();
+        if (dir == null || !dir.isDirectory()) return result;
+        File[] files = dir.listFiles((d, name) -> name.toLowerCase().endsWith(extension.toLowerCase()));
+        if (files != null) result.addAll(Arrays.asList(files));
+        return result;
+    }
+
+    public static List<File> listFilesRecursive(File dir) {
+        List<File> result = new ArrayList<>();
+        if (dir == null || !dir.isDirectory()) return result;
+        File[] files = dir.listFiles();
+        if (files != null) {
+            for (File file : files) {
+                if (file.isDirectory()) {
+                    result.addAll(listFilesRecursive(file));
+                } else {
+                    result.add(file);
+                }
+            }
+        }
+        return result;
+    }
+
     public static void clear(File dir) {
         if (dir == null) return;
         if (dir.isDirectory()) for (File file : list(dir)) clear(file);
         if (dir.delete()) SpiderDebug.log("Deleted:" + dir.getAbsolutePath());
+    }
+
+    public static void clearDir(File dir) {
+        if (dir == null || !dir.isDirectory()) return;
+        for (File file : list(dir)) {
+            clear(file);
+        }
     }
 
     public static File create(File file) {
@@ -145,5 +250,214 @@ public class Path {
             e.printStackTrace();
             return file;
         }
+    }
+
+    public static boolean exists(String path) {
+        return !TextUtils.isEmpty(path) && new File(path).exists();
+    }
+
+    public static boolean exists(File file) {
+        return file != null && file.exists();
+    }
+
+    public static boolean isFile(String path) {
+        return !TextUtils.isEmpty(path) && new File(path).isFile();
+    }
+
+    public static boolean isFile(File file) {
+        return file != null && file.isFile();
+    }
+
+    public static boolean isDirectory(String path) {
+        return !TextUtils.isEmpty(path) && new File(path).isDirectory();
+    }
+
+    public static boolean isDirectory(File file) {
+        return file != null && file.isDirectory();
+    }
+
+    public static boolean canRead(String path) {
+        return !TextUtils.isEmpty(path) && new File(path).canRead();
+    }
+
+    public static boolean canRead(File file) {
+        return file != null && file.canRead();
+    }
+
+    public static boolean canWrite(String path) {
+        return !TextUtils.isEmpty(path) && new File(path).canWrite();
+    }
+
+    public static boolean canWrite(File file) {
+        return file != null && file.canWrite();
+    }
+
+    public static long length(String path) {
+        return TextUtils.isEmpty(path) ? 0 : new File(path).length();
+    }
+
+    public static long length(File file) {
+        return file == null ? 0 : file.length();
+    }
+
+    public static long lastModified(String path) {
+        return TextUtils.isEmpty(path) ? 0 : new File(path).lastModified();
+    }
+
+    public static long lastModified(File file) {
+        return file == null ? 0 : file.lastModified();
+    }
+
+    public static String getName(String path) {
+        if (TextUtils.isEmpty(path)) return "";
+        return new File(path).getName();
+    }
+
+    public static String getName(File file) {
+        return file == null ? "" : file.getName();
+    }
+
+    public static String getParent(String path) {
+        if (TextUtils.isEmpty(path)) return "";
+        File parent = new File(path).getParentFile();
+        return parent == null ? "" : parent.getAbsolutePath();
+    }
+
+    public static String getParent(File file) {
+        if (file == null) return "";
+        File parent = file.getParentFile();
+        return parent == null ? "" : parent.getAbsolutePath();
+    }
+
+    public static String getExtension(String filename) {
+        if (TextUtils.isEmpty(filename)) return "";
+        int lastDot = filename.lastIndexOf('.');
+        return lastDot >= 0 ? filename.substring(lastDot + 1).toLowerCase() : "";
+    }
+
+    public static String getExtension(File file) {
+        return file == null ? "" : getExtension(file.getName());
+    }
+
+    public static String removeExtension(String filename) {
+        if (TextUtils.isEmpty(filename)) return "";
+        int lastDot = filename.lastIndexOf('.');
+        return lastDot >= 0 ? filename.substring(0, lastDot) : filename;
+    }
+
+    public static String getMimeType(String filename) {
+        String ext = getExtension(filename);
+        switch (ext) {
+            case "jpg":
+            case "jpeg":
+                return "image/jpeg";
+            case "png":
+                return "image/png";
+            case "gif":
+                return "image/gif";
+            case "webp":
+                return "image/webp";
+            case "mp4":
+                return "video/mp4";
+            case "mkv":
+                return "video/x-matroska";
+            case "avi":
+                return "video/x-msvideo";
+            case "mov":
+                return "video/quicktime";
+            case "mp3":
+                return "audio/mpeg";
+            case "wav":
+                return "audio/wav";
+            case "flac":
+                return "audio/flac";
+            case "pdf":
+                return "application/pdf";
+            case "txt":
+                return "text/plain";
+            case "json":
+                return "application/json";
+            case "xml":
+                return "application/xml";
+            case "html":
+                return "text/html";
+            case "js":
+                return "application/javascript";
+            case "css":
+                return "text/css";
+            case "zip":
+                return "application/zip";
+            case "rar":
+                return "application/x-rar-compressed";
+            case "7z":
+                return "application/x-7z-compressed";
+            default:
+                return "application/octet-stream";
+        }
+    }
+
+    public static String formatSize(long bytes) {
+        if (bytes < 1024) {
+            return bytes + " B";
+        } else if (bytes < 1024 * 1024) {
+            return String.format("%.2f KB", bytes / 1024.0);
+        } else if (bytes < 1024 * 1024 * 1024) {
+            return String.format("%.2f MB", bytes / (1024.0 * 1024));
+        } else {
+            return String.format("%.2f GB", bytes / (1024.0 * 1024 * 1024));
+        }
+    }
+
+    public static int countFiles(File dir) {
+        if (dir == null || !dir.isDirectory()) return 0;
+        File[] files = dir.listFiles(File::isFile);
+        return files == null ? 0 : files.length;
+    }
+
+    public static int countDirs(File dir) {
+        if (dir == null || !dir.isDirectory()) return 0;
+        File[] files = dir.listFiles(File::isDirectory);
+        return files == null ? 0 : files.length;
+    }
+
+    public static long getDirSize(File dir) {
+        if (dir == null) return 0;
+        if (dir.isFile()) return dir.length();
+        long size = 0;
+        File[] files = dir.listFiles();
+        if (files != null) {
+            for (File file : files) {
+                size += getDirSize(file);
+            }
+        }
+        return size;
+    }
+
+    public static boolean rename(File file, String newName) {
+        if (file == null || TextUtils.isEmpty(newName)) return false;
+        File newFile = new File(file.getParent(), newName);
+        return file.renameTo(newFile);
+    }
+
+    public static boolean delete(File file) {
+        if (file == null) return false;
+        if (file.isDirectory()) {
+            File[] files = file.listFiles();
+            if (files != null) {
+                for (File f : files) {
+                    delete(f);
+                }
+            }
+        }
+        return file.delete();
+    }
+
+    public static boolean isEmpty(File file) {
+        if (file == null) return true;
+        if (file.isDirectory()) {
+            File[] files = file.listFiles();
+            return files == null || files.length == 0;
+        }
+        return file.length() == 0;
     }
 }
