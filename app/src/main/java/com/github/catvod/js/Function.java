@@ -175,17 +175,17 @@ public class Function {
             
             Spider spider = info.getSpider();
             if (spider != null) {
-                String result = spider.playerContent(flag, id, vipFlags);
-                if (!TextUtils.isEmpty(result)) {
-                    JSONObject json = new JSONObject(result);
-                    Result result = Result.get()
+                String jsonStr = spider.playerContent(flag, id, vipFlags);
+                if (!TextUtils.isEmpty(jsonStr)) {
+                    JSONObject json = new JSONObject(jsonStr);
+                    Result res = Result.get()
                             .url(json.optString("url"))
                             .parse(json.optInt("parse", 0))
                             .header(parseHeader(json.optString("header")))
                             .format(json.optString("format"))
                             .subs(parseSubs(json.optJSONArray("subs")));
-                    if (json.optInt("jx", 0) == 1) result.jx();
-                    return result.string();
+                    if (json.optInt("jx", 0) == 1) res.jx();
+                    return res.string();
                 }
             }
             
