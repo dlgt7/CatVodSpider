@@ -178,14 +178,14 @@ public class Function {
                 String result = spider.playerContent(flag, id, vipFlags);
                 if (!TextUtils.isEmpty(result)) {
                     JSONObject json = new JSONObject(result);
-                    return Result.get()
+                    Result result = Result.get()
                             .url(json.optString("url"))
                             .parse(json.optInt("parse", 0))
-                            .jx(json.optInt("jx", 0))
                             .header(parseHeader(json.optString("header")))
                             .format(json.optString("format"))
-                            .subs(parseSubs(json.optJSONArray("subs")))
-                            .string();
+                            .subs(parseSubs(json.optJSONArray("subs")));
+                    if (json.optInt("jx", 0) == 1) result.jx();
+                    return result.string();
                 }
             }
             
