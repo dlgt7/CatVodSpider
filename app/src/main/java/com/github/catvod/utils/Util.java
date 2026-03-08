@@ -17,18 +17,34 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class Util {
 
-    public static final Pattern THUNDER = Pattern.compile("(magnet|thunder|ed2k):.*");
-    public static final String CHROME = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36";
+    private static final Pattern THUNDER = Pattern.compile("(magnet|thunder|ed2k):.*");
+    private static final Pattern HTML_TAG = Pattern.compile("<[^>]*>");
+    private static final Pattern WHITESPACE = Pattern.compile("\\s+");
+    private static final Pattern DOMAIN_PREFIX = Pattern.compile("^(https?://)?(www\\.)?");
+    
+    private static final String[] USER_AGENTS = {
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Mobile/15E148 Safari/604.1"
+    };
+    
+    public static final String CHROME = USER_AGENTS[0];
+    
     public static final List<String> MEDIA = Arrays.asList("mp4", "mkv", "mov", "wav", "wma", "wmv", "flv", "avi", "iso", "mpg", "ts", "mp3", "aac", "flac", "m4a", "ape", "ogg", "rm", "rmvb", "asf", "webm", "m3u8", "f4v");
     public static final List<String> SUB = Arrays.asList("srt", "ass", "ssa", "vtt", "sub", "smi");
     public static final List<String> IMAGE = Arrays.asList("jpg", "jpeg", "png", "gif", "webp", "bmp", "svg");
     public static final List<String> AUDIO = Arrays.asList("mp3", "wav", "wma", "aac", "flac", "m4a", "ogg", "ape", "opus");
     public static final List<String> VIDEO = Arrays.asList("mp4", "mkv", "avi", "mov", "wmv", "flv", "webm", "m3u8", "ts", "f4v", "rmvb", "rm", "asf", "3gp");
+
+    public static String getRandomUserAgent() {
+        return USER_AGENTS[(int) (Math.random() * USER_AGENTS.length)];
+    }
 
     public static boolean isThunder(String url) {
         return THUNDER.matcher(url).find() || isTorrent(url);
@@ -322,7 +338,7 @@ public class Util {
             return "";
         }
         try {
-            String domain = url.replaceAll("^(https?://)?(www\\.)?", "");
+            String domain = DOMAIN_PREFIX.matcher(url).replaceAll("");
             int index = domain.indexOf('/');
             return index > 0 ? domain.substring(0, index) : domain;
         } catch (Exception e) {
@@ -408,14 +424,14 @@ public class Util {
         if (html == null) {
             return "";
         }
-        return html.replaceAll("<[^>]*>", "");
+        return HTML_TAG.matcher(html).replaceAll("");
     }
 
     public static String cleanWhitespace(String text) {
         if (text == null) {
             return "";
         }
-        return text.replaceAll("\\s+", " ").trim();
+        return WHITESPACE.matcher(text).replaceAll(" ").trim();
     }
 
     public static boolean isNumeric(String text) {

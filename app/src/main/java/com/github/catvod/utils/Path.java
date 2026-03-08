@@ -13,18 +13,16 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Comparator;
 import java.util.List;
 
 public class Path {
 
     private static final String TAG = Path.class.getSimpleName();
+    private static final int MAX_RECURSION_DEPTH = 20;
+    private static final long MAX_DIR_SIZE = 1024L * 1024 * 1024 * 10;
 
     private static File mkdir(File file) {
         if (!file.exists()) file.mkdirs();
@@ -92,6 +90,7 @@ public class Path {
         try {
             return new String(readToByte(file), StandardCharsets.UTF_8);
         } catch (IOException e) {
+            SpiderDebug.log(e);
             return "";
         }
     }
@@ -100,7 +99,7 @@ public class Path {
         try {
             return new String(readToByte(is), StandardCharsets.UTF_8);
         } catch (IOException e) {
-            e.printStackTrace();
+            SpiderDebug.log(e);
             return "";
         }
     }
@@ -121,14 +120,12 @@ public class Path {
     }
 
     public static File write(File file, byte[] data) {
-        try {
-            FileOutputStream fos = new FileOutputStream(create(file));
+        try (FileOutputStream fos = new FileOutputStream(create(file))) {
             fos.write(data);
             fos.flush();
-            fos.close();
             return file;
         } catch (IOException e) {
-            e.printStackTrace();
+            SpiderDebug.log(e);
             return file;
         }
     }
@@ -138,14 +135,12 @@ public class Path {
     }
 
     public static File append(File file, byte[] data) {
-        try {
-            FileOutputStream fos = new FileOutputStream(file, true);
+        try (FileOutputStream fos = new FileOutputStream(file, true)) {
             fos.write(data);
             fos.flush();
-            fos.close();
             return file;
         } catch (IOException e) {
-            e.printStackTrace();
+            SpiderDebug.log(e);
             return file;
         }
     }
@@ -157,25 +152,28 @@ public class Path {
     public static void move(File in, File out) {
         if (in.renameTo(out)) return;
         copy(in, out);
-        clear(in);
+        delete(in);
     }
 
     public static void copy(File in, File out) {
-        try {
-            copy(new FileInputStream(in), out);
-        } catch (IOException ignored) {
+        try (FileInputStream fis = new FileInputStream(in);
+             FileOutputStream fos = new FileOutputStream(create(out))) {
+            int read;
+            byte[] buffer = new byte[16384];
+            while ((read = fis.read(buffer)) != -1) fos.write(buffer, 0, read);
+        } catch (IOException e) {
+            SpiderDebug.log(e);
         }
     }
 
     public static void copy(InputStream in, File out) {
-        try {
+        try (FileOutputStream fos = new FileOutputStream(create(out))) {
             int read;
             byte[] buffer = new byte[16384];
-            FileOutputStream fos = new FileOutputStream(create(out));
             while ((read = in.read(buffer)) != -1) fos.write(buffer, 0, read);
-            fos.close();
             in.close();
-        } catch (IOException ignored) {
+        } catch (IOException e) {
+            SpiderDebug.log(e);
         }
     }
 
@@ -211,13 +209,29 @@ public class Path {
     }
 
     public static List<File> listFilesRecursive(File dir) {
+        return listFilesRecursive(dir, 0);
+    }
+
+    private static List<File> listFilesRecursive(File dir, int depth) {
         List<File> result = new ArrayList<>();
-        if (dir == null || !dir.isDirectory()) return result;
+        if (dir == null || !dir.isDirectory() || depth > MAX_RECURSION_DEPTH) return result;
+        
+        try {
+            String canonicalPath = dir.getCanonicalPath();
+            if (isSymlink(dir)) {
+                SpiderDebug.log("Skipping symlink: " + canonicalPath);
+                return result;
+            }
+        } catch (IOException e) {
+            SpiderDebug.log(e);
+            return result;
+        }
+        
         File[] files = dir.listFiles();
         if (files != null) {
             for (File file : files) {
                 if (file.isDirectory()) {
-                    result.addAll(listFilesRecursive(file));
+                    result.addAll(listFilesRecursive(file, depth + 1));
                 } else {
                     result.add(file);
                 }
@@ -227,15 +241,16 @@ public class Path {
     }
 
     public static void clear(File dir) {
-        if (dir == null) return;
-        if (dir.isDirectory()) for (File file : list(dir)) clear(file);
-        if (dir.delete()) SpiderDebug.log("Deleted:" + dir.getAbsolutePath());
+        delete(dir);
     }
 
     public static void clearDir(File dir) {
         if (dir == null || !dir.isDirectory()) return;
-        for (File file : list(dir)) {
-            clear(file);
+        File[] files = dir.listFiles();
+        if (files != null) {
+            for (File file : files) {
+                delete(file);
+            }
         }
     }
 
@@ -244,10 +259,9 @@ public class Path {
             if (file.getParentFile() != null) mkdir(file.getParentFile());
             if (!file.canWrite()) file.setWritable(true);
             if (!file.exists()) file.createNewFile();
-            Shell.exec("chmod 777 " + file);
             return file;
         } catch (IOException e) {
-            e.printStackTrace();
+            SpiderDebug.log(e);
             return file;
         }
     }
@@ -421,13 +435,32 @@ public class Path {
     }
 
     public static long getDirSize(File dir) {
-        if (dir == null) return 0;
+        return getDirSize(dir, 0);
+    }
+
+    private static long getDirSize(File dir, int depth) {
+        if (dir == null || depth > MAX_RECURSION_DEPTH) return 0;
         if (dir.isFile()) return dir.length();
+        
+        try {
+            String canonicalPath = dir.getCanonicalPath();
+            if (isSymlink(dir)) {
+                SpiderDebug.log("Skipping symlink in size calc: " + canonicalPath);
+                return 0;
+            }
+        } catch (IOException e) {
+            return 0;
+        }
+        
         long size = 0;
         File[] files = dir.listFiles();
         if (files != null) {
             for (File file : files) {
-                size += getDirSize(file);
+                size += getDirSize(file, depth + 1);
+                if (size > MAX_DIR_SIZE) {
+                    SpiderDebug.log("Dir size exceeds limit: " + dir.getAbsolutePath());
+                    return MAX_DIR_SIZE;
+                }
             }
         }
         return size;
@@ -440,16 +473,67 @@ public class Path {
     }
 
     public static boolean delete(File file) {
-        if (file == null) return false;
+        return delete(file, 0);
+    }
+
+    private static boolean delete(File file, int depth) {
+        if (file == null || depth > MAX_RECURSION_DEPTH) return false;
+        
+        try {
+            String canonicalPath = file.getCanonicalPath();
+            
+            if (isSymlink(file)) {
+                SpiderDebug.log("Skipping symlink deletion: " + canonicalPath);
+                return file.delete();
+            }
+            
+            if (isProtectedPath(canonicalPath)) {
+                SpiderDebug.log("Protected path, skipping deletion: " + canonicalPath);
+                return false;
+            }
+        } catch (IOException e) {
+            SpiderDebug.log(e);
+            return false;
+        }
+        
         if (file.isDirectory()) {
             File[] files = file.listFiles();
             if (files != null) {
                 for (File f : files) {
-                    delete(f);
+                    delete(f, depth + 1);
                 }
             }
         }
-        return file.delete();
+        
+        boolean deleted = file.delete();
+        if (deleted) {
+            SpiderDebug.log("Deleted: " + file.getAbsolutePath());
+        }
+        return deleted;
+    }
+
+    private static boolean isSymlink(File file) {
+        try {
+            File canonicalFile = file.getCanonicalFile();
+            File absoluteFile = file.getAbsoluteFile();
+            return !canonicalFile.equals(absoluteFile);
+        } catch (IOException e) {
+            return true;
+        }
+    }
+
+    private static boolean isProtectedPath(String path) {
+        if (TextUtils.isEmpty(path)) return true;
+        String[] protectedPaths = {
+            "/system", "/data/data", "/data/app", "/proc", "/dev", 
+            "/sys", "/root", "/vendor", "/cache", "/etc"
+        };
+        for (String protectedPath : protectedPaths) {
+            if (path.startsWith(protectedPath)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public static boolean isEmpty(File file) {
