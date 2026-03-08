@@ -1,21 +1,17 @@
 package com.github.catvod.net;
 
-import android.annotation.SuppressLint;
+import android.text.TextUtils;
+import android.util.Log;
 
-import com.github.catvod.crawler.Spider;
+import com.github.catvod.crawler.SpiderDebug;
+import com.github.catvod.spider.Init;
 
 import java.io.File;
 import java.io.IOException;
-import java.security.SecureRandom;
-import java.security.cert.X509Certificate;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
-
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.TrustManager;
-import javax.net.ssl.X509TrustManager;
 
 import okhttp3.Call;
 import okhttp3.Dns;
@@ -29,7 +25,9 @@ import okhttp3.Response;
 
 public class OkHttp {
 
-    private static final long TIMEOUT = TimeUnit.SECONDS.toMillis(15);
+    private static final String TAG = OkHttp.class.getSimpleName();
+    private static final long DEFAULT_TIMEOUT = TimeUnit.SECONDS.toMillis(15);
+    private static final long MAX_TIMEOUT = TimeUnit.SECONDS.toMillis(60);
 
     public static final String POST = "POST";
     public static final String GET = "GET";
@@ -37,7 +35,8 @@ public class OkHttp {
     public static final String DELETE = "DELETE";
     public static final String PATCH = "PATCH";
 
-    private OkHttpClient client;
+    private static volatile OkHttpClient client;
+    private static volatile OkHttpClient safeClient;
 
     private static class Loader {
         static volatile OkHttp INSTANCE = new OkHttp();
@@ -71,76 +70,62 @@ public class OkHttp {
         return new OkRequest(GET, url, params, header).execute(client(timeout)).getBody();
     }
 
-    public static String post(String url, Map<String, String> params) {
-        return post(url, params, null).getBody();
-    }
-
-    public static OkResult post(String url, Map<String, String> params, Map<String, String> header) {
-        return new OkRequest(POST, url, params, header).execute(client());
-    }
-
     public static String post(String url, String json) {
-        return post(url, json, null).getBody();
+        return post(url, json, null);
     }
 
-    public static OkResult post(String url, String json, Map<String, String> header) {
-        return new OkRequest(POST, url, json, header).execute(client());
+    public static String post(String url, String json, Map<String, String> header) {
+        return new OkRequest(POST, url, json, header).execute(client()).getBody();
     }
 
-    public static String put(String url, Map<String, String> params) {
-        return put(url, params, null).getBody();
-    }
-
-    public static OkResult put(String url, Map<String, String> params, Map<String, String> header) {
-        return new OkRequest(PUT, url, params, header).execute(client());
+    public static String post(String url, Map<String, String> params, Map<String, String> header) {
+        return new OkRequest(POST, url, params, header).execute(client()).getBody();
     }
 
     public static String put(String url, String json) {
-        return put(url, json, null).getBody();
+        return put(url, json, null);
     }
 
-    public static OkResult put(String url, String json, Map<String, String> header) {
-        return new OkRequest(PUT, url, json, header).execute(client());
+    public static String put(String url, String json, Map<String, String> header) {
+        return new OkRequest(PUT, url, json, header).execute(client()).getBody();
     }
 
-    public static String delete(String url, Map<String, String> params) {
-        return delete(url, params, null).getBody();
+    public static String delete(String url, Map<String, String> header) {
+        return new OkRequest(DELETE, url, null, header).execute(client()).getBody();
     }
 
-    public static OkResult delete(String url, Map<String, String> params, Map<String, String> header) {
-        return new OkRequest(DELETE, url, params, header).execute(client());
+    public static String patch(String url, String json, Map<String, String> header) {
+        return new OkRequest(PATCH, url, json, header).execute(client()).getBody();
     }
 
-    public static String delete(String url, String json) {
-        return delete(url, json, null).getBody();
+    public static Object[] proxy(String url, Map<String, String> header) {
+        try {
+            Response response = newCall(url, header);
+            return new Object[]{response.code(), response.header("Content-Type", "application/octet-stream"), response.body().byteStream()};
+        } catch (Exception e) {
+            SpiderDebug.log(e);
+            return new Object[]{500, "text/plain", null};
+        }
     }
 
-    public static OkResult delete(String url, String json, Map<String, String> header) {
-        return new OkRequest(DELETE, url, json, header).execute(client());
+    public static Response newCall(String url, Map<String, String> header) throws IOException {
+        Request.Builder builder = new Request.Builder().url(url);
+        if (header != null) for (String key : header.keySet()) builder.addHeader(key, header.get(key));
+        return client().newCall(builder.build()).execute();
     }
 
-    public static String patch(String url, Map<String, String> params) {
-        return patch(url, params, null).getBody();
-    }
-
-    public static OkResult patch(String url, Map<String, String> params, Map<String, String> header) {
-        return new OkRequest(PATCH, url, params, header).execute(client());
-    }
-
-    public static String patch(String url, String json) {
-        return patch(url, json, null).getBody();
-    }
-
-    public static OkResult patch(String url, String json, Map<String, String> header) {
-        return new OkRequest(PATCH, url, json, header).execute(client());
+    public static Response newCall(String url, Map<String, String> header, String tag) throws IOException {
+        Request.Builder builder = new Request.Builder().url(url).tag(tag);
+        if (header != null) for (String key : header.keySet()) builder.addHeader(key, header.get(key));
+        return client().newCall(builder.build()).execute();
     }
 
     public static String upload(String url, Map<String, String> params, Map<String, File> files) {
-        return upload(url, params, files, null).getBody();
+        return upload(url, params, files, null);
     }
 
-    public static OkResult upload(String url, Map<String, String> params, Map<String, File> files, Map<String, String> header) {
-        return new OkUpload(url, params, files, header).execute(client());
+    public static String upload(String url, Map<String, String> params, Map<String, File> files, Map<String, String> header) {
+        return new OkUpload(url, params, files, header).execute(client()).getBody();
     }
 
     public static String download(String url, String path) throws IOException {
@@ -148,14 +133,20 @@ public class OkHttp {
     }
 
     public static String download(String url, String path, Map<String, String> header) throws IOException {
-        Response response = client().newCall(new Request.Builder().url(url).headers(header != null ? Headers.of(header) : new Headers.Builder().build()).build()).execute();
-        if (response.isSuccessful() && response.body() != null) {
-            File file = new File(path);
-            file.getParentFile().mkdirs();
-            response.body().byteStream().transferTo(new java.io.FileOutputStream(file));
-            return file.getAbsolutePath();
+        Response response = newCall(url, header);
+        if (!response.isSuccessful()) {
+            response.close();
+            throw new IOException("HTTP " + response.code());
         }
-        return "";
+        File file = new File(path);
+        if (file.getParentFile() != null) file.getParentFile().mkdirs();
+        try (java.io.InputStream is = response.body().byteStream(); java.io.FileOutputStream fos = new java.io.FileOutputStream(file)) {
+            byte[] buffer = new byte[8192];
+            int len;
+            while ((len = is.read(buffer)) != -1) fos.write(buffer, 0, len);
+        }
+        response.close();
+        return file.getAbsolutePath();
     }
 
     public static byte[] bytes(String url) {
@@ -164,98 +155,84 @@ public class OkHttp {
 
     public static byte[] bytes(String url, Map<String, String> header) {
         try {
-            Response response = client().newCall(new Request.Builder().url(url).headers(header != null ? Headers.of(header) : new Headers.Builder().build()).build()).execute();
-            if (response.isSuccessful() && response.body() != null) {
-                return response.body().bytes();
+            Response response = newCall(url, header);
+            if (!response.isSuccessful()) {
+                response.close();
+                return new byte[0];
             }
-        } catch (IOException e) {
-            e.printStackTrace();
+            byte[] data = response.body().bytes();
+            response.close();
+            return data;
+        } catch (Exception e) {
+            SpiderDebug.log(e);
+            return new byte[0];
         }
-        return new byte[0];
     }
 
-    public static String getLocation(String url, Map<String, String> header) throws IOException {
-        return getLocation(client().newBuilder().followRedirects(false).followSslRedirects(false).build().newCall(new Request.Builder().url(url).headers(Headers.of(header)).build()).execute().headers().toMultimap());
+    public static void cancel(Object tag) {
+        if (tag == null) return;
+        try {
+            client().dispatcher().cancelAll();
+        } catch (Exception e) {
+            SpiderDebug.log(e);
+        }
     }
 
-    public static String getLocation(Map<String, List<String>> headers) {
-        if (headers == null) return null;
-        if (headers.containsKey("location")) return headers.get("location").get(0);
-        if (headers.containsKey("Location")) return headers.get("Location").get(0);
-        return null;
-    }
-
-    public static void cancel(String tag) {
-        cancel(client(), tag);
-    }
-
-    public static void cancel(OkHttpClient client, String tag) {
-        for (Call call : client.dispatcher().queuedCalls()) if (tag.equals(call.request().tag())) call.cancel();
-        for (Call call : client.dispatcher().runningCalls()) if (tag.equals(call.request().tag())) call.cancel();
-    }
-
-    public static void cancelAll() {
-        cancelAll(client());
-    }
-
-    public static void cancelAll(OkHttpClient client) {
-        client.dispatcher().cancelAll();
-    }
-
-    private static OkHttpClient build() {
-        if (get().client != null) return get().client;
-        return get().client = getBuilder().build();
-    }
-
-    private static OkHttpClient.Builder getBuilder() {
-        return new OkHttpClient.Builder().dns(safeDns()).connectTimeout(TIMEOUT, TimeUnit.MILLISECONDS).readTimeout(TIMEOUT, TimeUnit.MILLISECONDS).writeTimeout(TIMEOUT, TimeUnit.MILLISECONDS).hostnameVerifier((hostname, session) -> true).sslSocketFactory(getSSLContext().getSocketFactory(), trustAllCertificates()).retryOnConnectionFailure(true).followRedirects(true).followSslRedirects(true);
+    public static OkHttpClient client() {
+        if (client == null) {
+            synchronized (OkHttp.class) {
+                if (client == null) {
+                    client = buildClient(DEFAULT_TIMEOUT);
+                }
+            }
+        }
+        return client;
     }
 
     private static OkHttpClient client(long timeout) {
-        return client().newBuilder().connectTimeout(timeout, TimeUnit.MILLISECONDS).readTimeout(timeout, TimeUnit.MILLISECONDS).writeTimeout(timeout, TimeUnit.MILLISECONDS).build();
+        if (timeout <= 0 || timeout == DEFAULT_TIMEOUT) return client();
+        return buildClient(timeout);
     }
 
-    private static OkHttpClient client() {
-        try {
-            return Objects.requireNonNull(Spider.client());
-        } catch (Throwable e) {
-            return build();
+    private static OkHttpClient buildClient(long timeout) {
+        OkHttpClient.Builder builder = new OkHttpClient.Builder()
+                .connectTimeout(timeout, TimeUnit.MILLISECONDS)
+                .readTimeout(timeout, TimeUnit.MILLISECONDS)
+                .writeTimeout(timeout, TimeUnit.MILLISECONDS)
+                .retryOnConnectionFailure(true)
+                .followRedirects(true)
+                .followSslRedirects(true);
+        
+        builder.connectionPool(new okhttp3.ConnectionPool(5, 5, TimeUnit.MINUTES));
+        
+        File cacheDir = getCacheDir();
+        if (cacheDir != null && cacheDir.exists()) {
+            int cacheSize = 50 * 1024 * 1024;
+            builder.cache(new okhttp3.Cache(cacheDir, cacheSize));
         }
+        
+        return builder.build();
     }
 
-    private static Dns safeDns() {
+    private static File getCacheDir() {
         try {
-            return Objects.requireNonNull(Spider.safeDns());
-        } catch (Throwable e) {
-            return Dns.SYSTEM;
+            if (Init.context() != null) {
+                File cacheDir = new File(Init.context().getCacheDir(), "http_cache");
+                if (!cacheDir.exists()) cacheDir.mkdirs();
+                return cacheDir;
+            }
+        } catch (Exception e) {
+            SpiderDebug.log(e);
         }
+        return null;
     }
 
-    private static SSLContext getSSLContext() {
-        try {
-            SSLContext context = SSLContext.getInstance("TLS");
-            context.init(null, new TrustManager[]{trustAllCertificates()}, new SecureRandom());
-            return context;
-        } catch (Throwable e) {
-            return null;
+    private static Headers getHeaders(Map<String, String> header) {
+        if (header == null || header.isEmpty()) return new Headers();
+        Headers.Builder builder = new Headers.Builder();
+        for (Map.Entry<String, String> entry : header.entrySet()) {
+            builder.add(entry.getKey(), entry.getValue());
         }
-    }
-
-    @SuppressLint({"TrustAllX509TrustManager", "CustomX509TrustManager"})
-    private static X509TrustManager trustAllCertificates() {
-        return new X509TrustManager() {
-            @Override
-            public void checkClientTrusted(X509Certificate[] chain, String authType) {
-            }
-
-            @Override
-            public void checkServerTrusted(X509Certificate[] chain, String authType) {
-            }
-
-            @Override
-            public X509Certificate[] getAcceptedIssuers() {
-                return new X509Certificate[0];
-            }
-        };
+        return builder.build();
     }
 }
