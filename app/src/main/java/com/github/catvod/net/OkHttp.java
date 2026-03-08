@@ -4,6 +4,7 @@ import android.annotation.SuppressLint;
 
 import com.github.catvod.crawler.Spider;
 
+import java.io.File;
 import java.io.IOException;
 import java.security.SecureRandom;
 import java.security.cert.X509Certificate;
@@ -19,8 +20,11 @@ import javax.net.ssl.X509TrustManager;
 import okhttp3.Call;
 import okhttp3.Dns;
 import okhttp3.Headers;
+import okhttp3.MediaType;
+import okhttp3.MultipartBody;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
+import okhttp3.RequestBody;
 import okhttp3.Response;
 
 public class OkHttp {
@@ -29,6 +33,9 @@ public class OkHttp {
 
     public static final String POST = "POST";
     public static final String GET = "GET";
+    public static final String PUT = "PUT";
+    public static final String DELETE = "DELETE";
+    public static final String PATCH = "PATCH";
 
     private OkHttpClient client;
 
@@ -80,6 +87,93 @@ public class OkHttp {
         return new OkRequest(POST, url, json, header).execute(client());
     }
 
+    public static String put(String url, Map<String, String> params) {
+        return put(url, params, null).getBody();
+    }
+
+    public static OkResult put(String url, Map<String, String> params, Map<String, String> header) {
+        return new OkRequest(PUT, url, params, header).execute(client());
+    }
+
+    public static String put(String url, String json) {
+        return put(url, json, null).getBody();
+    }
+
+    public static OkResult put(String url, String json, Map<String, String> header) {
+        return new OkRequest(PUT, url, json, header).execute(client());
+    }
+
+    public static String delete(String url, Map<String, String> params) {
+        return delete(url, params, null).getBody();
+    }
+
+    public static OkResult delete(String url, Map<String, String> params, Map<String, String> header) {
+        return new OkRequest(DELETE, url, params, header).execute(client());
+    }
+
+    public static String delete(String url, String json) {
+        return delete(url, json, null).getBody();
+    }
+
+    public static OkResult delete(String url, String json, Map<String, String> header) {
+        return new OkRequest(DELETE, url, json, header).execute(client());
+    }
+
+    public static String patch(String url, Map<String, String> params) {
+        return patch(url, params, null).getBody();
+    }
+
+    public static OkResult patch(String url, Map<String, String> params, Map<String, String> header) {
+        return new OkRequest(PATCH, url, params, header).execute(client());
+    }
+
+    public static String patch(String url, String json) {
+        return patch(url, json, null).getBody();
+    }
+
+    public static OkResult patch(String url, String json, Map<String, String> header) {
+        return new OkRequest(PATCH, url, json, header).execute(client());
+    }
+
+    public static String upload(String url, Map<String, String> params, Map<String, File> files) {
+        return upload(url, params, files, null).getBody();
+    }
+
+    public static OkResult upload(String url, Map<String, String> params, Map<String, File> files, Map<String, String> header) {
+        return new OkUpload(url, params, files, header).execute(client());
+    }
+
+    public static String download(String url, String path) throws IOException {
+        return download(url, path, null);
+    }
+
+    public static String download(String url, String path, Map<String, String> header) throws IOException {
+        Response response = client().newCall(new Request.Builder().url(url).headers(header != null ? Headers.of(header) : new Headers.Builder().build()).build()).execute();
+        if (response.isSuccessful() && response.body() != null) {
+            File file = new File(path);
+            file.getParentFile().mkdirs();
+            response.body().byteStream().transferTo(new java.io.FileOutputStream(file));
+            return file.getAbsolutePath();
+        }
+        return "";
+    }
+
+    public static byte[] bytes(String url) {
+        return bytes(url, null);
+    }
+
+    public static byte[] bytes(String url, Map<String, String> header) {
+        try {
+            Response response = client().newCall(new Request.Builder().url(url).headers(header != null ? Headers.of(header) : new Headers.Builder().build()).build()).execute();
+            if (response.isSuccessful() && response.body() != null) {
+                return response.body().bytes();
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return new byte[0];
+    }
+
     public static String getLocation(String url, Map<String, String> header) throws IOException {
         return getLocation(client().newBuilder().followRedirects(false).followSslRedirects(false).build().newCall(new Request.Builder().url(url).headers(Headers.of(header)).build()).execute().headers().toMultimap());
     }
@@ -114,7 +208,7 @@ public class OkHttp {
     }
 
     private static OkHttpClient.Builder getBuilder() {
-        return new OkHttpClient.Builder().dns(safeDns()).connectTimeout(TIMEOUT, TimeUnit.MILLISECONDS).readTimeout(TIMEOUT, TimeUnit.MILLISECONDS).writeTimeout(TIMEOUT, TimeUnit.MILLISECONDS).hostnameVerifier((hostname, session) -> true).sslSocketFactory(getSSLContext().getSocketFactory(), trustAllCertificates());
+        return new OkHttpClient.Builder().dns(safeDns()).connectTimeout(TIMEOUT, TimeUnit.MILLISECONDS).readTimeout(TIMEOUT, TimeUnit.MILLISECONDS).writeTimeout(TIMEOUT, TimeUnit.MILLISECONDS).hostnameVerifier((hostname, session) -> true).sslSocketFactory(getSSLContext().getSocketFactory(), trustAllCertificates()).retryOnConnectionFailure(true).followRedirects(true).followSslRedirects(true);
     }
 
     private static OkHttpClient client(long timeout) {
