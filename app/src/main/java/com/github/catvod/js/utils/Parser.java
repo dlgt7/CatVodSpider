@@ -145,13 +145,21 @@ public class Parser {
 
     public static String unescapeHtmlEntities(String text) {
         if (TextUtils.isEmpty(text)) return "";
-        return text.replace("&amp;", "&")
+        text = text.replace("&amp;", "&")
                 .replace("&lt;", "<")
                 .replace("&gt;", ">")
                 .replace("&quot;", "\"")
                 .replace("&apos;", "'")
-                .replace("&nbsp;", " ")
-                .replaceAll("&#(\\d+);", m -> String.valueOf((char) Integer.parseInt(m.group(1))));
+                .replace("&nbsp;", " ");
+        
+        Pattern pattern = Pattern.compile("&#(\\d+);");
+        Matcher matcher = pattern.matcher(text);
+        StringBuffer sb = new StringBuffer();
+        while (matcher.find()) {
+            matcher.appendReplacement(sb, String.valueOf((char) Integer.parseInt(matcher.group(1))));
+        }
+        matcher.appendTail(sb);
+        return sb.toString();
     }
 
     public static String cleanHtml(String html) {
