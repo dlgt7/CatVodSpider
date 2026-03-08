@@ -1,6 +1,9 @@
 package com.github.catvod.spider;
 
 import android.content.Context;
+import android.content.pm.PackageInfo;
+import android.content.pm.PackageManager;
+import android.content.pm.Signature;
 import android.net.Uri;
 import android.text.TextUtils;
 
@@ -18,20 +21,37 @@ import com.github.catvod.utils.Path;
 import com.github.catvod.utils.Util;
 
 import java.io.BufferedInputStream;
+import java.io.ByteArrayInputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.security.MessageDigest;
+import java.security.cert.CertificateFactory;
+import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 import okhttp3.Response;
 
 public class Market extends Spider {
 
     private static final String TAG = Market.class.getSimpleName();
+    private static final int MAX_FILE_SIZE = 100 * 1024 * 1024;
+    
+    private static final Set<String> TRUSTED_SIGNATURES = new HashSet<>();
+    
+    static {
+        TRUSTED_SIGNATURES.add("YOUR_APP_SIGNATURE_HERE");
+    }
+    
+    private static final boolean SIGNATURE_CHECK_ENABLED = false;
+
     private List<Data> datas;
     private Context context;
 
@@ -202,6 +222,11 @@ public class Market extends Spider {
             }
             
             long contentLength = response.body().contentLength();
+            if (contentLength > MAX_FILE_SIZE) {
+                response.close();
+                return Result.error("文件过大，拒绝下载");
+            }
+            
             File downloadDir = Path.download();
             if (!downloadDir.exists()) {
                 downloadDir.mkdirs();
@@ -224,6 +249,10 @@ public class Market extends Spider {
                     Notify.show("解压完成: " + name);
                     break;
                 case "apk":
+                    if (SIGNATURE_CHECK_ENABLED && !verifyApkSignature(file)) {
+                        file.delete();
+                        return Result.error("APK 签名验证失败，已删除文件");
+                    }
                     FileUtil.openFile(file);
                     Notify.show("安装包已下载: " + name);
                     break;
@@ -273,6 +302,58 @@ public class Market extends Spider {
         } catch (IOException e) {
             SpiderDebug.log(e);
             return false;
+        }
+    }
+
+    private boolean verifyApkSignature(File apkFile) {
+        try {
+            PackageManager pm = context.getPackageManager();
+            PackageInfo packageInfo = pm.getPackageArchiveInfo(
+                    apkFile.getAbsolutePath(),
+                    PackageManager.GET_SIGNATURES
+            );
+            
+            if (packageInfo == null || packageInfo.signatures == null) {
+                SpiderDebug.log("Market: unable to read APK signatures");
+                return false;
+            }
+            
+            for (Signature signature : packageInfo.signatures) {
+                String signatureHash = getSignatureHash(signature);
+                SpiderDebug.log("Market: APK signature hash: " + signatureHash);
+                
+                if (TRUSTED_SIGNATURES.contains(signatureHash)) {
+                    SpiderDebug.log("Market: signature verified successfully");
+                    return true;
+                }
+            }
+            
+            SpiderDebug.log("Market: signature not in trusted list");
+            return !TRUSTED_SIGNATURES.isEmpty();
+        } catch (Exception e) {
+            SpiderDebug.log(e);
+            return false;
+        }
+    }
+
+    private String getSignatureHash(Signature signature) {
+        try {
+            byte[] rawCert = signature.toByteArray();
+            InputStream certStream = new ByteArrayInputStream(rawCert);
+            CertificateFactory certFactory = CertificateFactory.getInstance("X509");
+            X509Certificate cert = (X509Certificate) certFactory.generateCertificate(certStream);
+            
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] publicKey = md.digest(cert.getPublicKey().getEncoded());
+            
+            StringBuilder sb = new StringBuilder();
+            for (byte b : publicKey) {
+                sb.append(String.format("%02X", b));
+            }
+            return sb.toString();
+        } catch (Exception e) {
+            SpiderDebug.log(e);
+            return "";
         }
     }
 
