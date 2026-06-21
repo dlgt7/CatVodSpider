@@ -55,4 +55,6 @@ dependencies {
     implementation 'com.hierynomus:smbj:0.14.0'
     implementation 'com.orhanobut:logger:2.2.0'
     implementation 'org.jsoup:jsoup:1.22.1'
+    // Danmaku library - 使用B站开源弹幕库
+    // implementation 'com.github.ctilai:AndroidDanmakuFlame:1.0.0'
 }
