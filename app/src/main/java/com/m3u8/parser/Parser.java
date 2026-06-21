@@ -1,13 +1,11 @@
 package com.m3u8.parser;
 
-import com.github.catvod.crawler.SpiderDebug;
 import com.m3u8.parser.model.ContextType;
 import com.m3u8.parser.model.PlayList;
 import com.m3u8.parser.model.TrackData;
 import com.m3u8.parser.model.TrackInfo;
 
 import java.net.URI;
-import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Matcher;
