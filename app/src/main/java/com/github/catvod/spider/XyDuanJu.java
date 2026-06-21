@@ -38,7 +38,11 @@ public class XyDuanJu extends Spider {
 
     @Override
     public void init(Context context, String extend) {
-        super.init(context, extend);
+        try {
+            super.init(context, extend);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
         login();
     }
 
