@@ -12,7 +12,6 @@ import com.github.catvod.net.OkHttp;
 import com.github.catvod.utils.Util;
 
 import org.json.JSONArray;
-import org.json.JSONException;
 import org.json.JSONObject;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Element;
@@ -24,9 +23,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * @author Qile
- */
 public class Kanqiu extends Spider {
 
     private static String siteUrl = "http://www.88kanqiu.tw";
@@ -43,7 +39,7 @@ public class Kanqiu extends Spider {
     }
 
     @Override
-    public String homeContent(boolean filter) throws JSONException {
+    public String homeContent(boolean filter) {
         List<Class> classes = new ArrayList<>();
         List<String> typeIds = Arrays.asList("", "1", "8", "21");
         List<String> typeNames = Arrays.asList("全部直播", "篮球直播", "足球直播", "其他直播");
@@ -73,26 +69,31 @@ public class Kanqiu extends Spider {
     }
 
     @Override
-    public String detailContent(List<String> ids) throws JSONException {
+    public String detailContent(List<String> ids) {
+        if (ids == null || ids.isEmpty()) return Result.error("无内容");
         if (ids.get(0).equals(siteUrl)) return Result.error("比赛尚未开始");
-        String content = OkHttp.string(ids.get(0) + "-url", getHeader());
-        String result = new JSONObject(content).optString("data");
-        result = result.substring(6);
-        result = result.substring(0, result.length() - 2);
-        String json = new String(Base64.decode(result, Base64.DEFAULT));
-        JSONArray linksArray = new JSONObject(json).getJSONArray("links");
-        List<String> vodItems = new ArrayList<>();
-        for (int i = 0; i < linksArray.length(); i++) {
-            JSONObject linkObject = linksArray.getJSONObject(i);
-            String text = linkObject.optString("name");
-            String href = linkObject.optString("url").replace("#", "***");
-            vodItems.add(text + "$" + href);
+        try {
+            String content = OkHttp.string(ids.get(0) + "-url", getHeader());
+            String result = new JSONObject(content).optString("data");
+            result = result.substring(6);
+            result = result.substring(0, result.length() - 2);
+            String json = new String(Base64.decode(result, Base64.DEFAULT));
+            JSONArray linksArray = new JSONObject(json).getJSONArray("links");
+            List<String> vodItems = new ArrayList<>();
+            for (int i = 0; i < linksArray.length(); i++) {
+                JSONObject linkObject = linksArray.getJSONObject(i);
+                String text = linkObject.optString("name");
+                String href = linkObject.optString("url").replace("#", "***");
+                vodItems.add(text + "$" + href);
+            }
+            Vod vod = new Vod();
+            vod.setVodId(ids.get(0));
+            vod.setVodPlayFrom("Qile");
+            vod.setVodPlayUrl(TextUtils.join("#", vodItems));
+            return Result.string(vod);
+        } catch (Exception e) {
+            return Result.error("获取播放地址失败");
         }
-        Vod vod = new Vod();
-        vod.setVodId(ids.get(0));
-        vod.setVodPlayFrom("Qile");
-        vod.setVodPlayUrl(TextUtils.join("#", vodItems));
-        return Result.string(vod);
     }
 
     @Override
