@@ -1,9 +1,7 @@
 package com.m3u8.parser.model;
 
-import com.github.catvod.crawler.SpiderDebug;
 import com.m3u8.parser.Parser;
 
-import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -69,11 +67,7 @@ public class PlayList {
     }
 
     private void parse() {
-        try {
-            Parser.parse(this);
-        } catch (URISyntaxException e) {
-            SpiderDebug.log(e.getLocalizedMessage());
-        }
+        Parser.parse(this);
     }
 
     @Override
