@@ -71,7 +71,7 @@ public class Trans {
      */
     public static boolean needTrans() {
         // 如果用户强制设置了，按设置来
-        if (Init.contain(KEY_FORCE_TRANS)) {
+        if (Init.contains(KEY_FORCE_TRANS)) {
             return Init.getBoolean(KEY_FORCE_TRANS, DEFAULT_FORCE_TRANS);
         }
         // 默认禁用本地转换，因为API已处理
@@ -98,7 +98,7 @@ public class Trans {
      * 检查是否被强制设置
      */
     public static boolean isForcedTrans() {
-        return Init.contain(KEY_FORCE_TRANS);
+        return Init.contains(KEY_FORCE_TRANS);
     }
 
     /**
