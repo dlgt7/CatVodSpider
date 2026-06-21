@@ -39,7 +39,7 @@ public class Kanqiu extends Spider {
     }
 
     @Override
-    public String homeContent(boolean filter) {
+    public String homeContent(boolean filter) throws Exception {
         List<Class> classes = new ArrayList<>();
         List<String> typeIds = Arrays.asList("", "1", "8", "21");
         List<String> typeNames = Arrays.asList("全部直播", "篮球直播", "足球直播", "其他直播");

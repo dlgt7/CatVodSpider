@@ -68,7 +68,7 @@ public class Rydj extends Spider {
     @Override
     public String homeContent(boolean filter) throws Exception {
         List<Vod> videos = new ArrayList<>();
-        List<Map<String, String>> classes = new ArrayList<>();
+        List<Class> classes = new ArrayList<>();
 
         Map<String, String> params = new HashMap<>();
         params.put("reqType", "duanjuCategory");
@@ -88,10 +88,7 @@ public class Rydj extends Spider {
                     String cid = vo.get("categoryId").getAsString();
                     String typeId = oppo + "@" + cid;
 
-                    Map<String, String> cls = new HashMap<>();
-                    cls.put("type_id", typeId);
-                    cls.put("type_name", oppo);
-                    classes.add(cls);
+                    classes.add(new Class(typeId, oppo));
                 }
             }
         }
