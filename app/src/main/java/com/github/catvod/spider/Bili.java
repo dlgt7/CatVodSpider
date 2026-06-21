@@ -200,7 +200,10 @@ public class Bili extends Spider {
             url.add(acceptDesc[i]);
             url.add(Proxy.getUrl(siteKey, "&aid=" + aid + "&cid=" + cid + "&qn=" + acceptQuality[i] + "&type=mpd"));
         }
-        return Result.get().url(url).danmaku(Arrays.asList(new Danmaku().name("B站").url(dan))).dash().header(getHeader()).string();
+        Danmaku danmaku = new Danmaku();
+        danmaku.setName("B站");
+        danmaku.setUrl(dan);
+        return Result.get().url(url).danmaku(Arrays.asList(danmaku)).dash().header(getHeader()).string();
     }
 
     @Override
