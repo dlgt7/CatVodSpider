@@ -256,7 +256,7 @@ public class DanmakuCache {
      * 获取缓存目录
      */
     private static File getCacheDir() {
-        File cacheDir = new File(Init.getContext().getCacheDir(), CACHE_DIR);
+        File cacheDir = new File(Init.context().getCacheDir(), CACHE_DIR);
         if (!cacheDir.exists()) {
             cacheDir.mkdirs();
         }
