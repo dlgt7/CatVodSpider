@@ -19,6 +19,7 @@ import org.jsoup.select.Elements;
 import java.net.URLEncoder;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -33,7 +34,6 @@ public class TVBYB extends Spider {
         put("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36");
     }};
 
-    @Override
     public String getName() {
         return "TVBYB";
     }
@@ -56,7 +56,7 @@ public class TVBYB extends Spider {
         classes.add(new Class("14", "港台剧"));
 
         List<Vod> videos = new ArrayList<>();
-        HashMap<String, List<Filter>> filters = new HashMap<>();
+        LinkedHashMap<String, List<Filter>> filters = new LinkedHashMap<>();
 
         if (filter) {
             filters.put("1", getFilterData("1"));
