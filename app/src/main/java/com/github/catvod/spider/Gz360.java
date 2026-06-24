@@ -1,7 +1,6 @@
 package com.github.catvod.spider;
 
 import android.content.Context;
-import android.text.TextUtils;
 import android.util.Base64;
 
 import com.github.catvod.bean.Class;
@@ -10,15 +9,14 @@ import com.github.catvod.bean.Result;
 import com.github.catvod.bean.Vod;
 import com.github.catvod.crawler.Spider;
 import com.github.catvod.net.OkHttp;
-import com.github.catvod.utils.Crypto;
+import com.github.catvod.utils.Json;
+import com.github.catvod.utils.Util;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
 
 import java.nio.charset.StandardCharsets;
 import java.security.KeyFactory;
-import java.security.MessageDigest;
 import java.security.PrivateKey;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.util.ArrayList;
@@ -26,23 +24,33 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 
 import javax.crypto.Cipher;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 
-/**
- * Gz360 Spider
- */
 public class Gz360 extends Spider {
 
-    private final HashMap<String, String> a = new HashMap<>();
+    private static final String BASE_URL = "https://api.w32z7vtd.com";
+    private static final String AES_KEY = "U823n8pKnAAbWOST";
+    private static final String AES_IV = "wgr8N6BCs7426wf1";
+    private static final String TOKEN = "97630f5f85d9f3c639fb7790ca881ef2.4cccf48dc340fe8bded39cfe4ef9ac2adb27425a9069e6cd121210fc7ba518ea8c1cc5629261e94bb6ccb66d8548449c72076c956a2fb46c253008909a6c66347eb458fe3c06d1fcc993ca03a298328f9229f1994a608250c7d1ae124c4520e6e14ce8bf9f4404119a6bbf53cf592a8df2e9145de92ec43ec87cf4bdc563f6e919fe32861b0e93b118ec37d8035fbb3c.473433979755ccd5ec1b4581ccef76e8209b9e0c6ff819917f12dffad47d0d5e";
+    private static final String KEYS = "bMTqITVqBsbq9UjLufsQuBvRiIyfqHLqAWUx0gj0ZUe9DMNDTmJDVZzAh45AZ5LtkC39Y0DU4Ufqm/9gliIJaj7cI/dhmoM5fib5HcslzyGONEwZY5fHBvokBreGaT8bPoaxmnWdTRjRfJzYZV6T06O7GsYVa6DuKTVArb0g48Q=";
+    private static final String SIGN_SUFFIX = "*&zvdvdvddbfikkkumtmdwqppp?|4Y!s!2br";
+    private static final String RSA_PRIVATE_KEY = "-----BEGIN PRIVATE KEY-----\nMIICdgIBADANBgkqhkiG9w0BAQEFAASCAmAwggJcAgEAAoGAe6hKrWLi1zQmjTT1\nozbE4QdFeJGNxubxld6GrFGximxfMsMB6BpJhpcTouAqywAFppiKetUBBbXwYsYU\n1wNr648XVmPmCMCy4rY8vdliFnbMUj086DU6Z+/oXBdWU3/b1G0DN3E9wULRSwcK\nZT3wj/cCI1vsCm3gj2R5SqkA9Y0CAwEAAQKBgAJH+4CxV0/zBVcLiBCHvSANm0l7\nHetybTh/j2p0Y1sTXro4ALwAaCTUeqdBjWiLSo9lNwDHFyq8zX90+gNxa7c5EqcW\nV9FmlVXr8VhfBzcZo1nXeNdXFT7tQ2yah/odtdcx+vRMSGJd1t/5k5bDd9wAvYdI\nDblMAg+wiKKZ5KcdAkEA1cCakEN4NexkF5tHPRrR6XOY/XHfkqXxEhMqmNbB9U34\nsaTJnLWIHC8IXys6Qmzz30TtzCjuOqKRRy+FMM4TdwJBAJQZFPjsGC+RqcG5UvVM\niMPhnwe/bXEehShK86yJK/g/UiKrO87h3aEu5gcJqBygTq3BBBoH2md3pr/W+hUM\nWBsCQQChfhTIrdDinKi6lRxrdBnn0Ohjg2cwuqK5zzU9p/N+S9x7Ck8wUI53DKm8\njUJE8WAG7WLj/oCOWEh+ic6NIwTdAkEAj0X8nhx6AXsgCYRql1klbqtVmL8+95KZ\nK7PnLWG/IfjQUy3pPGoSaZ7fdquG8bq8oyf5+dzjE/oTXcByS+6XRQJAP/5ciy1b\nL3NhUhsaOVy55MHXnPjdcTX0FaLi+ybXZIfIQ2P4rb19mVq1feMbCXhz+L1rG8oa\nt5lYKfpe8k83ZA==\n-----END PRIVATE KEY-----";
 
-    private static String aesDecrypt(String data, String key, String iv) {
+    private final Map<String, String> typeMap = new HashMap<>();
+
+    private static String aesDecryptHex(String data, String key, String iv) {
         try {
-            byte[] bytes = Crypto.hexToBytes(data);
+            int len = data.length() / 2;
+            byte[] bytes = new byte[len];
+            for (int i = 0; i < len; i++) {
+                int pos = i * 2;
+                String str = data.substring(pos, pos + 2);
+                bytes[i] = (byte) Integer.parseInt(str, 16);
+            }
             Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
             SecretKeySpec keySpec = new SecretKeySpec(key.getBytes(StandardCharsets.UTF_8), "AES");
             IvParameterSpec ivSpec = new IvParameterSpec(iv.getBytes(StandardCharsets.UTF_8));
@@ -53,11 +61,11 @@ public class Gz360 extends Spider {
         }
     }
 
-    private static String aesEncrypt(String data) {
+    private static String aesEncryptHex(String data) {
         try {
             Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
-            SecretKeySpec keySpec = new SecretKeySpec("U823n8pKnAAbWOST".getBytes(StandardCharsets.UTF_8), "AES");
-            IvParameterSpec ivSpec = new IvParameterSpec("wgr8N6BCs7426wf1".getBytes(StandardCharsets.UTF_8));
+            SecretKeySpec keySpec = new SecretKeySpec(AES_KEY.getBytes(StandardCharsets.UTF_8), "AES");
+            IvParameterSpec ivSpec = new IvParameterSpec(AES_IV.getBytes(StandardCharsets.UTF_8));
             cipher.init(Cipher.ENCRYPT_MODE, keySpec, ivSpec);
             byte[] encrypted = cipher.doFinal(data.getBytes(StandardCharsets.UTF_8));
             StringBuilder sb = new StringBuilder();
@@ -70,117 +78,17 @@ public class Gz360 extends Spider {
         }
     }
 
-    private static JsonObject apiRequest(JsonObject params, String path) {
-        String baseUrl = "https://api.w32z7vtd.com";
-        try {
-            String time = String.valueOf(System.currentTimeMillis() / 1000);
-            String requestKey = aesEncrypt(params.toString());
-            String token = "97630f5f85d9f3c639fb7790ca881ef2.4cccf48dc340fe8bded39cfe4ef9ac2adb27425a9069e6cd121210fc7ba518ea8c1cc5629261e94bb6ccb66d8548449c72076c956a2fb46c253008909a6c66347eb458fe3c06d1fcc993ca03a298328f9229f1994a608250c7d1ae124c4520e6e14ce8bf9f4404119a6bbf53cf592a8df2e9145de92ec43ec87cf4bdc563f6e919fe32861b0e93b118ec37d8035fbb3c.473433979755ccd5ec1b4581ccef76e8209b9e0c6ff819917f12dffad47d0d5e";
-            String keys = "bMTqITVqBsbq9UjLufsQuBvRiIyfqHLqAWUx0gj0ZUe9DMNDTmJDVZzAh45AZ5LtkC39Y0DU4Ufqm/9gliIJaj7cI/dhmoM5fib5HcslzyGONEwZY5fHBvokBreGaT8bPoaxmnWdTRjRfJzYZV6T06O7GsYVa6DuKTVArb0g48Q=";
-
-            StringBuilder sb = new StringBuilder("token_id=,token=97630f5f85d9f3c639fb7790ca881ef2.4cccf48dc340fe8bded39cfe4ef9ac2adb27425a9069e6cd121210fc7ba518ea8c1cc5629261e94bb6ccb66d8548449c72076c956a2fb46c253008909a6c66347eb458fe3c06d1fcc993ca03a298328f9229f1994a608250c7d1ae124c4520e6e14ce8bf9f4404119a6bbf53cf592a8df2e9145de92ec43ec87cf4bdc563f6e919fe32861b0e93b118ec37d8035fbb3c.473433979755ccd5ec1b4581ccef76e8209b9e0c6ff819917f12dffad47d0d5e");
-            sb.append(requestKey);
-            sb.append(",app_id=1,time=").append(time);
-            sb.append(",keys=bMTqITVqBsbq9UjLufsQuBvRiIyfqHLqAWUx0gj0ZUe9DMNDTmJDVZzAh45AZ5LtkC39Y0DU4Ufqm/9gliIJaj7cI/dhmoM5fib5HcslzyGONEwZY5fHBvokBreGaT8bPoaxmnWdTRjRfJzYZV6T06O7GsYVa6DuKTVArb0g48Q=*&zvdvdvddbfikkkumtmdwqppp?|4Y!s!2br");
-
-            String signature = md5Encrypt(sb.toString());
-
-            LinkedHashMap<String, String> formData = new LinkedHashMap<>();
-            formData.put("token", token);
-            formData.put("token_id", "");
-            formData.put("phone_type", "1");
-            formData.put("time", time);
-            formData.put("phone_model", "xiaomi-2206123sc");
-            formData.put("keys", keys);
-            formData.put("request_key", requestKey);
-            formData.put("signature", signature);
-            formData.put("app_id", "1");
-            formData.put("ad_version", "1");
-
-            String url = baseUrl.concat(path);
-            String response = OkHttp.post(url, formData, getHeaders());
-            JsonObject result = JsonParser.parseString(response).getAsJsonObject();
-
-            if (!result.has("data")) return null;
-
-            JsonObject data = result.getAsJsonObject("data");
-            if (data.has("keys") && data.has("response_key")) {
-                String keysStr = data.get("keys").getAsString();
-                String decryptedKeys = rsaDecrypt(keysStr);
-                JsonObject keysObj = JsonParser.parseString(decryptedKeys).getAsJsonObject();
-                String responseKey = data.get("response_key").getAsString();
-                String aesKey = keysObj.get("key").getAsString();
-                String aesIv = keysObj.get("iv").getAsString();
-                String decrypted = aesDecrypt(responseKey, aesKey, aesIv);
-                if (!TextUtils.isEmpty(decrypted)) {
-                    return JsonParser.parseString(decrypted).getAsJsonObject();
-                }
-            }
-            return null;
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
-    private static HashMap<String, String> getHeaders() {
-        HashMap<String, String> headers = new HashMap<>();
-        headers.put("Version", "2406025");
-        headers.put("PackageName", "com.j64f4b21072.ha69699879.dfea0a9826ba.ibf50c9b1d");
-        headers.put("Ver", "1.9.2");
-        headers.put("Referer", "https://api.w32z7vtd.com");
-        headers.put("Content-Type", "application/x-www-form-urlencoded");
-        headers.put("User-Agent", "okhttp/3.12.0");
-        return headers;
-    }
-
-    private static ArrayList<Filter> getCommonFilters() {
-        ArrayList<Filter> filters = new ArrayList<>();
-        // 地区
-        filters.add(new Filter("area", "地区", Arrays.asList(
-                new Filter.Value("地区", "0"),
-                new Filter.Value("大陆", "大陆"),
-                new Filter.Value("香港", "香港"),
-                new Filter.Value("台湾", "台湾"),
-                new Filter.Value("日本", "日本"),
-                new Filter.Value("韩国", "韩国")
-        )));
-        // 年份
-        filters.add(new Filter("year", "年份", Arrays.asList(
-                new Filter.Value("年份", "0"),
-                new Filter.Value("2026", "2026"),
-                new Filter.Value("2025", "2025"),
-                new Filter.Value("2024", "2024"),
-                new Filter.Value("2023", "2023")
-        )));
-        // 排序
-        filters.add(new Filter("sort", "排序", Arrays.asList(
-                new Filter.Value("综合", "d_id"),
-                new Filter.Value("最新", "d_addtime"),
-                new Filter.Value("最热", "d_score"),
-                new Filter.Value("高分", "d_score")
-        )));
-        return filters;
-    }
-
-    private static String md5Encrypt(String data) {
-        try {
-            MessageDigest md = MessageDigest.getInstance("MD5");
-            byte[] digest = md.digest(data.getBytes(StandardCharsets.UTF_8));
-            StringBuilder sb = new StringBuilder();
-            for (byte b : digest) {
-                sb.append(String.format("%02x", b));
-            }
-            return sb.toString().toUpperCase(Locale.ROOT);
-        } catch (Exception e) {
-            return "";
-        }
+    private static String md5Upper(String data) {
+        return Util.md5(data).toUpperCase();
     }
 
     private static String rsaDecrypt(String data) {
         try {
             byte[] encrypted = Base64.decode(data, Base64.DEFAULT);
-            String privateKeyStr = "MIICdgIBADANBgkqhkiG9w0BAQEFAASCAmAwggJcAgEAAoGAe6hKrWLi1zQmjTT1\nozbE4QdFeJGNxubxld6GrFGximxfMsMB6BpJhpcTouAqywAFppiKetUBBbXwYsYU\n1wNr648XVmPmCMCy4rY8vdliFnbMUj086DU6Z+/oXBdWU3/b1G0DN3E9wULRSwcK\nZT3wj/cCI1vsCm3gj2R5SqkA9Y0CAwEAAQKBgAJH+4CxV0/zBVcLiBCHvSANm0l7\nHetybTh/j2p0Y1sTXro4ALwAaCTUeqdBjWiLSo9lNwDHFyq8zX90+gNxa7c5EqcW\nV9FmlVXr8VhfBzcZo1nXeNdXFT7tQ2yah/odtdcx+vRMSGJd1t/5k5bDd9wAvYdI\nDblMAg+wiKKZ5KcdAkEA1cCakEN4NexkF5tHPRrR6XOY/XHfkqXxEhMqmNbB9U34\nsaTJnLWIHC8IXys6Qmzz30TtzCjuOqKRRy+FMM4TdwJBAJQZFPjsGC+RqcG5UvVM\niMPhnwe/bXEehShK86yJK/g/UiKrO87h3aEu5gcJqBygTq3BBBoH2md3pr/W+hUM\nWBsCQQChfhTIrdDinKi6lRxrdBnn0Ohjg2cwuqK5zzU9p/N+S9x7Ck8wUI53DKm8\njUJE8WAG7WLj/oCOWEh+ic6NIwTdAkEAj0X8nhx6AXsgCYRql1klbqtVmL8+95KZ\nK7PnLWG/IfjQUy3pPGoSaZ7fdquG8bq8oyf5+dzjE/oTXcByS+6XRQJAP/5ciy1b\nL3NhUhsaOVy55MHXnPjdcTX0FaLi+ybXZIfIQ2P4rb19mVq1feMbCXhz+L1rG8oa\nt5lYKfpe8k83ZA==";
-            privateKeyStr = privateKeyStr.replace("-----BEGIN PRIVATE KEY-----", "").replace("-----END PRIVATE KEY-----", "").replaceAll("\\s", "");
+            String privateKeyStr = RSA_PRIVATE_KEY
+                    .replace("-----BEGIN PRIVATE KEY-----", "")
+                    .replace("-----END PRIVATE KEY-----", "")
+                    .replaceAll("\\s", "");
             byte[] keyBytes = Base64.decode(privateKeyStr, Base64.DEFAULT);
             PKCS8EncodedKeySpec keySpec = new PKCS8EncodedKeySpec(keyBytes);
             KeyFactory keyFactory = KeyFactory.getInstance("RSA");
@@ -202,20 +110,100 @@ public class Gz360 extends Spider {
         }
     }
 
-    private static String getString(JsonObject obj, String key) {
-        if (obj != null && obj.has(key) && !obj.get(key).isJsonNull()) {
-            return obj.get(key).getAsString();
+    private static Map<String, String> getHeaders() {
+        Map<String, String> headers = new HashMap<>();
+        headers.put("Version", "2406025");
+        headers.put("PackageName", "com.j64f4b21072.ha69699879.dfea0a9826ba.ibf50c9b1d");
+        headers.put("Ver", "1.9.2");
+        headers.put("Referer", BASE_URL);
+        headers.put("Content-Type", "application/x-www-form-urlencoded");
+        headers.put("User-Agent", "okhttp/3.12.0");
+        return headers;
+    }
+
+    private static JsonObject apiRequest(JsonObject params, String path) {
+        try {
+            String time = String.valueOf(System.currentTimeMillis() / 1000);
+            String requestKey = aesEncryptHex(Json.toJson(params));
+
+            StringBuilder signBuilder = new StringBuilder();
+            signBuilder.append("token_id=,token=").append(TOKEN).append(",phone_type=1,request_key=");
+            signBuilder.append(requestKey);
+            signBuilder.append(",app_id=1,time=").append(time);
+            signBuilder.append(",keys=").append(KEYS).append(SIGN_SUFFIX);
+
+            String signature = md5Upper(signBuilder.toString());
+
+            LinkedHashMap<String, String> formData = new LinkedHashMap<>();
+            formData.put("token", TOKEN);
+            formData.put("token_id", "");
+            formData.put("phone_type", "1");
+            formData.put("time", time);
+            formData.put("phone_model", "xiaomi-2206123sc");
+            formData.put("keys", KEYS);
+            formData.put("request_key", requestKey);
+            formData.put("signature", signature);
+            formData.put("app_id", "1");
+            formData.put("ad_version", "1");
+
+            String url = BASE_URL + path;
+            String response = OkHttp.post(url, formData, getHeaders());
+            JsonObject result = Json.safeObject(response);
+
+            if (Json.isNull(result, "data")) return null;
+
+            JsonObject data = Json.getJsonObject(result, "data");
+            if (Json.isNotNull(data, "keys") && Json.isNotNull(data, "response_key")) {
+                String keysStr = Json.getString(data, "keys");
+                String decryptedKeys = rsaDecrypt(keysStr);
+                JsonObject keysObj = Json.safeObject(decryptedKeys);
+                String responseKey = Json.getString(data, "response_key");
+                String aesKey = Json.getString(keysObj, "key");
+                String aesIv = Json.getString(keysObj, "iv");
+                String decrypted = aesDecryptHex(responseKey, aesKey, aesIv);
+                if (Util.isNotEmpty(decrypted)) {
+                    return Json.safeObject(decrypted);
+                }
+            }
+            return null;
+        } catch (Exception e) {
+            return null;
         }
-        return "";
+    }
+
+    private static List<Filter> getCommonFilters() {
+        List<Filter> filters = new ArrayList<>();
+        filters.add(new Filter("area", "地区", Arrays.asList(
+                new Filter.Value("地区", "0"),
+                new Filter.Value("大陆", "大陆"),
+                new Filter.Value("香港", "香港"),
+                new Filter.Value("台湾", "台湾"),
+                new Filter.Value("日本", "日本"),
+                new Filter.Value("韩国", "韩国")
+        )));
+        filters.add(new Filter("year", "年份", Arrays.asList(
+                new Filter.Value("年份", "0"),
+                new Filter.Value("2026", "2026"),
+                new Filter.Value("2025", "2025"),
+                new Filter.Value("2024", "2024"),
+                new Filter.Value("2023", "2023")
+        )));
+        filters.add(new Filter("sort", "排序", Arrays.asList(
+                new Filter.Value("综合", "d_id"),
+                new Filter.Value("最新", "d_addtime"),
+                new Filter.Value("最热", "d_score"),
+                new Filter.Value("高分", "d_score")
+        )));
+        return filters;
     }
 
     @Override
     public void init(Context context, String extend) {
-        a.put("1", "5");
-        a.put("2", "12");
-        a.put("3", "30");
-        a.put("4", "22");
-        a.put("64", "");
+        typeMap.put("1", "5");
+        typeMap.put("2", "12");
+        typeMap.put("3", "30");
+        typeMap.put("4", "22");
+        typeMap.put("64", "");
     }
 
     @Override
@@ -230,8 +218,7 @@ public class Gz360 extends Spider {
 
         LinkedHashMap<String, List<Filter>> filters = new LinkedHashMap<>();
 
-        // 电影分类过滤器
-        ArrayList<Filter> movieFilters = getCommonFilters();
+        List<Filter> movieFilters = new ArrayList<>(getCommonFilters());
         movieFilters.add(2, new Filter("sub", "类型", Arrays.asList(
                 new Filter.Value("动作片", "5"),
                 new Filter.Value("喜剧片", "6"),
@@ -242,8 +229,7 @@ public class Gz360 extends Spider {
         )));
         filters.put("1", movieFilters);
 
-        // 国产剧分类过滤器
-        ArrayList<Filter> dramaFilters = getCommonFilters();
+        List<Filter> dramaFilters = new ArrayList<>(getCommonFilters());
         dramaFilters.add(2, new Filter("sub", "类型", Arrays.asList(
                 new Filter.Value("国产剧", "12"),
                 new Filter.Value("香港剧", "13"),
@@ -254,8 +240,7 @@ public class Gz360 extends Spider {
         )));
         filters.put("2", dramaFilters);
 
-        // 动漫分类过滤器
-        ArrayList<Filter> animeFilters = getCommonFilters();
+        List<Filter> animeFilters = new ArrayList<>(getCommonFilters());
         animeFilters.add(2, new Filter("sub", "类型", Arrays.asList(
                 new Filter.Value("中国动漫", "30"),
                 new Filter.Value("日本动漫", "31"),
@@ -263,8 +248,7 @@ public class Gz360 extends Spider {
         )));
         filters.put("3", animeFilters);
 
-        // 综艺分类过滤器
-        ArrayList<Filter> varietyFilters = getCommonFilters();
+        List<Filter> varietyFilters = new ArrayList<>(getCommonFilters());
         varietyFilters.add(2, new Filter("sub", "类型", Arrays.asList(
                 new Filter.Value("大陆综艺", "22"),
                 new Filter.Value("港台综艺", "23"),
@@ -273,7 +257,6 @@ public class Gz360 extends Spider {
         )));
         filters.put("4", varietyFilters);
 
-        // 短剧分类过滤器
         filters.put("64", Arrays.asList(
                 new Filter("sort", "排序", Arrays.asList(
                         new Filter.Value("综合", "d_id"),
@@ -286,21 +269,23 @@ public class Gz360 extends Spider {
         return Result.string(classes, filters);
     }
 
-    private Vod getVod(JsonObject item) {
+    private Vod parseVod(JsonObject item) {
         Vod vod = new Vod();
-        vod.setVodId(getString(item, "vod_id"));
-        vod.setVodName(getString(item, "vod_name"));
-        vod.setVodPic(getString(item, "vod_pic"));
-        vod.setVodYear(getString(item, "vod_year"));
-        String continu = getString(item, "vod_continu");
-        String score = getString(item, "vod_scroe");
-        if (!TextUtils.isEmpty(continu) && !"0".equals(continu)) {
-            vod.setVodRemarks("更新至" + continu + "集");
-        } else if (!TextUtils.isEmpty(score)) {
-            vod.setVodRemarks(score);
+        vod.setVodId(Json.getString(item, "vod_id"));
+        vod.setVodName(Json.getString(item, "vod_name"));
+        vod.setVodPic(Json.getString(item, "vod_pic"));
+        vod.setVodYear(Json.getString(item, "vod_year"));
+        String continu = Json.getString(item, "vod_continu");
+        String score = Json.getString(item, "vod_scroe");
+        String remark;
+        if (Util.isNotEmpty(continu) && !"0".equals(continu)) {
+            remark = "更新至" + continu + "集";
+        } else if (Util.isNotEmpty(score)) {
+            remark = score;
         } else {
-            vod.setVodRemarks("暂无备注");
+            remark = "暂无备注";
         }
+        vod.setVodRemarks(remark);
         return vod;
     }
 
@@ -310,27 +295,31 @@ public class Gz360 extends Spider {
         params.addProperty("tid", tid);
         params.addProperty("page", pg);
 
-        String sort = extend != null && extend.containsKey("sort") ? extend.get("sort") : "d_id";
+        String sort = "d_id";
+        String area = "0";
+        String sub = typeMap.get(tid);
+        String year = "0";
+
+        if (extend != null && !extend.isEmpty()) {
+            if (extend.containsKey("sort")) sort = extend.get("sort");
+            if (extend.containsKey("area")) area = extend.get("area");
+            if (extend.containsKey("sub")) sub = extend.get("sub");
+            if (extend.containsKey("year")) year = extend.get("year");
+        }
+
         params.addProperty("sort", sort);
-
-        String area = extend != null && extend.containsKey("area") ? extend.get("area") : "0";
         params.addProperty("area", area);
-
-        String sub = extend != null && extend.containsKey("sub") ? extend.get("sub") : a.get(tid);
         params.addProperty("sub", sub);
-
-        String year = extend != null && extend.containsKey("year") ? extend.get("year") : "0";
         params.addProperty("year", year);
-
         params.addProperty("pageSize", "30");
 
         JsonObject result = apiRequest(params, "/App/IndexList/indexList");
 
-        ArrayList<Vod> list = new ArrayList<>();
+        List<Vod> list = new ArrayList<>();
         if (result != null && result.has("list")) {
-            JsonArray array = result.getAsJsonArray("list");
+            JsonArray array = Json.getJsonArray(result, "list");
             for (JsonElement element : array) {
-                list.add(getVod(element.getAsJsonObject()));
+                list.add(parseVod(element.getAsJsonObject()));
             }
         }
 
@@ -346,16 +335,15 @@ public class Gz360 extends Spider {
         params.addProperty("token_id", "1009464");
         params.addProperty("vod_id", vodId);
         params.addProperty("mobile_time", String.valueOf(System.currentTimeMillis() / 1000));
-        params.addProperty("token", "97630f5f85d9f3c639fb7790ca881ef2.4cccf48dc340fe8bded39cfe4ef9ac2adb27425a9069e6cd121210fc7ba518ea8c1cc5629261e94bb6ccb66d8548449c72076c956a2fb46c253008909a6c66347eb458fe3c06d1fcc993ca03a298328f9229f1994a608250c7d1ae124c4520e6e14ce8bf9f4404119a6bbf53cf592a8df2e9145de92ec43ec87cf4bdc563f6e919fe32861b0e93b118ec37d8035fbb3c.473433979755ccd5ec1b4581ccef76e8209b9e0c6ff819917f12dffad47d0d5e");
+        params.addProperty("token", TOKEN);
 
         JsonObject vodInfo = apiRequest(params, "/App/IndexPlay/playInfo");
-        if (vodInfo == null || !vodInfo.has("vodInfo")) {
+        if (vodInfo == null || Json.isNull(vodInfo, "vodInfo")) {
             return Result.error("详情获取失败");
         }
 
-        JsonObject vodData = vodInfo.getAsJsonObject("vodInfo");
+        JsonObject vodData = Json.getJsonObject(vodInfo, "vodInfo");
 
-        // 获取播放链接
         JsonObject playParams = new JsonObject();
         playParams.addProperty("vurl_cloud_id", "2");
         playParams.addProperty("vod_d_id", vodId);
@@ -364,18 +352,18 @@ public class Gz360 extends Spider {
 
         LinkedHashMap<String, List<String>> playMap = new LinkedHashMap<>();
         if (playResult != null && playResult.has("list")) {
-            JsonArray playArray = playResult.getAsJsonArray("list");
+            JsonArray playArray = Json.getJsonArray(playResult, "list");
             for (JsonElement element : playArray) {
                 JsonObject playItem = element.getAsJsonObject();
-                String title = getString(playItem, "title");
-                if (!playItem.has("play")) continue;
-                JsonObject play = playItem.getAsJsonObject("play");
+                String title = Json.getString(playItem, "title");
+                if (Json.isNull(playItem, "play")) continue;
+                JsonObject play = Json.getJsonObject(playItem, "play");
                 for (String playKey : play.keySet()) {
-                    JsonObject playData = play.getAsJsonObject(playKey);
-                    String showType = getString(playData, "show_type");
+                    JsonObject playData = Json.getJsonObject(play, playKey);
+                    String showType = Json.getString(playData, "show_type");
                     if ("2".equals(showType)) continue;
-                    String param = getString(playData, "param");
-                    if (TextUtils.isEmpty(param)) continue;
+                    String param = Json.getString(playData, "param");
+                    if (Util.isEmpty(param)) continue;
                     if (!playMap.containsKey(playKey)) {
                         playMap.put(playKey, new ArrayList<>());
                     }
@@ -384,25 +372,25 @@ public class Gz360 extends Spider {
             }
         }
 
-        ArrayList<String> playFrom = new ArrayList<>();
-        ArrayList<String> playUrl = new ArrayList<>();
+        List<String> playFrom = new ArrayList<>();
+        List<String> playUrl = new ArrayList<>();
         for (String key : playMap.keySet()) {
             playFrom.add(key);
-            playUrl.add(TextUtils.join("#", playMap.get(key)));
+            playUrl.add(Util.join("#", playMap.get(key)));
         }
 
         Vod vod = new Vod();
         vod.setVodId(vodId);
-        vod.setVodName(getString(vodData, "vod_name"));
-        vod.setVodPic(getString(vodData, "vod_pic"));
-        vod.setVodContent(getString(vodData, "vod_use_content"));
-        vod.setVodActor(getString(vodData, "vod_actor"));
-        vod.setVodDirector(getString(vodData, "vod_director"));
-        vod.setVodArea(getString(vodData, "vod_area"));
-        vod.setVodYear(getString(vodData, "vod_year"));
-        vod.setVodRemarks(getString(vodData, "vod_scroe"));
-        vod.setVodPlayFrom(TextUtils.join("$$$", playFrom));
-        vod.setVodPlayUrl(TextUtils.join("$$$", playUrl));
+        vod.setVodName(Json.getString(vodData, "vod_name"));
+        vod.setVodPic(Json.getString(vodData, "vod_pic"));
+        vod.setVodContent(Json.getString(vodData, "vod_use_content"));
+        vod.setVodActor(Json.getString(vodData, "vod_actor"));
+        vod.setVodDirector(Json.getString(vodData, "vod_director"));
+        vod.setVodArea(Json.getString(vodData, "vod_area"));
+        vod.setVodYear(Json.getString(vodData, "vod_year"));
+        vod.setVodRemarks(Json.getString(vodData, "vod_scroe"));
+        vod.setVodPlayFrom(Util.join("$$$", playFrom));
+        vod.setVodPlayUrl(Util.join("$$$", playUrl));
 
         return Result.string(vod);
     }
@@ -421,13 +409,13 @@ public class Gz360 extends Spider {
         }
 
         JsonObject result = apiRequest(params, "/App/Resource/VurlDetail/showOne");
-        String url = result != null ? getString(result, "url") : "";
+        String url = result != null ? Json.getString(result, "url") : "";
 
-        if (TextUtils.isEmpty(url)) {
+        if (Util.isEmpty(url)) {
             return Result.error("播放链接解析失败");
         }
 
-        HashMap<String, String> headers = new HashMap<>();
+        Map<String, String> headers = new HashMap<>();
         headers.put("User-Agent", "Lavf/57.83.100");
 
         return Result.get().url(url).parse(0).header(headers).string();
@@ -441,11 +429,11 @@ public class Gz360 extends Spider {
 
         JsonObject result = apiRequest(params, "/App/Index/findMoreVod");
 
-        ArrayList<Vod> list = new ArrayList<>();
+        List<Vod> list = new ArrayList<>();
         if (result != null && result.has("list")) {
-            JsonArray array = result.getAsJsonArray("list");
+            JsonArray array = Json.getJsonArray(result, "list");
             for (JsonElement element : array) {
-                list.add(getVod(element.getAsJsonObject()));
+                list.add(parseVod(element.getAsJsonObject()));
             }
         }
 
