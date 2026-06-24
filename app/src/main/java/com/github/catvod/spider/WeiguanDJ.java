@@ -163,7 +163,7 @@ public class WeiguanDJ extends Spider {
             StringBuilder sb = new StringBuilder("https://api.drama.9ddm.com/drama/home/search");
             sb.append(c());
             
-            String response = OkHttp.post(sb.toString(), params.toString(), a()).getBody();
+            String response = OkHttp.post(sb.toString(), params.toString(), a());
             JSONObject json = new JSONObject(response);
             JSONArray data = json.getJSONArray("data");
             
@@ -277,7 +277,7 @@ public class WeiguanDJ extends Spider {
             StringBuilder sb = new StringBuilder("https://api.drama.9ddm.com/drama/home/search");
             sb.append(c());
             
-            String response = OkHttp.post(sb.toString(), params.toString(), a()).getBody();
+            String response = OkHttp.post(sb.toString(), params.toString(), a());
             JSONObject json = new JSONObject(response);
             JSONArray data = json.getJSONArray("data");
             
