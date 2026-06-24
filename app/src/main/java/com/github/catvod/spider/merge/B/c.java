@@ -1,5 +1,6 @@
 package com.github.catvod.spider.merge.B;
 
+import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 
 /**
@@ -10,7 +11,7 @@ public final class c {
     /**
      * 返回 UTF-8 Charset
      */
-    public static StandardCharsets c() {
+    public static Charset c() {
         return StandardCharsets.UTF_8;
     }
 }
