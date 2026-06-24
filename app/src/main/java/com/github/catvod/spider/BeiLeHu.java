@@ -47,8 +47,7 @@ public class BeiLeHu extends Spider {
 
             String url = "https://vd.ubestkid.com/api/v1/bv/video";
             String body = json.toString();
-            OkResult result = OkHttp.post(url, body, headers);
-            String response = result.getBody();
+            String response = OkHttp.post(url, body, headers);
 
             JSONObject responseJson = new JSONObject(response);
             JSONObject resultObj = responseJson.optJSONObject("result");
