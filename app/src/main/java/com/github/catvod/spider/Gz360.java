@@ -10,6 +10,7 @@ import com.github.catvod.bean.Result;
 import com.github.catvod.bean.Vod;
 import com.github.catvod.crawler.Spider;
 import com.github.catvod.net.OkHttp;
+import com.github.catvod.utils.Crypto;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -41,13 +42,7 @@ public class Gz360 extends Spider {
 
     private static String aesDecrypt(String data, String key, String iv) {
         try {
-            int len = data.length() / 2;
-            byte[] bytes = new byte[len];
-            for (int i = 0; i < len; i++) {
-                int start = i * 2;
-                int end = start + 2;
-                bytes[i] = (byte) Integer.parseInt(data.substring(start, end), 16);
-            }
+            byte[] bytes = Crypto.hexToBytes(data);
             Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
             SecretKeySpec keySpec = new SecretKeySpec(key.getBytes(StandardCharsets.UTF_8), "AES");
             IvParameterSpec ivSpec = new IvParameterSpec(iv.getBytes(StandardCharsets.UTF_8));
