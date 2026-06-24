@@ -189,8 +189,7 @@ public class ChildrenDuoDuo extends Spider {
             }
         }
 
-        ArrayList<com.github.catvod.bean.Filter> filters = new ArrayList<>();
-        return Result.string(classes, filters);
+        return Result.string(classes, new LinkedHashMap<>());
     }
 
     @Override
