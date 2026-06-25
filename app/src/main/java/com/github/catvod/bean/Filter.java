@@ -37,6 +37,11 @@ public class Filter {
     public Filter() {
     }
 
+    public Filter(String key, String name) {
+        this.key = key;
+        this.name = name;
+    }
+
     public Filter(String key, String name, List<Value> value) {
         this.key = key;
         this.name = name;
