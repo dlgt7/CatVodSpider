@@ -8,8 +8,6 @@ import android.util.Base64;
 import android.view.Surface;
 import android.view.WindowManager;
 
-import com.github.tvbox.osc.server.ControlManager;
-import com.github.tvbox.osc.base.App;
 import com.github.catvod.utils.Util;
 import com.github.catvod.utils.Crypto;
 import com.github.catvod.js.utils.JSUtil;
@@ -60,33 +58,27 @@ public class SpiderApi {
 
     /**
      * 获取服务器地址
-     * 
+     *
+     * <p>由于当前环境未集成 tvbox ControlManager，返回空字符串作为占位。
+     * 如需启用，请在集成 tvbox 服务后重写此方法。</p>
+     *
      * @param local 是否获取本地地址
      * @return 服务器地址字符串
      */
     public String getAddress(boolean local) {
-        try {
-            return ControlManager.get().getAddress(local);
-        } catch (Throwable th) {
-            SpiderDebug.log("getAddress error (local=" + local + "): " + th.getMessage());
-            return "";
-        }
+        return "";
     }
 
     /**
      * 获取服务器端口
-     * 
+     *
+     * <p>由于当前环境未集成 tvbox ControlManager，返回空字符串作为占位。
+     * 如需启用，请在集成 tvbox 服务后重写此方法。</p>
+     *
      * @return 端口字符串
      */
     public String getPort() {
-        try {
-            String address = ControlManager.get().getAddress(true);
-            int idx = address.lastIndexOf(":");
-            return idx >= 0 ? address.substring(idx + 1).replace("/", "") : "";
-        } catch (Throwable th) {
-            SpiderDebug.log("getPort error: " + th.getMessage());
-            return "";
-        }
+        return "";
     }
 
     /**
@@ -105,29 +97,14 @@ public class SpiderApi {
 
     /**
      * 获取屏幕方向
-     * 
+     *
+     * <p>由于当前环境未集成 tvbox App，无法获取当前 Activity，
+     * 默认返回传感器横屏模式。如需启用，请在集成 tvbox 服务后重写此方法。</p>
+     *
      * @return 屏幕方向常量值
      */
     public int getScreenOrientation() {
-        try {
-            Activity activity = App.getInstance().getCurrentActivity();
-            Context context = activity == null ? App.getInstance() : activity;
-            int orientation = context.getResources().getConfiguration().orientation;
-            int rotation = Surface.ROTATION_0;
-            WindowManager windowManager = (WindowManager) context.getSystemService(Context.WINDOW_SERVICE);
-            if (windowManager != null && windowManager.getDefaultDisplay() != null) {
-                rotation = windowManager.getDefaultDisplay().getRotation();
-            }
-            if (orientation == Configuration.ORIENTATION_PORTRAIT) {
-                return ActivityInfo.SCREEN_ORIENTATION_PORTRAIT;
-            }
-            if (orientation == Configuration.ORIENTATION_LANDSCAPE) {
-                return rotation == Surface.ROTATION_90 ? ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE : ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE;
-            }
-            return ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED;
-        } catch (Throwable th) {
-            return ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE;
-        }
+        return ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE;
     }
 
     /**
