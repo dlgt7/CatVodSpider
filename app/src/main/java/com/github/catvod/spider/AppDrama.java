@@ -587,7 +587,10 @@ public class AppDrama extends Spider {
 
     private static String rsaEncrypt(String data, String publicKeyStr) {
         try {
-            return Crypto.rsaEncrypt(data, publicKeyStr);
+            // Crypto.rsaEncrypt uses Base64.DEFAULT but smali x0 uses Base64.NO_WRAP (flag 2)
+            String result = Crypto.rsaEncrypt(data, publicKeyStr);
+            byte[] decoded = Base64.decode(result, Base64.DEFAULT);
+            return Base64.encodeToString(decoded, Base64.NO_WRAP);
         } catch (Exception e) {
             return "";
         }
@@ -768,24 +771,22 @@ public class AppDrama extends Spider {
     }
 
     private byte[] postProto(String url, byte[] body, Map<String, String> headers) {
+        if (url == null || !url.startsWith("http")) return new byte[0];
         try {
             OkHttpClient client = OkHttp.client();
             Request.Builder builder = new Request.Builder().url(url);
             if (headers != null) {
-                for (String key : headers.keySet()) {
-                    if ("publicParams".equals(key)) continue;
-                    builder.addHeader(key, headers.get(key));
+                for (Map.Entry<String, String> entry : headers.entrySet()) {
+                    builder.addHeader(entry.getKey(), entry.getValue());
                 }
-            }
-            if (headers != null && headers.containsKey("publicParams")) {
-                builder.addHeader("publicParams", headers.get("publicParams"));
             }
             RequestBody requestBody = RequestBody.create(body, MediaType.parse("application/x-protobuf"));
             builder.post(requestBody);
             Response response = client.newCall(builder.build()).execute();
-            if (response.isSuccessful() && response.body() != null) {
-                return response.body().bytes();
+            if (response.body() == null) {
+                return new byte[0];
             }
+            return response.body().bytes();
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -793,27 +794,11 @@ public class AppDrama extends Spider {
     }
 
     private String postJson(String url, Map<String, String> headers) {
+        // 对应 smali merge/C/a.P(String, HashMap)
+        if (url == null || !url.startsWith("http")) return "";
         try {
-            OkHttpClient client = OkHttp.client();
-            Request.Builder builder = new Request.Builder().url(url);
-            String publicParams = null;
-            if (headers != null) {
-                for (String key : headers.keySet()) {
-                    if ("publicParams".equals(key)) {
-                        publicParams = headers.get(key);
-                        continue;
-                    }
-                    builder.addHeader(key, headers.get(key));
-                }
-            }
-            if (publicParams != null) {
-                builder.addHeader("publicParams", publicParams);
-            }
-            builder.get();
-            Response response = client.newCall(builder.build()).execute();
-            if (response.isSuccessful() && response.body() != null) {
-                return response.body().string();
-            }
+            if (headers == null) headers = new HashMap<>();
+            return OkHttp.string(url, null, headers);
         } catch (Exception e) {
             e.printStackTrace();
         }
