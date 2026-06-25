@@ -180,11 +180,11 @@ public class XBPQ extends Spider {
                 XBPQParser.setDebugMode(debugMode);
                 
                 if (debugMode) {
-                    SpiderDebug.log("[XBPQ-" + siteHost + "] 初始化成功");
+                    SpiderDebug.error("[XBPQ-" + siteHost + "] 初始化成功");
                 }
             }
         } catch (Exception e) {
-            SpiderDebug.log("[XBPQ] init error: " + e.getMessage(), e);
+            SpiderDebug.error("[XBPQ] init error: " + e.getMessage(), e);
         }
     }
     
@@ -237,7 +237,7 @@ public class XBPQ extends Spider {
             pageProxy = config.getPageProxy();
             
         } catch (Exception e) {
-            SpiderDebug.log("[XBPQ] initSiteParams error: " + e.getMessage(), e);
+            SpiderDebug.error("[XBPQ] initSiteParams error: " + e.getMessage(), e);
         }
     }
     
@@ -303,7 +303,7 @@ public class XBPQ extends Spider {
             
             return Result.string(classes, list, filters);
         } catch (Exception e) {
-            SpiderDebug.log("[XBPQ] homeContent error: " + e.getMessage(), e);
+            SpiderDebug.error("[XBPQ] homeContent error: " + e.getMessage(), e);
             return Result.error("首页内容获取失败");
         }
     }
@@ -335,7 +335,7 @@ public class XBPQ extends Spider {
             int page = XBPQUtils.parseInt(pg, 1);
             return Result.get().vod(list).page(page, 1, list.size(), list.size()).string();
         } catch (Exception e) {
-            SpiderDebug.log("[XBPQ] categoryContent error: " + e.getMessage(), e);
+            SpiderDebug.error("[XBPQ] categoryContent error: " + e.getMessage(), e);
             return Result.error("分类内容获取失败");
         }
     }
@@ -376,7 +376,7 @@ public class XBPQ extends Spider {
             
             return Result.string(list);
         } catch (Exception e) {
-            SpiderDebug.log("[XBPQ] detailContent error: " + e.getMessage(), e);
+            SpiderDebug.error("[XBPQ] detailContent error: " + e.getMessage(), e);
             return Result.error("详情内容获取失败");
         }
     }
@@ -406,7 +406,7 @@ public class XBPQ extends Spider {
             
             return Result.string(list);
         } catch (Exception e) {
-            SpiderDebug.log("[XBPQ] searchContent error: " + e.getMessage(), e);
+            SpiderDebug.error("[XBPQ] searchContent error: " + e.getMessage(), e);
             return Result.error("搜索失败");
         }
     }
@@ -475,7 +475,7 @@ public class XBPQ extends Spider {
                 .header(httpHelper.buildPlayHeaders())
                 .string();
         } catch (Exception e) {
-            SpiderDebug.log("[XBPQ] playerContent error: " + e.getMessage(), e);
+            SpiderDebug.error("[XBPQ] playerContent error: " + e.getMessage(), e);
             return Result.error("播放链接获取失败");
         }
     }
@@ -552,7 +552,7 @@ public class XBPQ extends Spider {
             
             return url;
         } catch (Exception e) {
-            SpiderDebug.log("[XBPQ] buildCateUrl error: " + e.getMessage(), e);
+            SpiderDebug.error("[XBPQ] buildCateUrl error: " + e.getMessage(), e);
             return "";
         }
     }
@@ -595,7 +595,7 @@ public class XBPQ extends Spider {
             
             return url;
         } catch (Exception e) {
-            SpiderDebug.log("[XBPQ] buildSearchUrl error: " + e.getMessage(), e);
+            SpiderDebug.error("[XBPQ] buildSearchUrl error: " + e.getMessage(), e);
             return "";
         }
     }
@@ -668,7 +668,7 @@ public class XBPQ extends Spider {
                 }
             }
         } catch (Exception e) {
-            SpiderDebug.log("[XBPQ] parseCategories error: " + e.getMessage(), e);
+            SpiderDebug.error("[XBPQ] parseCategories error: " + e.getMessage(), e);
         }
     }
     
@@ -698,7 +698,7 @@ public class XBPQ extends Spider {
                 }
             }
         } catch (Exception e) {
-            SpiderDebug.log("[XBPQ] parseCategoriesFromHtml error: " + e.getMessage(), e);
+            SpiderDebug.error("[XBPQ] parseCategoriesFromHtml error: " + e.getMessage(), e);
         }
     }
     
@@ -728,7 +728,7 @@ public class XBPQ extends Spider {
             // 解析字母筛选
             parseFilterByConfig(filters, "字母", "字母值", "letter");
         } catch (Exception e) {
-            SpiderDebug.log("[XBPQ] parseFilters error: " + e.getMessage(), e);
+            SpiderDebug.error("[XBPQ] parseFilters error: " + e.getMessage(), e);
         }
     }
     
@@ -796,7 +796,7 @@ public class XBPQ extends Spider {
                 filters.put(filterKey, filterList);
             }
         } catch (Exception e) {
-            SpiderDebug.log("[XBPQ] parseFilterByConfig error: " + e.getMessage(), e);
+            SpiderDebug.error("[XBPQ] parseFilterByConfig error: " + e.getMessage(), e);
         }
     }
     
@@ -828,7 +828,7 @@ public class XBPQ extends Spider {
                 }
             }
         } catch (Exception e) {
-            SpiderDebug.log("[XBPQ] parseHomeList error: " + e.getMessage(), e);
+            SpiderDebug.error("[XBPQ] parseHomeList error: " + e.getMessage(), e);
         }
         return list;
     }
@@ -861,7 +861,7 @@ public class XBPQ extends Spider {
                 Collections.reverse(list);
             }
         } catch (Exception e) {
-            SpiderDebug.log("[XBPQ] parseCateList error: " + e.getMessage(), e);
+            SpiderDebug.error("[XBPQ] parseCateList error: " + e.getMessage(), e);
         }
         return list;
     }
@@ -890,7 +890,7 @@ public class XBPQ extends Spider {
                 }
             }
         } catch (Exception e) {
-            SpiderDebug.log("[XBPQ] parseSearchList error: " + e.getMessage(), e);
+            SpiderDebug.error("[XBPQ] parseSearchList error: " + e.getMessage(), e);
         }
         return list;
     }
@@ -953,7 +953,7 @@ public class XBPQ extends Spider {
                 return new Vod(link, title, image, subtitle);
             }
         } catch (Exception e) {
-            SpiderDebug.log("[XBPQ] parseVodItem error: " + e.getMessage(), e);
+            SpiderDebug.error("[XBPQ] parseVodItem error: " + e.getMessage(), e);
         }
         return null;
     }
@@ -1027,7 +1027,7 @@ public class XBPQ extends Spider {
                 return new Vod(link, title, image, subtitle);
             }
         } catch (Exception e) {
-            SpiderDebug.log("[XBPQ] parseSearchVodItem error: " + e.getMessage(), e);
+            SpiderDebug.error("[XBPQ] parseSearchVodItem error: " + e.getMessage(), e);
         }
         return null;
     }
@@ -1113,7 +1113,7 @@ public class XBPQ extends Spider {
             
             return vod;
         } catch (Exception e) {
-            SpiderDebug.log("[XBPQ] parseDetail error: " + e.getMessage(), e);
+            SpiderDebug.error("[XBPQ] parseDetail error: " + e.getMessage(), e);
             return null;
         }
     }
@@ -1232,7 +1232,7 @@ public class XBPQ extends Spider {
                 vod.setVodPlayFrom("默认");
             }
         } catch (Exception e) {
-            SpiderDebug.log("[XBPQ] parsePlayInfo error: " + e.getMessage(), e);
+            SpiderDebug.error("[XBPQ] parsePlayInfo error: " + e.getMessage(), e);
         }
     }
 
@@ -1244,25 +1244,25 @@ public class XBPQ extends Spider {
     private List<String> parseArray(String content, String rule) {
         if (TextUtils.isEmpty(content) || TextUtils.isEmpty(rule)) {
             if (debugMode) {
-                SpiderDebug.log("[XBPQ-" + siteHost + "] parseArray: 参数为空 - content长度=" + (content == null ? "null" : content.length()) + ", rule=" + rule);
+                SpiderDebug.error("[XBPQ-" + siteHost + "] parseArray: 参数为空 - content长度=" + (content == null ? "null" : content.length()) + ", rule=" + rule);
             }
             return new ArrayList<>();
         }
         
         try {
             if (debugMode) {
-                SpiderDebug.log("[XBPQ-" + siteHost + "] parseArray 开始: rule=" + rule);
+                SpiderDebug.error("[XBPQ-" + siteHost + "] parseArray 开始: rule=" + rule);
             }
             
             List<String> result = XBPQParser.parseArray(content, rule);
             
             if (debugMode) {
-                SpiderDebug.log("[XBPQ-" + siteHost + "] parseArray 完成: 结果数量=" + result.size());
+                SpiderDebug.error("[XBPQ-" + siteHost + "] parseArray 完成: 结果数量=" + result.size());
             }
             
             return result;
         } catch (Exception e) {
-            SpiderDebug.log("[XBPQ-" + siteHost + "] parseArray error: " + e.getMessage(), e);
+            SpiderDebug.error("[XBPQ-" + siteHost + "] parseArray error: " + e.getMessage(), e);
             return new ArrayList<>();
         }
     }
@@ -1276,25 +1276,25 @@ public class XBPQ extends Spider {
     private String parseField(String content, String rule) {
         if (TextUtils.isEmpty(content) || TextUtils.isEmpty(rule)) {
             if (debugMode) {
-                SpiderDebug.log("[XBPQ-" + siteHost + "] parseField: 参数为空 - content长度=" + (content == null ? "null" : content.length()) + ", rule=" + rule);
+                SpiderDebug.error("[XBPQ-" + siteHost + "] parseField: 参数为空 - content长度=" + (content == null ? "null" : content.length()) + ", rule=" + rule);
             }
             return "";
         }
         
         try {
             if (debugMode) {
-                SpiderDebug.log("[XBPQ-" + siteHost + "] parseField 开始: rule=" + rule);
+                SpiderDebug.error("[XBPQ-" + siteHost + "] parseField 开始: rule=" + rule);
             }
             
             String result = XBPQParser.parseHtml(content, rule);
             
             if (debugMode) {
-                SpiderDebug.log("[XBPQ-" + siteHost + "] parseField 完成: 结果=" + (result.length() > 50 ? result.substring(0, 50) + "..." : result));
+                SpiderDebug.error("[XBPQ-" + siteHost + "] parseField 完成: 结果=" + (result.length() > 50 ? result.substring(0, 50) + "..." : result));
             }
             
             return result;
         } catch (Exception e) {
-            SpiderDebug.log("[XBPQ-" + siteHost + "] parseField error: " + e.getMessage(), e);
+            SpiderDebug.error("[XBPQ-" + siteHost + "] parseField error: " + e.getMessage(), e);
             return "";
         }
     }
