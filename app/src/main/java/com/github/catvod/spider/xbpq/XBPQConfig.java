@@ -809,29 +809,6 @@ public class XBPQConfig {
     }
     
     /**
-     * 从 JSONObject 获取整数值（支持多键 fallback）
-     *
-     * @param json JSON 对象
-     * @param keys 键名列表（最后一个可以是默认值）
-     * @return 整数值
-     */
-    private int getInt(JSONObject json, String... keys) {
-        if (json == null || keys == null || keys.length == 0) {
-            return 0;
-        }
-
-        // 遍历所有键名查找值
-        for (int i = 0; i < keys.length; i++) {
-            String key = keys[i];
-            if (json.has(key)) {
-                return json.optInt(key, 0);
-            }
-        }
-
-        return 0;
-    }
-
-    /**
      * 从 JSONObject 获取整数值（带默认值，支持多键 fallback）
      *
      * @param json JSON 对象
@@ -866,30 +843,6 @@ public class XBPQConfig {
         return json.has(key) ? json.optInt(key, defaultValue) : defaultValue;
     }
     
-    /**
-     * 从 JSONObject 获取布尔值（支持多键 fallback）
-     *
-     * @param json JSON 对象
-     * @param keys 键名列表（最后一个可以是默认值）
-     * @return 布尔值
-     */
-    private boolean getBoolean(JSONObject json, String... keys) {
-        if (json == null || keys == null || keys.length == 0) {
-            return false;
-        }
-
-        // 遍历所有键名查找值
-        for (int i = 0; i < keys.length; i++) {
-            String key = keys[i];
-            if (json.has(key)) {
-                String value = json.optString(key, "0");
-                return "1".equals(value) || "true".equalsIgnoreCase(value);
-            }
-        }
-
-        return false;
-    }
-
     /**
      * 从 JSONObject 获取布尔值（带默认值，支持多键 fallback）
      *
