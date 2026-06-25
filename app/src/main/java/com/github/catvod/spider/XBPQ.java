@@ -149,7 +149,7 @@ public class XBPQ extends Spider {
     // ==================== 初始化方法 ====================
     
     @Override
-    public void init(Context context, String extend) {
+    public void init(Context context, String extend) throws Exception {
         super.init(context, extend);
         
         try {
