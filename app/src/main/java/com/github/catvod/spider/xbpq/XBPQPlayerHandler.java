@@ -426,7 +426,7 @@ public class XBPQPlayerHandler {
             
             @Override
             public void onReceivedSslError(WebView view, android.webkit.SslErrorHandler handler,
-                                           android.webkit.SslError error) {
+                                           android.net.http.SslError error) {
                 handler.proceed();
             }
         });
