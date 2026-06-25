@@ -774,19 +774,21 @@ public class AppDrama extends Spider {
         if (url == null || !url.startsWith("http")) return new byte[0];
         try {
             OkHttpClient client = OkHttp.client();
+            MediaType mediaType = MediaType.parse("application/x-protobuf");
+            RequestBody requestBody = RequestBody.create(mediaType, body);
             Request.Builder builder = new Request.Builder().url(url);
+            builder.post(requestBody);
             if (headers != null) {
                 for (Map.Entry<String, String> entry : headers.entrySet()) {
                     builder.addHeader(entry.getKey(), entry.getValue());
                 }
             }
-            RequestBody requestBody = RequestBody.create(body, MediaType.parse("application/x-protobuf"));
-            builder.post(requestBody);
-            Response response = client.newCall(builder.build()).execute();
-            if (response.body() == null) {
-                return new byte[0];
+            try (Response response = client.newCall(builder.build()).execute()) {
+                if (response.body() == null) {
+                    return new byte[0];
+                }
+                return response.body().bytes();
             }
-            return response.body().bytes();
         } catch (Exception e) {
             e.printStackTrace();
         }
