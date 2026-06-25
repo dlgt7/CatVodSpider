@@ -180,7 +180,7 @@ public class XBPQ extends Spider {
                 XBPQParser.setDebugMode(debugMode);
                 
                 if (debugMode) {
-                    SpiderDebug.error("[XBPQ-" + siteHost + "] 初始化成功");
+                    SpiderDebug.log("[XBPQ-" + siteHost + "] 初始化成功");
                 }
             }
         } catch (Exception e) {
@@ -1244,22 +1244,22 @@ public class XBPQ extends Spider {
     private List<String> parseArray(String content, String rule) {
         if (TextUtils.isEmpty(content) || TextUtils.isEmpty(rule)) {
             if (debugMode) {
-                SpiderDebug.error("[XBPQ-" + siteHost + "] parseArray: 参数为空 - content长度=" + (content == null ? "null" : content.length()) + ", rule=" + rule);
+                SpiderDebug.log("[XBPQ-" + siteHost + "] parseArray: 参数为空 - content长度=" + (content == null ? "null" : content.length()) + ", rule=" + rule);
             }
             return new ArrayList<>();
         }
-        
+
         try {
             if (debugMode) {
-                SpiderDebug.error("[XBPQ-" + siteHost + "] parseArray 开始: rule=" + rule);
+                SpiderDebug.log("[XBPQ-" + siteHost + "] parseArray 开始: rule=" + rule);
             }
-            
+
             List<String> result = XBPQParser.parseArray(content, rule);
-            
+
             if (debugMode) {
-                SpiderDebug.error("[XBPQ-" + siteHost + "] parseArray 完成: 结果数量=" + result.size());
+                SpiderDebug.log("[XBPQ-" + siteHost + "] parseArray 完成: 结果数量=" + result.size());
             }
-            
+
             return result;
         } catch (Exception e) {
             SpiderDebug.error("[XBPQ-" + siteHost + "] parseArray error: " + e.getMessage(), e);
@@ -1276,22 +1276,22 @@ public class XBPQ extends Spider {
     private String parseField(String content, String rule) {
         if (TextUtils.isEmpty(content) || TextUtils.isEmpty(rule)) {
             if (debugMode) {
-                SpiderDebug.error("[XBPQ-" + siteHost + "] parseField: 参数为空 - content长度=" + (content == null ? "null" : content.length()) + ", rule=" + rule);
+                SpiderDebug.log("[XBPQ-" + siteHost + "] parseField: 参数为空 - content长度=" + (content == null ? "null" : content.length()) + ", rule=" + rule);
             }
             return "";
         }
-        
+
         try {
             if (debugMode) {
-                SpiderDebug.error("[XBPQ-" + siteHost + "] parseField 开始: rule=" + rule);
+                SpiderDebug.log("[XBPQ-" + siteHost + "] parseField 开始: rule=" + rule);
             }
-            
+
             String result = XBPQParser.parseHtml(content, rule);
-            
+
             if (debugMode) {
-                SpiderDebug.error("[XBPQ-" + siteHost + "] parseField 完成: 结果=" + (result.length() > 50 ? result.substring(0, 50) + "..." : result));
+                SpiderDebug.log("[XBPQ-" + siteHost + "] parseField 完成: 结果=" + (result.length() > 50 ? result.substring(0, 50) + "..." : result));
             }
-            
+
             return result;
         } catch (Exception e) {
             SpiderDebug.error("[XBPQ-" + siteHost + "] parseField error: " + e.getMessage(), e);
