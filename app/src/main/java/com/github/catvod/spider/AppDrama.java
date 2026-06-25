@@ -217,12 +217,13 @@ public class AppDrama extends Spider {
     }
 
     private static byte[] parseApiResultData(byte[] data) {
+        // ApiResultProto: field 1=code(int64), field 2=msg(String), field 3=data(bytes)
         int[] pos = {0};
         while (pos[0] < data.length) {
             int tag = readTag(data, pos);
             int fieldNum = getTagFieldNumber(tag);
             int wireType = getTagWireType(tag);
-            if (fieldNum == 2 && wireType == 2) {
+            if (fieldNum == 3 && wireType == 2) {
                 return readBytesField(data, pos);
             } else {
                 skipField(data, pos, wireType);
@@ -278,6 +279,9 @@ public class AppDrama extends Spider {
     }
 
     private static class DramaBean {
+        // DramaProto$DramaBean: field 1=area, 2=coverImage(msg), 3=id(int32),
+        //   4=brief, 5=name, 6=stars, 7=director, 8=type, 9=cateType2, 10=updateTime,
+        //   11=vodPubdate, 12=actor, 13=remark, 14=year, 15=clazz
         int id;
         String name;
         DramaCoverImageBean coverImage;
@@ -290,14 +294,14 @@ public class AppDrama extends Spider {
                 int tag = readTag(data, pos);
                 int fieldNum = getTagFieldNumber(tag);
                 int wireType = getTagWireType(tag);
-                if (fieldNum == 1 && wireType == 0) {
-                    bean.id = readInt32Field(data, pos);
-                } else if (fieldNum == 2 && wireType == 2) {
-                    bean.name = readStringField(data, pos);
-                } else if (fieldNum == 3 && wireType == 2) {
+                if (fieldNum == 2 && wireType == 2) {
                     byte[] msgData = readBytesField(data, pos);
                     bean.coverImage = DramaCoverImageBean.parseFrom(msgData);
+                } else if (fieldNum == 3 && wireType == 0) {
+                    bean.id = readInt32Field(data, pos);
                 } else if (fieldNum == 5 && wireType == 2) {
+                    bean.name = readStringField(data, pos);
+                } else if (fieldNum == 13 && wireType == 2) {
                     bean.remark = readStringField(data, pos);
                 } else {
                     skipField(data, pos, wireType);
@@ -329,6 +333,9 @@ public class AppDrama extends Spider {
     }
 
     private static class DramaVideoBean {
+        // DramaVideoProto$DramaVideoBean: field 1=id, 2=title, 3=titleOld, 4=path,
+        //   5=size, 6=time, 7=format, 8=type, 9=source, 10=sourceCn, 11=sourceOld,
+        //   12=season, 13=episode, 14=isVip, 15=dramaId, 16=priority, 17=classType, 18=sort
         String sourceCn;
         String source;
         String path;
@@ -341,14 +348,14 @@ public class AppDrama extends Spider {
                 int tag = readTag(data, pos);
                 int fieldNum = getTagFieldNumber(tag);
                 int wireType = getTagWireType(tag);
-                if (fieldNum == 1 && wireType == 2) {
-                    bean.sourceCn = readStringField(data, pos);
-                } else if (fieldNum == 2 && wireType == 2) {
-                    bean.source = readStringField(data, pos);
-                } else if (fieldNum == 3 && wireType == 2) {
-                    bean.path = readStringField(data, pos);
-                } else if (fieldNum == 4 && wireType == 2) {
+                if (fieldNum == 2 && wireType == 2) {
                     bean.title = readStringField(data, pos);
+                } else if (fieldNum == 4 && wireType == 2) {
+                    bean.path = readStringField(data, pos);
+                } else if (fieldNum == 9 && wireType == 2) {
+                    bean.source = readStringField(data, pos);
+                } else if (fieldNum == 10 && wireType == 2) {
+                    bean.sourceCn = readStringField(data, pos);
                 } else {
                     skipField(data, pos, wireType);
                 }
@@ -358,6 +365,13 @@ public class AppDrama extends Spider {
     }
 
     private static class DramaDetailBean {
+        // DramaDetailProto$DramaDetailBean: 1=area, 2=coverImage(msg), 3=createTime, 4=id,
+        //   5=favoriteId, 6=intro, 7=brief, 8=like, 9=name, 10=stars, 11=starsCount,
+        //   12=director, 13=tag, 14=type, 15=cateType2, 16=cateType1, 17=updateTime,
+        //   18=year, 19=hits, 20=hitsDay, 21=hitsWeek, 22=hitsMonth, 23=keyword,
+        //   24=config, 25=actor, 26=remark, 27=isEnd, 28=vodPubdate,
+        //   29=videos(repeated msg), 30=downloads, 31=userLikes, 32=favorite,
+        //   33=season, 34=serial, 35=vip, 36=hot
         String name;
         DramaCoverImageBean coverImage;
         String actor;
@@ -375,24 +389,24 @@ public class AppDrama extends Spider {
                 int tag = readTag(data, pos);
                 int fieldNum = getTagFieldNumber(tag);
                 int wireType = getTagWireType(tag);
-                if (fieldNum == 1 && wireType == 0) {
-                    bean.year = readInt32Field(data, pos);
+                if (fieldNum == 1 && wireType == 2) {
+                    bean.area = readStringField(data, pos);
                 } else if (fieldNum == 2 && wireType == 2) {
-                    bean.name = readStringField(data, pos);
-                } else if (fieldNum == 3 && wireType == 2) {
                     byte[] msgData = readBytesField(data, pos);
                     bean.coverImage = DramaCoverImageBean.parseFrom(msgData);
-                } else if (fieldNum == 4 && wireType == 2) {
-                    bean.actor = readStringField(data, pos);
-                } else if (fieldNum == 5 && wireType == 2) {
-                    bean.tag = readStringField(data, pos);
                 } else if (fieldNum == 6 && wireType == 2) {
-                    bean.area = readStringField(data, pos);
-                } else if (fieldNum == 7 && wireType == 2) {
-                    bean.remark = readStringField(data, pos);
-                } else if (fieldNum == 8 && wireType == 2) {
                     bean.intro = readStringField(data, pos);
                 } else if (fieldNum == 9 && wireType == 2) {
+                    bean.name = readStringField(data, pos);
+                } else if (fieldNum == 13 && wireType == 2) {
+                    bean.tag = readStringField(data, pos);
+                } else if (fieldNum == 18 && wireType == 0) {
+                    bean.year = readInt32Field(data, pos);
+                } else if (fieldNum == 25 && wireType == 2) {
+                    bean.actor = readStringField(data, pos);
+                } else if (fieldNum == 26 && wireType == 2) {
+                    bean.remark = readStringField(data, pos);
+                } else if (fieldNum == 29 && wireType == 2) {
                     byte[] msgData = readBytesField(data, pos);
                     bean.videosList.add(DramaVideoBean.parseFrom(msgData));
                 } else {
@@ -404,6 +418,8 @@ public class AppDrama extends Spider {
     }
 
     private static class RSARequest {
+        // RSARequestProto$RSARequest: 1=timestamp(int64), 2=sign(String),
+        //   3=fake1(String), 4=randomStr(String), 5=fake2(String)
         long timestamp;
         String randomStr;
         String sign;
@@ -414,9 +430,9 @@ public class AppDrama extends Spider {
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             try {
                 out.write(writeInt64Field(1, timestamp));
-                out.write(writeStringField(2, randomStr));
-                out.write(writeStringField(3, sign));
-                out.write(writeStringField(4, fake1));
+                out.write(writeStringField(2, sign));
+                out.write(writeStringField(3, fake1));
+                out.write(writeStringField(4, randomStr));
                 out.write(writeStringField(5, fake2));
             } catch (IOException e) {
                 e.printStackTrace();
@@ -455,9 +471,14 @@ public class AppDrama extends Spider {
     }
 
     private static class ParsePlayUrlBean {
+        // ParsePlayUrlProto$ParsePlayUrlBean: 1=playUrl(String), 2=fitMode(int32),
+        //   3=mirrorMode(int32), 4=timeout(int32), 5=direct(int32),
+        //   6=headers(map<string,string>), 7=androidPlayCore(String),
+        //   8=iosPlayCore(String), 9=msg(String)
+        // headers is a proto map<string,string>: each entry is a sub-message
+        // with field 1=key, field 2=value, repeated under field 6.
         String playUrl;
         Map<String, String> headersMap = new HashMap<>();
-        int headersCount;
 
         static ParsePlayUrlBean parseFrom(byte[] data) {
             ParsePlayUrlBean bean = new ParsePlayUrlBean();
@@ -468,9 +489,7 @@ public class AppDrama extends Spider {
                 int wireType = getTagWireType(tag);
                 if (fieldNum == 1 && wireType == 2) {
                     bean.playUrl = readStringField(data, pos);
-                } else if (fieldNum == 2 && wireType == 0) {
-                    bean.headersCount = readInt32Field(data, pos);
-                } else if (fieldNum == 3 && wireType == 2) {
+                } else if (fieldNum == 6 && wireType == 2) {
                     byte[] entryData = readBytesField(data, pos);
                     parseMapEntry(entryData, bean.headersMap);
                 } else {
@@ -1154,7 +1173,7 @@ public class AppDrama extends Spider {
             ParsePlayUrlBean playUrlBean = ParsePlayUrlBean.parseFrom(apiData);
 
             HashMap<String, String> headers = new HashMap<>();
-            if (playUrlBean.headersCount > 0 && playUrlBean.headersMap != null) {
+            if (playUrlBean.headersMap != null && !playUrlBean.headersMap.isEmpty()) {
                 headers.putAll(playUrlBean.headersMap);
             }
 
