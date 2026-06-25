@@ -427,6 +427,8 @@ public class XBPQPlayerHandler {
             @Override
             public void onReceivedSslError(WebView view, android.webkit.SslErrorHandler handler,
                                            android.net.http.SslError error) {
+                // 嗅探场景下许多视频站点使用自签名/过期证书，忽略 SSL 错误以保证嗅探可用。
+                // 注意：此处理仅用于 WebView 嗅探，不影响 OkHttp 的请求安全策略。
                 handler.proceed();
             }
         });

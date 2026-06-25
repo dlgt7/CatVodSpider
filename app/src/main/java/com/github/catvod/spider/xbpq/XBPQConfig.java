@@ -626,150 +626,150 @@ public class XBPQConfig {
         if (json == null) return;
         
         // 基础 URL 配置
-        homeUrl = getString(json, "主页url", "首页推荐链接", "homeUrl");
-        recommendUrl = getString(json, "首页推荐链接");
-        cateUrl = getString(json, "分类url", "分类链接", "cateUrl");
-        cateLink = getString(json, "分类链接");
-        cateName = getString(json, "分类名称", "分类");
-        cateNameReplace = getString(json, "分类名称替换词");
-        searchUrl = getString(json, "搜索url", "搜索链接", "searchUrl");
-        searchLink = getString(json, "搜索链接");
-        
+        homeUrl = getString(json, "", "主页url", "首页推荐链接", "homeUrl");
+        recommendUrl = getString(json, "", "首页推荐链接");
+        cateUrl = getString(json, "", "分类url", "分类链接", "cateUrl");
+        cateLink = getString(json, "", "分类链接");
+        cateName = getString(json, "", "分类名称", "分类");
+        cateNameReplace = getString(json, "", "分类名称替换词");
+        searchUrl = getString(json, "", "搜索url", "搜索链接", "searchUrl");
+        searchLink = getString(json, "", "搜索链接");
+
         // 编码和请求头配置
-        encoding = getString(json, "编码", "网页编码格式", "UTF-8");
-        userAgent = getString(json, "请求头参数", "请求头", "PC_UA");
-        requestHeader = getString(json, "请求头");
+        encoding = getString(json, "UTF-8", "编码", "网页编码格式");
+        userAgent = getString(json, "PC_UA", "请求头参数", "请求头");
+        requestHeader = getString(json, "", "请求头");
         imageProxy = getBoolean(json, false, "图片是否需要代理", "图片代理");
-        backupUrl = getString(json, "备用地址");
+        backupUrl = getString(json, "", "备用地址");
         
         // 首页配置
         enableHomeData = getBoolean(json, "是否开启获取首页数据", true);
-        homeListRule = getString(json, "首页列表数组规则");
-        homeItemRule = getString(json, "首页片单列表数组规则");
+        homeListRule = getString(json, "", "首页列表数组规则");
+        homeItemRule = getString(json, "", "首页片单列表数组规则");
         homeItemJsoup = getBoolean(json, "首页片单是否Jsoup写法", true);
-        homeItemTitle = getString(json, "首页片单标题");
-        homeItemLink = getString(json, "首页片单链接");
-        homeItemImage = getString(json, "首页片单图片");
-        homeItemSubtitle = getString(json, "首页片单副标题");
-        homeItemLinkPrefix = getString(json, "首页片单链接加前缀");
-        homeItemLinkSuffix = getString(json, "首页片单链接加后缀");
+        homeItemTitle = getString(json, "", "首页片单标题");
+        homeItemLink = getString(json, "", "首页片单链接");
+        homeItemImage = getString(json, "", "首页片单图片");
+        homeItemSubtitle = getString(json, "", "首页片单副标题");
+        homeItemLinkPrefix = getString(json, "", "首页片单链接加前缀");
+        homeItemLinkSuffix = getString(json, "", "首页片单链接加后缀");
         
         // 分类配置
         cateStartPage = getInt(json, 1, "分类起始页码", "起始页");
         cateCutMode = getInt(json, "分类截取模式", 1);
-        cateListRule = getString(json, "分类列表数组规则");
+        cateListRule = getString(json, "", "分类列表数组规则");
         cateItemJsoup = getBoolean(json, "分类片单是否Jsoup写法", true);
-        cateItemTitle = getString(json, "分类片单标题");
-        cateItemLink = getString(json, "分类片单链接");
-        cateItemImage = getString(json, "分类片单图片");
-        cateItemSubtitle = getString(json, "分类片单副标题");
-        cateItemLinkPrefix = getString(json, "分类片单链接加前缀");
-        cateItemLinkSuffix = getString(json, "分类片单链接加后缀");
-        cateArray = getString(json, "分类数组");
-        cateTitle = getString(json, "分类标题");
-        cateId = getString(json, "分类ID");
-        cateSecondCut = getString(json, "分类二次截取");
+        cateItemTitle = getString(json, "", "分类片单标题");
+        cateItemLink = getString(json, "", "分类片单链接");
+        cateItemImage = getString(json, "", "分类片单图片");
+        cateItemSubtitle = getString(json, "", "分类片单副标题");
+        cateItemLinkPrefix = getString(json, "", "分类片单链接加前缀");
+        cateItemLinkSuffix = getString(json, "", "分类片单链接加后缀");
+        cateArray = getString(json, "", "分类数组");
+        cateTitle = getString(json, "", "分类标题");
+        cateId = getString(json, "", "分类ID");
+        cateSecondCut = getString(json, "", "分类二次截取");
         
         // 搜索配置
-        searchHeader = getString(json, "搜索请求头参数", "搜索请求头");
+        searchHeader = getString(json, "", "搜索请求头参数", "搜索请求头");
         searchCutMode = getInt(json, "搜索截取模式", 1);
-        searchListRule = getString(json, "搜索列表数组规则");
-        searchSecondCut = getString(json, "搜索二次截取");
+        searchListRule = getString(json, "", "搜索列表数组规则");
+        searchSecondCut = getString(json, "", "搜索二次截取");
         searchItemJsoup = getBoolean(json, "搜索片单是否Jsoup写法", true);
-        searchArray = getString(json, "搜索数组");
-        searchImage = getString(json, "搜索图片", "搜索片单图片");
-        searchTitle = getString(json, "搜索标题", "搜索片单标题");
-        searchSubtitle = getString(json, "搜索副标题");
-        searchLinkRule = getString(json, "搜索链接", "搜索片单链接");
-        searchLinkPrefix = getString(json, "搜索片单链接加前缀");
-        searchLinkSuffix = getString(json, "搜索片单链接加后缀");
-        postData = getString(json, "POST请求数据");
+        searchArray = getString(json, "", "搜索数组");
+        searchImage = getString(json, "", "搜索图片", "搜索片单图片");
+        searchTitle = getString(json, "", "搜索标题", "搜索片单标题");
+        searchSubtitle = getString(json, "", "搜索副标题");
+        searchLinkRule = getString(json, "", "搜索链接", "搜索片单链接");
+        searchLinkPrefix = getString(json, "", "搜索片单链接加前缀");
+        searchLinkSuffix = getString(json, "", "搜索片单链接加后缀");
+        postData = getString(json, "", "POST请求数据");
         
         // 详情配置
         detailJsoup = getBoolean(json, "详情是否Jsoup写法", false);
-        typeDetail = getString(json, "类型详情");
-        yearDetail = getString(json, "年代详情");
-        areaDetail = getString(json, "地区详情");
-        actorDetail = getString(json, "演员详情");
-        directorDetail = getString(json, "导演详情");
-        intro = getString(json, "简介");
-        introDetail = getString(json, "简介详情");
-        
+        typeDetail = getString(json, "", "类型详情");
+        yearDetail = getString(json, "", "年代详情");
+        areaDetail = getString(json, "", "地区详情");
+        actorDetail = getString(json, "", "演员详情");
+        directorDetail = getString(json, "", "导演详情");
+        intro = getString(json, "", "简介");
+        introDetail = getString(json, "", "简介详情");
+
         // 线路配置
-        lineArray = getString(json, "线路数组");
-        lineListRule = getString(json, "线路列表数组规则");
-        lineTitle = getString(json, "线路标题");
-        
+        lineArray = getString(json, "", "线路数组");
+        lineListRule = getString(json, "", "线路列表数组规则");
+        lineTitle = getString(json, "", "线路标题");
+
         // 播放配置
-        playArray = getString(json, "播放数组");
-        playListRule = getString(json, "播放列表数组规则");
-        playList = getString(json, "播放列表");
-        playSecondCut = getString(json, "播放二次截取");
-        episodeListRule = getString(json, "选集列表数组规则");
-        playTitle = getString(json, "播放标题");
-        episodeTitle = getString(json, "选集标题");
-        playLink = getString(json, "播放链接");
-        episodeLink = getString(json, "选集链接");
+        playArray = getString(json, "", "播放数组");
+        playListRule = getString(json, "", "播放列表数组规则");
+        playList = getString(json, "", "播放列表");
+        playSecondCut = getString(json, "", "播放二次截取");
+        episodeListRule = getString(json, "", "选集列表数组规则");
+        playTitle = getString(json, "", "播放标题");
+        episodeTitle = getString(json, "", "选集标题");
+        playLink = getString(json, "", "播放链接");
+        episodeLink = getString(json, "", "选集链接");
         episodeJsoup = getBoolean(json, "选集标题链接是否Jsoup写法", true);
         reverseEpisode = getBoolean(json, false, "是否反转选集序列", "倒序");
-        episodeLinkPrefix = getString(json, "选集链接加前缀");
-        episodeLinkSuffix = getString(json, "选集链接加后缀");
+        episodeLinkPrefix = getString(json, "", "选集链接加前缀");
+        episodeLinkSuffix = getString(json, "", "选集链接加后缀");
         directPlay = getBoolean(json, "链接是否直接播放", false);
-        directPlayPrefix = getString(json, "直接播放链接加前缀");
-        directPlaySuffix = getString(json, "直接播放链接加后缀");
-        directPlayHeader = getString(json, "直接播放直链视频请求头");
+        directPlayPrefix = getString(json, "", "直接播放链接加前缀");
+        directPlaySuffix = getString(json, "", "直接播放链接加后缀");
+        directPlayHeader = getString(json, "", "直接播放直链视频请求头");
         
         // 嗅探配置
-        sniffWord = getString(json, "嗅探词", "手动嗅探视频链接关键词");
-        forceSniffWord = getString(json, "强制嗅探词");
+        sniffWord = getString(json, "", "嗅探词", "手动嗅探视频链接关键词");
+        forceSniffWord = getString(json, "", "强制嗅探词");
         manualSniff = getBoolean(json, "是否开启手动嗅探", false);
-        manualSniffKeyword = getString(json, "手动嗅探视频链接关键词");
-        manualSniffFilter = getString(json, "手动嗅探视频链接过滤词");
-        pageProxy = getString(json, "页面代理");
-        
+        manualSniffKeyword = getString(json, "", "手动嗅探视频链接关键词");
+        manualSniffFilter = getString(json, "", "手动嗅探视频链接过滤词");
+        pageProxy = getString(json, "", "页面代理");
+
         // 其他配置
         reverseOrder = getBoolean(json, "倒序", false);
         analyzeMacPlayer = getBoolean(json, "分析MacPlayer", false);
-        imageRule = getString(json, "图片");
-        titleRule = getString(json, "标题");
-        subtitleRule = getString(json, "副标题");
-        arrayRule = getString(json, "数组", " 数组");
-        linkRule = getString(json, "链接");
-        linkPrefix = getString(json, "链接前缀");
-        linkSuffix = getString(json, "链接后缀");
-        ruleName = getString(json, "规则名");
-        ruleAuthor = getString(json, "规则作者");
+        imageRule = getString(json, "", "图片");
+        titleRule = getString(json, "", "标题");
+        subtitleRule = getString(json, "", "副标题");
+        arrayRule = getString(json, "", "数组", " 数组");
+        linkRule = getString(json, "", "链接");
+        linkPrefix = getString(json, "", "链接前缀");
+        linkSuffix = getString(json, "", "链接后缀");
+        ruleName = getString(json, "", "规则名");
+        ruleAuthor = getString(json, "", "规则作者");
         filterData = json.optJSONObject("筛选数据");
-        
+
         // 新增配置解析
-        siteName = getString(json, "站名");
+        siteName = getString(json, "", "站名");
         homePageCount = getInt(json, "首页", 0);
-        filterWord = getString(json, "过滤词", "滤词");
-        statusDetail = getString(json, "状态");
-        jumpPlayLink = getString(json, "跳转播放链接");
-        jumpParse = getString(json, "跳转解析");
-        playLinkPrefix = getString(json, "播放链接前缀");
+        filterWord = getString(json, "", "过滤词", "滤词");
+        statusDetail = getString(json, "", "状态");
+        jumpPlayLink = getString(json, "", "跳转播放链接");
+        jumpParse = getString(json, "", "跳转解析");
+        playLinkPrefix = getString(json, "", "播放链接前缀");
         noSniff = getBoolean(json, "免嗅", false);
         searchMode = getInt(json, "搜索模式", 0);
-        searchSuffix = getString(json, "搜索后缀");
-        cateValue = getString(json, "分类值");
-        lineSecondCut = getString(json, "线路二次截取");
-        
+        searchSuffix = getString(json, "", "搜索后缀");
+        cateValue = getString(json, "", "分类值");
+        lineSecondCut = getString(json, "", "线路二次截取");
+
         // 筛选配置解析
-        typeFilter = getString(json, "类型");
-        typeValue = getString(json, "类型值");
-        areaFilter = getString(json, "地区");
-        areaValue = getString(json, "地区值");
-        plotFilter = getString(json, "剧情");
-        plotValue = getString(json, "剧情值");
-        yearFilter = getString(json, "年份");
-        yearValue = getString(json, "年份值");
-        langFilter = getString(json, "语言");
-        langValue = getString(json, "语言值");
-        letterFilter = getString(json, "字母");
-        letterValue = getString(json, "字母值");
-        sortFilter = getString(json, "排序");
-        sortValue = getString(json, "排序值");
+        typeFilter = getString(json, "", "类型");
+        typeValue = getString(json, "", "类型值");
+        areaFilter = getString(json, "", "地区");
+        areaValue = getString(json, "", "地区值");
+        plotFilter = getString(json, "", "剧情");
+        plotValue = getString(json, "", "剧情值");
+        yearFilter = getString(json, "", "年份");
+        yearValue = getString(json, "", "年份值");
+        langFilter = getString(json, "", "语言");
+        langValue = getString(json, "", "语言值");
+        letterFilter = getString(json, "", "字母");
+        letterValue = getString(json, "", "字母值");
+        sortFilter = getString(json, "", "排序");
+        sortValue = getString(json, "", "排序值");
         
         // 解析所有规则到映射
         java.util.Iterator<String> keyIter = json.keys();
@@ -785,41 +785,27 @@ public class XBPQConfig {
     // ==================== 辅助方法 ====================
     
     /**
-     * 从 JSONObject 获取字符串值（支持多键 fallback）
-     * 
+     * 从 JSONObject 获取字符串值（支持多键 fallback 和默认值）
+     *
+     * <p>按顺序遍历 keys，返回第一个存在的键对应的值；如果所有键都不存在，返回 defaultValue。</p>
+     *
      * @param json JSON 对象
-     * @param keys 键名列表（最后一个可以是默认值）
+     * @param defaultValue 默认值（当所有键都不存在时返回）
+     * @param keys 键名列表（按优先级顺序）
      * @return 字符串值
      */
-    private String getString(JSONObject json, String... keys) {
+    private String getString(JSONObject json, String defaultValue, String... keys) {
         if (json == null || keys == null || keys.length == 0) {
-            return "";
-        }
-        
-        // 遍历所有键名查找值
-        for (int i = 0; i < keys.length; i++) {
-            String key = keys[i];
-            if (json.has(key)) {
-                return json.optString(key, "");
-            }
-        }
-        
-        return "";
-    }
-    
-    /**
-     * 从 JSONObject 获取字符串值（带默认值）
-     * 
-     * @param json JSON 对象
-     * @param key 键名
-     * @param defaultValue 默认值
-     * @return 字符串值
-     */
-    private String getString(JSONObject json, String key, String defaultValue) {
-        if (json == null || key == null) {
             return defaultValue;
         }
-        return json.has(key) ? json.optString(key, defaultValue) : defaultValue;
+
+        for (String key : keys) {
+            if (json.has(key)) {
+                return json.optString(key, defaultValue);
+            }
+        }
+
+        return defaultValue;
     }
     
     /**
