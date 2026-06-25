@@ -9,7 +9,6 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
 import com.github.catvod.crawler.SpiderDebug;
-import com.github.tvbox.osc.base.App;
 
 import org.json.JSONObject;
 
@@ -107,17 +106,7 @@ public class XBPQPlayerHandler {
      * @return 应用上下文对象，如果所有方式都失败则返回 null
      */
     private static android.content.Context getContext() {
-        // 方式1：使用 App.getInstance()
-        try {
-            android.content.Context context = App.getInstance();
-            if (context != null) {
-                return context;
-            }
-        } catch (Exception e) {
-            SpiderDebug.log("[XBPQ] getContext App.getInstance failed", e);
-        }
-        
-        // 方式2：尝试从 AppGlobals 获取
+        // 方式1：尝试从 AppGlobals 获取
         try {
             android.content.Context context = (android.content.Context) Class.forName("android.app.AppGlobals")
                 .getMethod("getInitialApplication")
@@ -127,10 +116,10 @@ public class XBPQPlayerHandler {
                 return context;
             }
         } catch (Exception e) {
-            SpiderDebug.log("[XBPQ] getContext AppGlobals failed", e);
+            SpiderDebug.error("[XBPQ] getContext AppGlobals failed", e);
         }
-        
-        // 方式3：尝试从 ActivityThread 获取
+
+        // 方式2：尝试从 ActivityThread 获取
         try {
             Object activityThread = Class.forName("android.app.ActivityThread")
                 .getMethod("currentActivityThread")
@@ -144,9 +133,9 @@ public class XBPQPlayerHandler {
                 return context;
             }
         } catch (Exception e) {
-            SpiderDebug.log("[XBPQ] getContext ActivityThread failed", e);
+            SpiderDebug.error("[XBPQ] getContext ActivityThread failed", e);
         }
-        
+
         SpiderDebug.log("[XBPQ] getContext 所有方式都失败，返回 null");
         return null;
     }
@@ -205,7 +194,7 @@ public class XBPQPlayerHandler {
 
             return json.toString();
         } catch (Exception e) {
-            SpiderDebug.log("[XBPQ] playerContent error: " + e.getMessage(), e);
+            SpiderDebug.error("[XBPQ] playerContent error: " + e.getMessage(), e);
             return jsonStr;
         }
     }
@@ -253,9 +242,9 @@ public class XBPQPlayerHandler {
                 }
             }
         } catch (Exception e) {
-            SpiderDebug.log("[XBPQ] handleMagnetLink error: " + e.getMessage(), e);
+            SpiderDebug.error("[XBPQ] handleMagnetLink error: " + e.getMessage(), e);
         }
-        
+
         return url;
     }
     
@@ -332,13 +321,7 @@ public class XBPQPlayerHandler {
                                    boolean isPc, ArrayList<Object> webViewSet,
                                    HashMap<String, Object> parseFlags) {
         // 必须在主线程创建 WebView
-        runOnUiThread(() -> {
-            if (!hasX5WebView()) {
-                createStandardWebView(url, parseResult, parseFlags, webViewSet, isPc);
-            } else {
-                createX5WebView(url, parseResult, parseFlags, webViewSet, isPc);
-            }
-        });
+        runOnUiThread(() -> createStandardWebView(url, parseResult, parseFlags, webViewSet, isPc));
     }
     
     /**
@@ -348,16 +331,10 @@ public class XBPQPlayerHandler {
      */
     public static void destroyView(ArrayList<Object> webViewSet) {
         if (webViewSet == null || webViewSet.isEmpty()) return;
-        
+
         // 必须在主线程销毁 WebView
-        runOnUiThread(() -> {
-            if (!hasX5WebView()) {
-                destroyStandardWebView(webViewSet);
-            } else {
-                destroyX5WebView(webViewSet);
-            }
-        });
-        
+        runOnUiThread(() -> destroyStandardWebView(webViewSet));
+
         webViewSet.clear();
     }
     
@@ -366,7 +343,7 @@ public class XBPQPlayerHandler {
      */
     private static void runOnUiThread(Runnable runnable) {
         if (runnable == null) return;
-        
+
         try {
             android.content.Context context = getContext();
             if (context instanceof android.app.Activity) {
@@ -375,11 +352,11 @@ public class XBPQPlayerHandler {
                 new android.os.Handler(android.os.Looper.getMainLooper()).post(runnable);
             }
         } catch (Exception e) {
-            SpiderDebug.log("[XBPQ] runOnUiThread error: " + e.getMessage(), e);
+            SpiderDebug.error("[XBPQ] runOnUiThread error: " + e.getMessage(), e);
             try {
                 new android.os.Handler(android.os.Looper.getMainLooper()).post(runnable);
             } catch (Exception ex) {
-                SpiderDebug.log("[XBPQ] runOnUiThread fallback error: " + ex.getMessage(), ex);
+                SpiderDebug.error("[XBPQ] runOnUiThread fallback error: " + ex.getMessage(), ex);
             }
         }
     }
@@ -448,80 +425,8 @@ public class XBPQPlayerHandler {
             }
             
             @Override
-            public void onReceivedSslError(WebView view, android.webkit.SslErrorHandler handler, 
-                                           android.net.SslError error) {
-                handler.proceed();
-            }
-        });
-    }
-    
-    /**
-     * 创建 X5 WebView
-     */
-    private static void createX5WebView(String url, HashMap<String, Object> parseResult,
-                                         HashMap<String, Object> parseFlags,
-                                         ArrayList<Object> webViewSet, boolean isPc) {
-        // 检查 Context 是否为空，避免 NPE
-        android.content.Context context = getContext();
-        if (context == null) {
-            SpiderDebug.log("[XBPQ] createX5WebView: Context 为 null，无法创建 X5 WebView");
-            return;
-        }
-        com.tencent.smtt.sdk.WebView webView = new com.tencent.smtt.sdk.WebView(context);
-        webViewSet.add(webView);
-        
-        configureX5WebView(webView, isPc);
-        setX5WebViewClient(webView, parseResult, parseFlags);
-        
-        webView.loadUrl(url);
-    }
-    
-    /**
-     * 配置 X5 WebView
-     */
-    private static void configureX5WebView(com.tencent.smtt.sdk.WebView webView, boolean isPc) {
-        com.tencent.smtt.sdk.WebSettings settings = webView.getSettings();
-        
-        settings.setJavaScriptEnabled(true);
-        settings.setDomStorageEnabled(true);
-        settings.setAllowFileAccess(true);
-        settings.setDatabaseEnabled(true);
-        settings.setSupportZoom(true);
-        settings.setBuiltInZoomControls(true);
-        settings.setDisplayZoomControls(false);
-        settings.setUseWideViewPort(true);
-        settings.setLoadWithOverviewMode(true);
-        settings.setCacheMode(com.tencent.smtt.sdk.WebSettings.LOAD_NO_CACHE);
-        
-        if (isPc) {
-            settings.setUserAgentString("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
-        } else {
-            settings.setUserAgentString("Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X)");
-        }
-    }
-    
-    /**
-     * 设置 X5 WebView Client
-     */
-    private static void setX5WebViewClient(com.tencent.smtt.sdk.WebView webView,
-                                            HashMap<String, Object> parseResult,
-                                            HashMap<String, Object> parseFlags) {
-        webView.setWebViewClient(new com.tencent.smtt.sdk.WebViewClient() {
-            @Override
-            public boolean shouldOverrideUrlLoading(com.tencent.smtt.sdk.WebView view, String url) {
-                view.loadUrl(url);
-                return true;
-            }
-            
-            @Override
-            public void onLoadResource(com.tencent.smtt.sdk.WebView view, String url) {
-                handleVideoSniff(url, parseResult, parseFlags);
-            }
-            
-            @Override
-            public void onReceivedSslError(com.tencent.smtt.sdk.WebView view, 
-                                           com.tencent.smtt.sdk.SslErrorHandler handler,
-                                           android.net.SslError error) {
+            public void onReceivedSslError(WebView view, android.webkit.SslErrorHandler handler,
+                                           android.webkit.SslError error) {
                 handler.proceed();
             }
         });
@@ -533,14 +438,14 @@ public class XBPQPlayerHandler {
     private static void handleVideoSniff(String url, HashMap<String, Object> parseResult,
                                           HashMap<String, Object> parseFlags) {
         if (parseFlags.containsKey(STOP_PARSE)) return;
-        
+
         // 判断是否为视频格式（使用 XBPQUtils 统一实现）
         if (XBPQUtils.isVideoFormat(url)) {
             parseResult.put(URL, url);
             SpiderDebug.log("[XBPQ] sniffed video URL: " + url);
         }
     }
-    
+
     /**
      * 销毁标准 WebView
      */
@@ -549,22 +454,13 @@ public class XBPQPlayerHandler {
             safeDestroy(webView);
         }
     }
-    
-    /**
-     * 销毁 X5 WebView
-     */
-    private static void destroyX5WebView(ArrayList<Object> webViewSet) {
-        for (Object webView : webViewSet) {
-            safeDestroy(webView);
-        }
-    }
-    
+
     /**
      * 安全销毁 WebView
      */
     private static void safeDestroy(Object webView) {
         if (webView == null) return;
-        
+
         try {
             if (webView instanceof WebView) {
                 WebView w = (WebView) webView;
@@ -576,35 +472,19 @@ public class XBPQPlayerHandler {
                 w.removeAllViews();
                 w.destroyDrawingCache();
                 w.destroy();
-            } else if (webView instanceof com.tencent.smtt.sdk.WebView) {
-                com.tencent.smtt.sdk.WebView w = (com.tencent.smtt.sdk.WebView) webView;
-                w.stopLoading();
-                w.loadUrl("about:blank");
-                w.clearHistory();
-                w.clearCache(true);
-                w.onPause();
-                w.removeAllViews();
-                w.destroyDrawingCache();
-                w.destroy();
             }
         } catch (Exception e) {
-            SpiderDebug.log("[XBPQ] safeDestroy error: " + e.getMessage(), e);
+            SpiderDebug.error("[XBPQ] safeDestroy error: " + e.getMessage(), e);
         }
     }
-    
+
     /**
      * 检测是否有 X5 WebView
+     *
+     * <p>当前项目未集成腾讯 X5 SDK，始终返回 false。
+     * 如需启用 X5 内核，请引入 com.tencent.smtt 依赖并恢复相关 X5 方法。</p>
      */
     public static boolean hasX5WebView() {
-        if (!staticHasX5WebViewDetected) {
-            try {
-                Class.forName("com.tencent.smtt.sdk.WebView");
-                staticHasX5WebView = true;
-            } catch (ClassNotFoundException e) {
-                staticHasX5WebView = false;
-            }
-            staticHasX5WebViewDetected = true;
-        }
-        return staticHasX5WebView;
+        return false;
     }
 }

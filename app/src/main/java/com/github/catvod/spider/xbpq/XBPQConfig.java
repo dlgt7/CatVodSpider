@@ -639,7 +639,7 @@ public class XBPQConfig {
         encoding = getString(json, "编码", "网页编码格式", "UTF-8");
         userAgent = getString(json, "请求头参数", "请求头", "PC_UA");
         requestHeader = getString(json, "请求头");
-        imageProxy = getBoolean(json, "图片是否需要代理", "图片代理", false);
+        imageProxy = getBoolean(json, false, "图片是否需要代理", "图片代理");
         backupUrl = getString(json, "备用地址");
         
         // 首页配置
@@ -655,7 +655,7 @@ public class XBPQConfig {
         homeItemLinkSuffix = getString(json, "首页片单链接加后缀");
         
         // 分类配置
-        cateStartPage = getInt(json, "分类起始页码", "起始页", 1);
+        cateStartPage = getInt(json, 1, "分类起始页码", "起始页");
         cateCutMode = getInt(json, "分类截取模式", 1);
         cateListRule = getString(json, "分类列表数组规则");
         cateItemJsoup = getBoolean(json, "分类片单是否Jsoup写法", true);
@@ -711,7 +711,7 @@ public class XBPQConfig {
         playLink = getString(json, "播放链接");
         episodeLink = getString(json, "选集链接");
         episodeJsoup = getBoolean(json, "选集标题链接是否Jsoup写法", true);
-        reverseEpisode = getBoolean(json, "是否反转选集序列", "倒序", false);
+        reverseEpisode = getBoolean(json, false, "是否反转选集序列", "倒序");
         episodeLinkPrefix = getString(json, "选集链接加前缀");
         episodeLinkSuffix = getString(json, "选集链接加后缀");
         directPlay = getBoolean(json, "链接是否直接播放", false);
@@ -772,7 +772,9 @@ public class XBPQConfig {
         sortValue = getString(json, "排序值");
         
         // 解析所有规则到映射
-        for (String key : json.keySet()) {
+        java.util.Iterator<String> keyIter = json.keys();
+        while (keyIter.hasNext()) {
+            String key = keyIter.next();
             String value = json.optString(key, "");
             if (value != null && !value.isEmpty()) {
                 rules.put(key, value);
@@ -822,7 +824,7 @@ public class XBPQConfig {
     
     /**
      * 从 JSONObject 获取整数值（支持多键 fallback）
-     * 
+     *
      * @param json JSON 对象
      * @param keys 键名列表（最后一个可以是默认值）
      * @return 整数值
@@ -831,7 +833,7 @@ public class XBPQConfig {
         if (json == null || keys == null || keys.length == 0) {
             return 0;
         }
-        
+
         // 遍历所有键名查找值
         for (int i = 0; i < keys.length; i++) {
             String key = keys[i];
@@ -839,8 +841,28 @@ public class XBPQConfig {
                 return json.optInt(key, 0);
             }
         }
-        
+
         return 0;
+    }
+
+    /**
+     * 从 JSONObject 获取整数值（带默认值，支持多键 fallback）
+     *
+     * @param json JSON 对象
+     * @param defaultValue 默认值
+     * @param keys 键名列表
+     * @return 整数值
+     */
+    private int getInt(JSONObject json, int defaultValue, String... keys) {
+        if (json == null || keys == null || keys.length == 0) {
+            return defaultValue;
+        }
+        for (String key : keys) {
+            if (json.has(key)) {
+                return json.optInt(key, defaultValue);
+            }
+        }
+        return defaultValue;
     }
     
     /**
@@ -860,7 +882,7 @@ public class XBPQConfig {
     
     /**
      * 从 JSONObject 获取布尔值（支持多键 fallback）
-     * 
+     *
      * @param json JSON 对象
      * @param keys 键名列表（最后一个可以是默认值）
      * @return 布尔值
@@ -869,7 +891,7 @@ public class XBPQConfig {
         if (json == null || keys == null || keys.length == 0) {
             return false;
         }
-        
+
         // 遍历所有键名查找值
         for (int i = 0; i < keys.length; i++) {
             String key = keys[i];
@@ -878,8 +900,29 @@ public class XBPQConfig {
                 return "1".equals(value) || "true".equalsIgnoreCase(value);
             }
         }
-        
+
         return false;
+    }
+
+    /**
+     * 从 JSONObject 获取布尔值（带默认值，支持多键 fallback）
+     *
+     * @param json JSON 对象
+     * @param defaultValue 默认值
+     * @param keys 键名列表
+     * @return 布尔值
+     */
+    private boolean getBoolean(JSONObject json, boolean defaultValue, String... keys) {
+        if (json == null || keys == null || keys.length == 0) {
+            return defaultValue;
+        }
+        for (String key : keys) {
+            if (json.has(key)) {
+                String value = json.optString(key, defaultValue ? "1" : "0");
+                return "1".equals(value) || "true".equalsIgnoreCase(value);
+            }
+        }
+        return defaultValue;
     }
     
     /**

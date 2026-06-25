@@ -158,7 +158,7 @@ public class XBPQJsonParser {
             SpiderDebug.log("[XBPQ] parseJson 结果: 结果长度=" + (result != null ? result.length() : 0) + ", 结果预览=" + preview);
             return result;
         } catch (Exception e) {
-            SpiderDebug.log("[XBPQ] parseJson error: rule=" + rule + ", " + e.getMessage(), e);
+            SpiderDebug.error("[XBPQ] parseJson error: rule=" + rule + ", " + e.getMessage(), e);
             return "";
         }
     }
@@ -211,7 +211,7 @@ public class XBPQJsonParser {
             
             SpiderDebug.log("[XBPQ] parseJsonArray 结果: 结果数量=" + result.size());
         } catch (Exception e) {
-            SpiderDebug.log("[XBPQ] parseJsonArray error: rule=" + rule + ", " + e.getMessage(), e);
+            SpiderDebug.error("[XBPQ] parseJsonArray error: rule=" + rule + ", " + e.getMessage(), e);
         }
         
         return result;
@@ -250,7 +250,7 @@ public class XBPQJsonParser {
                 }
             }
         } catch (Exception e) {
-            SpiderDebug.log("[XBPQ] traverseJson error: fieldName=" + fieldName + ", " + e.getMessage(), e);
+            SpiderDebug.error("[XBPQ] traverseJson error: fieldName=" + fieldName + ", " + e.getMessage(), e);
         }
         return null;
     }
@@ -324,7 +324,7 @@ public class XBPQJsonParser {
                 }
             }
         } catch (Exception e) {
-            SpiderDebug.log("[XBPQ] traverseJsonArray error: path=" + path + ", " + e.getMessage(), e);
+            SpiderDebug.error("[XBPQ] traverseJsonArray error: path=" + path + ", " + e.getMessage(), e);
         }
         return jsonObj;
     }

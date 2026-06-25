@@ -55,7 +55,7 @@ public class XBPQUtils {
         try {
             return URLEncoder.encode(text, DEFAULT_ENCODING);
         } catch (UnsupportedEncodingException e) {
-            SpiderDebug.log("[XBPQ] encodeUrl error: " + e.getMessage(), e);
+            SpiderDebug.error("[XBPQ] encodeUrl error: " + e.getMessage(), e);
             return text;
         }
     }
@@ -74,7 +74,7 @@ public class XBPQUtils {
         try {
             return URLDecoder.decode(text, DEFAULT_ENCODING);
         } catch (UnsupportedEncodingException e) {
-            SpiderDebug.log("[XBPQ] decodeUrl error: " + e.getMessage(), e);
+            SpiderDebug.error("[XBPQ] decodeUrl error: " + e.getMessage(), e);
             return text;
         }
     }
@@ -98,7 +98,7 @@ public class XBPQUtils {
         try {
             return URLDecoder.decode(text, encoding);
         } catch (UnsupportedEncodingException e) {
-            SpiderDebug.log("[XBPQ] decodeUrl error: encoding=" + encoding + ", " + e.getMessage(), e);
+            SpiderDebug.error("[XBPQ] decodeUrl error: encoding=" + encoding + ", " + e.getMessage(), e);
             return text;
         }
     }
@@ -120,7 +120,7 @@ public class XBPQUtils {
             byte[] bytes = text.getBytes(DEFAULT_ENCODING);
             return Base64.encodeToString(bytes, Base64.DEFAULT);
         } catch (UnsupportedEncodingException e) {
-            SpiderDebug.log("[XBPQ] encodeBase64 error: " + e.getMessage(), e);
+            SpiderDebug.error("[XBPQ] encodeBase64 error: " + e.getMessage(), e);
             return "";
         }
     }
@@ -140,7 +140,7 @@ public class XBPQUtils {
             byte[] bytes = text.getBytes(DEFAULT_ENCODING);
             return Base64.encodeToString(bytes, Base64.URL_SAFE | Base64.NO_WRAP);
         } catch (UnsupportedEncodingException e) {
-            SpiderDebug.log("[XBPQ] encodeBase64UrlSafe error: " + e.getMessage(), e);
+            SpiderDebug.error("[XBPQ] encodeBase64UrlSafe error: " + e.getMessage(), e);
             return "";
         }
     }
@@ -160,7 +160,7 @@ public class XBPQUtils {
             byte[] bytes = Base64.decode(text, Base64.DEFAULT);
             return new String(bytes, DEFAULT_ENCODING);
         } catch (Exception e) {
-            SpiderDebug.log("[XBPQ] decodeBase64 error: " + e.getMessage(), e);
+            SpiderDebug.error("[XBPQ] decodeBase64 error: " + e.getMessage(), e);
             return "";
         }
     }
@@ -180,7 +180,7 @@ public class XBPQUtils {
             byte[] bytes = Base64.decode(text, Base64.URL_SAFE | Base64.NO_WRAP);
             return new String(bytes, DEFAULT_ENCODING);
         } catch (Exception e) {
-            SpiderDebug.log("[XBPQ] decodeBase64UrlSafe error: " + e.getMessage(), e);
+            SpiderDebug.error("[XBPQ] decodeBase64UrlSafe error: " + e.getMessage(), e);
             return "";
         }
     }
@@ -284,7 +284,7 @@ public class XBPQUtils {
             return uri.getScheme() + "://" + uri.getHost() + 
                    (uri.getPort() > 0 ? ":" + uri.getPort() : "");
         } catch (Exception e) {
-            SpiderDebug.log("[XBPQ] getBaseUrl error: " + e.getMessage(), e);
+            SpiderDebug.error("[XBPQ] getBaseUrl error: " + e.getMessage(), e);
             return "";
         }
     }
@@ -304,7 +304,7 @@ public class XBPQUtils {
             Uri uri = Uri.parse(url);
             return uri.getHost();
         } catch (Exception e) {
-            SpiderDebug.log("[XBPQ] getHost error: " + e.getMessage(), e);
+            SpiderDebug.error("[XBPQ] getHost error: " + e.getMessage(), e);
             return "";
         }
     }
@@ -326,7 +326,7 @@ public class XBPQUtils {
         try {
             return Integer.parseInt(str.trim());
         } catch (NumberFormatException e) {
-            SpiderDebug.log("[XBPQ] parseInt error: str=" + str + ", " + e.getMessage(), e);
+            SpiderDebug.error("[XBPQ] parseInt error: str=" + str + ", " + e.getMessage(), e);
             return defaultValue;
         }
     }
@@ -346,7 +346,7 @@ public class XBPQUtils {
         try {
             return Long.parseLong(str.trim());
         } catch (NumberFormatException e) {
-            SpiderDebug.log("[XBPQ] parseLong error: str=" + str + ", " + e.getMessage(), e);
+            SpiderDebug.error("[XBPQ] parseLong error: str=" + str + ", " + e.getMessage(), e);
             return defaultValue;
         }
     }

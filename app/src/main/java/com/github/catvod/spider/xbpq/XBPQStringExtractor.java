@@ -94,7 +94,7 @@ public class XBPQStringExtractor {
             SpiderDebug.log("[XBPQ] extract 结果: 结果=" + rule);
             return rule;
         } catch (Exception e) {
-            SpiderDebug.log("[XBPQ] extract error: rule=" + rule + ", " + e.getMessage(), e);
+            SpiderDebug.error("[XBPQ] extract error: rule=" + rule + ", " + e.getMessage(), e);
             return "";
         }
     }
@@ -147,7 +147,7 @@ public class XBPQStringExtractor {
             SpiderDebug.log("[XBPQ] extractArray 结果: 结果数量=" + result.size());
             return result;
         } catch (Exception e) {
-            SpiderDebug.log("[XBPQ] extractArray error: rule=" + rule + ", " + e.getMessage(), e);
+            SpiderDebug.error("[XBPQ] extractArray error: rule=" + rule + ", " + e.getMessage(), e);
             return result;
         }
     }

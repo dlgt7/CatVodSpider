@@ -120,7 +120,7 @@ public class XBPQJsoupParser {
             
             return "";
         } catch (Exception e) {
-            SpiderDebug.log("[XBPQ] Jsoup.parse error: rule=" + rule + ", " + e.getMessage(), e);
+            SpiderDebug.error("[XBPQ] Jsoup.parse error: rule=" + rule + ", " + e.getMessage(), e);
             return "";
         }
     }
@@ -172,7 +172,7 @@ public class XBPQJsoupParser {
             SpiderDebug.log("[XBPQ] Jsoup.parseArray 结果: 结果数量=" + result.size());
             return result;
         } catch (Exception e) {
-            SpiderDebug.log("[XBPQ] Jsoup.parseArray error: rule=" + rule + ", " + e.getMessage(), e);
+            SpiderDebug.error("[XBPQ] Jsoup.parseArray error: rule=" + rule + ", " + e.getMessage(), e);
             return result;
         }
     }
@@ -199,7 +199,7 @@ public class XBPQJsoupParser {
                 return element.attr(attrOrText);
             }
         } catch (Exception e) {
-            SpiderDebug.log("[XBPQ] extractValue error: " + e.getMessage(), e);
+            SpiderDebug.error("[XBPQ] extractValue error: " + e.getMessage(), e);
             return "";
         }
     }
@@ -228,7 +228,7 @@ public class XBPQJsoupParser {
             
             return "";
         } catch (Exception e) {
-            SpiderDebug.log("[XBPQ] parseAttribute error: " + e.getMessage(), e);
+            SpiderDebug.error("[XBPQ] parseAttribute error: " + e.getMessage(), e);
             return "";
         }
     }
@@ -255,7 +255,7 @@ public class XBPQJsoupParser {
             
             return "";
         } catch (Exception e) {
-            SpiderDebug.log("[XBPQ] parseText error: " + e.getMessage(), e);
+            SpiderDebug.error("[XBPQ] parseText error: " + e.getMessage(), e);
             return "";
         }
     }

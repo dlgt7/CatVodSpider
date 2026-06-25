@@ -137,7 +137,7 @@ public class XBPQParser {
             }
             return result;
         } catch (Exception e) {
-            SpiderDebug.log("[XBPQ] parseHtml error: rule=" + rule + ", " + e.getMessage(), e);
+            SpiderDebug.error("[XBPQ] parseHtml error: rule=" + rule + ", " + e.getMessage(), e);
             return "";
         }
     }
@@ -211,7 +211,7 @@ public class XBPQParser {
             }
             return result;
         } catch (Exception e) {
-            SpiderDebug.log("[XBPQ] parseArray error: rule=" + rule + ", " + e.getMessage(), e);
+            SpiderDebug.error("[XBPQ] parseArray error: rule=" + rule + ", " + e.getMessage(), e);
             return new ArrayList<>();
         }
     }
@@ -235,7 +235,7 @@ public class XBPQParser {
         try {
             return XBPQRuleApplier.applyReplace(text, rule);
         } catch (Exception e) {
-            SpiderDebug.log("[XBPQ] applyReplace error: " + e.getMessage(), e);
+            SpiderDebug.error("[XBPQ] applyReplace error: " + e.getMessage(), e);
             return text;
         }
     }
@@ -257,7 +257,7 @@ public class XBPQParser {
         try {
             return XBPQRuleApplier.applyFilter(text, rule);
         } catch (Exception e) {
-            SpiderDebug.log("[XBPQ] applyFilter error: " + e.getMessage(), e);
+            SpiderDebug.error("[XBPQ] applyFilter error: " + e.getMessage(), e);
             return text;
         }
     }
@@ -279,7 +279,7 @@ public class XBPQParser {
         try {
             return XBPQRuleApplier.applyArraySort(array, rule);
         } catch (Exception e) {
-            SpiderDebug.log("[XBPQ] applyArraySort error: " + e.getMessage(), e);
+            SpiderDebug.error("[XBPQ] applyArraySort error: " + e.getMessage(), e);
             return array;
         }
     }
@@ -305,7 +305,7 @@ public class XBPQParser {
             result = XBPQRuleApplier.applyFilter(result, rule);
             return result;
         } catch (Exception e) {
-            SpiderDebug.log("[XBPQ] parseText error: rule=" + rule + ", " + e.getMessage(), e);
+            SpiderDebug.error("[XBPQ] parseText error: rule=" + rule + ", " + e.getMessage(), e);
             return "";
         }
     }
@@ -345,7 +345,7 @@ public class XBPQParser {
             // 处理字符串截取属性
             return XBPQStringExtractor.extract(html, cleanRule);
         } catch (Exception e) {
-            SpiderDebug.log("[XBPQ] parseAttribute error: rule=" + rule + ", " + e.getMessage(), e);
+            SpiderDebug.error("[XBPQ] parseAttribute error: rule=" + rule + ", " + e.getMessage(), e);
             return "";
         }
     }
@@ -404,7 +404,7 @@ public class XBPQParser {
             }
             return finalResult;
         } catch (Exception e) {
-            SpiderDebug.log("[XBPQ] parseWithConcat error: rule=" + rule + ", " + e.getMessage(), e);
+            SpiderDebug.error("[XBPQ] parseWithConcat error: rule=" + rule + ", " + e.getMessage(), e);
             return "";
         }
     }
@@ -478,7 +478,7 @@ public class XBPQParser {
             }
             return result;
         } catch (Exception e) {
-            SpiderDebug.log("[XBPQ] parseWithSpecificRule error: rule=" + rule + ", cateId=" + cateId + ", " + e.getMessage(), e);
+            SpiderDebug.error("[XBPQ] parseWithSpecificRule error: rule=" + rule + ", cateId=" + cateId + ", " + e.getMessage(), e);
             return "";
         }
     }
@@ -594,7 +594,7 @@ public class XBPQParser {
             }
             return "";
         } catch (Exception e) {
-            SpiderDebug.log("[XBPQ] parseWithBase64 error: rule=" + rule + ", " + e.getMessage(), e);
+            SpiderDebug.error("[XBPQ] parseWithBase64 error: rule=" + rule + ", " + e.getMessage(), e);
             return "";
         }
     }

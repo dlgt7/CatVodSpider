@@ -214,7 +214,7 @@ public class XBPQHttpHelper {
                 }
                 
             } catch (Exception e) {
-                SpiderDebug.log("[XBPQ-" + siteHost + "] fetchPage error: url=" + url + ", " + e.getMessage(), e);
+                SpiderDebug.error("[XBPQ-" + siteHost + "] fetchPage error: url=" + url + ", " + e.getMessage(), e);
                 
                 // 重试
                 if (retry < MAX_RETRY_COUNT) {

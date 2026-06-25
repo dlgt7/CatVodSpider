@@ -89,7 +89,7 @@ public class XBPQRuleApplier {
             
             return text;
         } catch (Exception e) {
-            SpiderDebug.log("[XBPQ] applyFilter error: rule=" + rule + ", " + e.getMessage(), e);
+            SpiderDebug.error("[XBPQ] applyFilter error: rule=" + rule + ", " + e.getMessage(), e);
             return text;
         }
     }
@@ -136,7 +136,7 @@ public class XBPQRuleApplier {
             
             return true;
         } catch (Exception e) {
-            SpiderDebug.log("[XBPQ] applyFilterRule error: filterRule=" + filterRule + ", " + e.getMessage(), e);
+            SpiderDebug.error("[XBPQ] applyFilterRule error: filterRule=" + filterRule + ", " + e.getMessage(), e);
             return true;
         }
     }
@@ -239,7 +239,7 @@ public class XBPQRuleApplier {
             
             return array;
         } catch (Exception e) {
-            SpiderDebug.log("[XBPQ] applyArrayFilter error: rule=" + rule + ", " + e.getMessage(), e);
+            SpiderDebug.error("[XBPQ] applyArrayFilter error: rule=" + rule + ", " + e.getMessage(), e);
             return array;
         }
     }
@@ -275,7 +275,7 @@ public class XBPQRuleApplier {
             
             return text;
         } catch (Exception e) {
-            SpiderDebug.log("[XBPQ] applyReplace error: rule=" + rule + ", " + e.getMessage(), e);
+            SpiderDebug.error("[XBPQ] applyReplace error: rule=" + rule + ", " + e.getMessage(), e);
             return text;
         }
     }
@@ -326,7 +326,7 @@ public class XBPQRuleApplier {
             
             return text;
         } catch (Exception e) {
-            SpiderDebug.log("[XBPQ] applyReplaceRule error: replaceRule=" + replaceRule + ", " + e.getMessage(), e);
+            SpiderDebug.error("[XBPQ] applyReplaceRule error: replaceRule=" + replaceRule + ", " + e.getMessage(), e);
             return text;
         }
     }
@@ -373,7 +373,7 @@ public class XBPQRuleApplier {
             
             return result;
         } catch (Exception e) {
-            SpiderDebug.log("[XBPQ] applyArrayReplace error: rule=" + rule + ", " + e.getMessage(), e);
+            SpiderDebug.error("[XBPQ] applyArrayReplace error: rule=" + rule + ", " + e.getMessage(), e);
             return array;
         }
     }
@@ -490,7 +490,7 @@ public class XBPQRuleApplier {
             SpiderDebug.log("[XBPQ] applyArraySort: 未匹配到排序模式, 返回原数组");
             return array;
         } catch (Exception e) {
-            SpiderDebug.log("[XBPQ] applyArraySort error: rule=" + rule + ", " + e.getMessage(), e);
+            SpiderDebug.error("[XBPQ] applyArraySort error: rule=" + rule + ", " + e.getMessage(), e);
             return array;
         }
     }
