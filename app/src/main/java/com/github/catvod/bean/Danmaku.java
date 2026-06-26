@@ -54,26 +54,52 @@ public class Danmaku {
     }
 
     /**
-     * 拉取弹幕内容并自动解压
-     * 适用于B站等使用deflate(raw)压缩的弹幕接口
+     * 拉取弹幕原始字节数据（最底层，调用方自行处理解压/解码）
+     * 适用于任何弹幕接口
      * @param url 弹幕接口URL
      * @param headers 请求头
-     * @return 解压后的弹幕XML字符串，失败返回空字符串
+     * @return 原始字节数组，失败返回空数组
      */
-    public static String fetch(String url, Map<String, String> headers) {
+    public static byte[] fetchBytes(String url, Map<String, String> headers) {
         try {
-            byte[] compressed = OkHttp.bytes(url, headers);
-            if (compressed == null || compressed.length == 0) return "";
-            return deflateToString(compressed);
+            byte[] bytes = OkHttp.bytes(url, headers);
+            return bytes == null ? new byte[0] : bytes;
+        } catch (Exception e) {
+            return new byte[0];
+        }
+    }
+
+    /**
+     * 拉取弹幕文本内容（适用于未压缩的JSON/XML/ASS接口，如爱奇艺/优酷/AcFun等）
+     * @param url 弹幕接口URL
+     * @param headers 请求头
+     * @return UTF-8字符串，失败返回空字符串
+     */
+    public static String fetchText(String url, Map<String, String> headers) {
+        byte[] bytes = fetchBytes(url, headers);
+        if (bytes.length == 0) return "";
+        try {
+            return new String(bytes, "UTF-8");
         } catch (Exception e) {
             return "";
         }
     }
 
     /**
+     * 拉取弹幕并解压deflate数据（适用于B站等使用raw deflate压缩的接口）
+     * @param url 弹幕接口URL
+     * @param headers 请求头
+     * @return 解压后的UTF-8字符串，失败返回空字符串
+     */
+    public static String fetchDeflate(String url, Map<String, String> headers) {
+        byte[] bytes = fetchBytes(url, headers);
+        return deflateToString(bytes);
+    }
+
+    /**
      * 解压raw deflate数据（无zlib头）
      * @param compressed 压缩字节数组
-     * @return 解压后的UTF-8字符串
+     * @return 解压后的UTF-8字符串，失败返回空字符串
      */
     public static String deflateToString(byte[] compressed) {
         if (compressed == null || compressed.length == 0) return "";
