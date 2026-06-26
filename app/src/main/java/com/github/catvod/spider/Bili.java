@@ -23,7 +23,6 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -33,7 +32,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.zip.Inflater;
 
 /**
  * @author ColaMint & FongMi & 唐三
@@ -131,25 +129,7 @@ public class Bili extends Spider {
 
     @Override
     public String danmakuContent(String id) throws Exception {
-        try {
-            byte[] compressed = OkHttp.bytes(id, getHeaders());
-            if (compressed.length == 0) return "";
-            Inflater inflater = new Inflater(true);
-            inflater.setInput(compressed);
-            ByteArrayOutputStream out = new ByteArrayOutputStream(compressed.length);
-            byte[] buffer = new byte[4096];
-            while (!inflater.finished()) {
-                int count = inflater.inflate(buffer);
-                if (count == 0) {
-                    if (inflater.needsInput() || inflater.needsDictionary()) break;
-                }
-                out.write(buffer, 0, count);
-            }
-            inflater.end();
-            return out.toString("UTF-8");
-        } catch (Exception e) {
-            return "";
-        }
+        return Danmaku.fetch(id, getHeaders());
     }
 
     private List<Filter> getFilter() {
@@ -361,7 +341,6 @@ public class Bili extends Spider {
             acceptDesc = parts[3].split(":");
         }
         List<String> url = new ArrayList<>();
-        String dan = "https://api.bilibili.com/x/v1/dm/list.so?oid=" + cid;
         int min = Math.min(acceptDesc.length, acceptQuality.length);
         for (int i = 0; i < min; i++) {
             url.add(acceptDesc[i]);
@@ -370,10 +349,7 @@ public class Bili extends Spider {
         if (url.isEmpty()) {
             return Result.error("B站无可用清晰度");
         }
-        Danmaku danmaku = new Danmaku();
-        danmaku.setName("B站");
-        danmaku.setUrl(dan);
-        return Result.get().url(url).danmaku(Arrays.asList(danmaku)).dash().header(getHeaders()).string();
+        return Result.get().url(url).danmaku(Arrays.asList(Danmaku.bili(cid))).dash().header(getHeaders()).string();
     }
 
     @Override
