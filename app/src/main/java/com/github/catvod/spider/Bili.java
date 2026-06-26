@@ -129,11 +129,11 @@ public class Bili extends Spider {
         return result;
     }
 
-    private Object[] getDanmaku(String cid) {
+    @Override
+    public String danmakuContent(String id) throws Exception {
         try {
-            String url = "https://api.bilibili.com/x/v1/dm/list.so?oid=" + cid;
-            byte[] compressed = OkHttp.bytes(url, getHeaders());
-            if (compressed.length == 0) return buildError(502, "弹幕获取失败");
+            byte[] compressed = OkHttp.bytes(id, getHeaders());
+            if (compressed.length == 0) return "";
             Inflater inflater = new Inflater(true);
             inflater.setInput(compressed);
             ByteArrayOutputStream out = new ByteArrayOutputStream(compressed.length);
@@ -146,11 +146,9 @@ public class Bili extends Spider {
                 out.write(buffer, 0, count);
             }
             inflater.end();
-            byte[] xml = out.toByteArray();
-            if (xml.length == 0) return buildError(502, "弹幕解压失败");
-            return new Object[]{200, "text/xml; charset=utf-8", new ByteArrayInputStream(xml)};
+            return out.toString("UTF-8");
         } catch (Exception e) {
-            return buildError(500, "danmaku error: " + e.getMessage());
+            return "";
         }
     }
 
@@ -363,7 +361,7 @@ public class Bili extends Spider {
             acceptDesc = parts[3].split(":");
         }
         List<String> url = new ArrayList<>();
-        String dan = Proxy.getUrl() + "?do=bili&dm=" + cid;
+        String dan = "https://api.bilibili.com/x/v1/dm/list.so?oid=" + cid;
         int min = Math.min(acceptDesc.length, acceptQuality.length);
         for (int i = 0; i < min; i++) {
             url.add(acceptDesc[i]);
@@ -380,9 +378,6 @@ public class Bili extends Spider {
 
     @Override
     public Object[] proxy(Map<String, String> params) throws Exception {
-        if (params.containsKey("dm")) {
-            return getDanmaku(params.get("dm"));
-        }
         try {
             String aid = params.get("aid");
             String cid = params.get("cid");
