@@ -129,7 +129,7 @@ public class Bili extends Spider {
 
     @Override
     public String danmakuContent(String id) throws Exception {
-        return Danmaku.fetch(id, getHeaders());
+        return Danmaku.fetchDeflate(id, getHeaders());
     }
 
     private List<Filter> getFilter() {
