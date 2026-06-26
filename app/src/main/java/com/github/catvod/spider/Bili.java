@@ -23,7 +23,9 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -31,6 +33,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.zip.Inflater;
 
 /**
  * @author ColaMint & FongMi & 唐三
@@ -124,6 +127,31 @@ public class Bili extends Spider {
         result[1] = "text/plain; charset=utf-8";
         result[2] = new ByteArrayInputStream(msg.getBytes());
         return result;
+    }
+
+    private Object[] getDanmaku(String cid) {
+        try {
+            String url = "https://api.bilibili.com/x/v1/dm/list.so?oid=" + cid;
+            byte[] compressed = OkHttp.bytes(url, getHeaders());
+            if (compressed.length == 0) return buildError(502, "弹幕获取失败");
+            Inflater inflater = new Inflater(true);
+            inflater.setInput(compressed);
+            ByteArrayOutputStream out = new ByteArrayOutputStream(compressed.length);
+            byte[] buffer = new byte[4096];
+            while (!inflater.finished()) {
+                int count = inflater.inflate(buffer);
+                if (count == 0) {
+                    if (inflater.needsInput() || inflater.needsDictionary()) break;
+                }
+                out.write(buffer, 0, count);
+            }
+            inflater.end();
+            byte[] xml = out.toByteArray();
+            if (xml.length == 0) return buildError(502, "弹幕解压失败");
+            return new Object[]{200, "text/xml; charset=utf-8", new ByteArrayInputStream(xml)};
+        } catch (Exception e) {
+            return buildError(500, "danmaku error: " + e.getMessage());
+        }
     }
 
     private List<Filter> getFilter() {
@@ -335,7 +363,7 @@ public class Bili extends Spider {
             acceptDesc = parts[3].split(":");
         }
         List<String> url = new ArrayList<>();
-        String dan = "https://api.bilibili.com/x/v1/dm/list.so?oid=".concat(cid);
+        String dan = Proxy.getUrl() + "?do=bili&dm=" + cid;
         int min = Math.min(acceptDesc.length, acceptQuality.length);
         for (int i = 0; i < min; i++) {
             url.add(acceptDesc[i]);
@@ -352,6 +380,9 @@ public class Bili extends Spider {
 
     @Override
     public Object[] proxy(Map<String, String> params) throws Exception {
+        if (params.containsKey("dm")) {
+            return getDanmaku(params.get("dm"));
+        }
         try {
             String aid = params.get("aid");
             String cid = params.get("cid");
