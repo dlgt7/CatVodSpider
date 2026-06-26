@@ -27,7 +27,7 @@ public class BilibiliLive extends Spider {
     private final ArrayList<Area> areas = new ArrayList<>();
     private boolean areasLoaded;
 
-    private ArrayList<Vod> a(Area area, int page) {
+    private ArrayList<Vod> a(Area area, int page) throws Exception {
         String url = "https://api.live.bilibili.com/room/v1/Area/getRoomList?platform=web&parent_area_id=" + area.parentId + "&area_id=" + area.id + "&page=" + page;
         String json = OkHttp.string(url, c());
         ArrayList<Vod> list = new ArrayList<>();
@@ -58,7 +58,7 @@ public class BilibiliLive extends Spider {
         return list;
     }
 
-    private ArrayList<Vod> b(int page) {
+    private ArrayList<Vod> b(int page) throws Exception {
         d();
         for (Area area : areas) {
             if (area.name.contains("娱乐") || area.name.contains("网游") || area.name.contains("游戏")) {
@@ -84,7 +84,7 @@ public class BilibiliLive extends Spider {
         return i(tid, pg);
     }
 
-    private void d() {
+    private void d() throws Exception {
         if (areasLoaded) return;
         String url = "https://api.live.bilibili.com/room/v1/Area/getList";
         String json = OkHttp.string(url, c());
@@ -219,7 +219,7 @@ public class BilibiliLive extends Spider {
         return list;
     }
 
-    private ArrayList<Vod> h(int page, String keyword) {
+    private ArrayList<Vod> h(int page, String keyword) throws Exception {
         d();
         if (areas.isEmpty()) return new ArrayList<>();
         keyword = keyword.trim();
