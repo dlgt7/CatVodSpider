@@ -38,20 +38,18 @@ import java.util.Map;
 public class Bili extends Spider {
 
     private static final String COOKIE = "buvid3=84B0395D-C9F2-C490-E92E-A09AB48FE26E71636infoc";
-    private static String b;
+    private static String cookie;
 
     private JsonObject extend;
     private boolean login;
     private boolean isVip;
     private Wbi wbi;
 
-    private static String a() {
-        String cookie = b;
-        if (TextUtils.isEmpty(cookie)) cookie = COOKIE;
-        return cookie;
+    private static String getCookie() {
+        return TextUtils.isEmpty(cookie) ? COOKIE : cookie;
     }
 
-    private static void b(Dash dash, StringBuilder sb) {
+    private static void findAudio(Dash dash, StringBuilder sb) {
         for (Media audio : dash.getAudio()) {
             HashMap<String, String> formats = new HashMap<>();
             formats.put("30280", "192000");
@@ -59,68 +57,68 @@ public class Bili extends Spider {
             formats.put("30216", "64000");
             for (String key : formats.keySet()) {
                 if (audio.getId().equals(key)) {
-                    sb.append(e(audio));
+                    sb.append(getMedia(audio));
                 }
             }
         }
     }
 
-    private static String c(Media media, String params) {
+    private static String getAdaptationSet(Media media, String params) {
         String id = media.getId() + "_" + media.getCodecId();
         String type = media.getMimeType().split("/")[0];
         String baseUrl = media.getBaseUrl().replace("&", "&amp;");
         return String.format(Locale.getDefault(), "<AdaptationSet>\n<ContentComponent contentType=\"%s\"/>\n<Representation id=\"%s\" bandwidth=\"%s\" codecs=\"%s\" mimeType=\"%s\" %s startWithSAP=\"%s\">\n<BaseURL>%s</BaseURL>\n<SegmentBase indexRange=\"%s\">\n<Initialization range=\"%s\"/>\n</SegmentBase>\n</Representation>\n</AdaptationSet>", type, id, media.getBandWidth(), media.getCodecs(), media.getMimeType(), params, media.getStartWithSap(), baseUrl, media.getSegmentBase().getIndexRange(), media.getSegmentBase().getInitialization());
     }
 
-    private static HashMap<String, String> d() {
+    private static HashMap<String, String> getHeaders() {
         HashMap<String, String> headers = new HashMap<>();
         headers.put("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36");
         headers.put("Referer", "https://www.bilibili.com");
-        String cookie = a();
-        if (cookie != null) headers.put("cookie", cookie);
+        String c = getCookie();
+        if (c != null) headers.put("cookie", c);
         return headers;
     }
 
-    private static String e(Media media) {
+    private static String getMedia(Media media) {
         if (media.getMimeType().startsWith("video")) {
             String params = String.format(Locale.getDefault(), "height='%s' width='%s' frameRate='%s' sar='%s'", media.getHeight(), media.getWidth(), media.getFrameRate(), media.getSar());
-            return c(media, params);
+            return getAdaptationSet(media, params);
         } else if (media.getMimeType().startsWith("audio")) {
             HashMap<String, String> formats = new HashMap<>();
             formats.put("30280", "192000");
             formats.put("30232", "132000");
             formats.put("30216", "64000");
             String params = String.format("numChannels='2' sampleRate='%s'", formats.get(media.getId()));
-            return c(media, params);
+            return getAdaptationSet(media, params);
         } else {
             return "";
         }
     }
 
-    private static HashMap<String, String> f() {
+    private static HashMap<String, String> getSearchHeaders() {
         HashMap<String, String> headers = new HashMap<>();
         headers.put("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36");
         headers.put("Referer", "https://search.bilibili.com");
-        headers.put("cookie", a());
+        headers.put("cookie", getCookie());
         return headers;
     }
 
-    private static String g(String cookie) {
-        if (TextUtils.isEmpty(cookie)) return "";
-        cookie = cookie.trim();
-        if (cookie.startsWith("{")) {
+    private static String parseCookie(String c) {
+        if (TextUtils.isEmpty(c)) return "";
+        c = c.trim();
+        if (c.startsWith("{")) {
             try {
-                JsonObject obj = Json.safeObject(cookie);
+                JsonObject obj = Json.safeObject(c);
                 if (obj.has("cookie") && !obj.get("cookie").isJsonNull()) {
-                    cookie = obj.get("cookie").getAsString().trim();
+                    c = obj.get("cookie").getAsString().trim();
                 }
             } catch (Exception e) {
             }
         }
-        return cookie;
+        return c;
     }
 
-    private static Object[] h(int code, String msg) {
+    private static Object[] buildError(int code, String msg) {
         Object[] result = new Object[3];
         result[0] = code;
         result[1] = "text/plain; charset=utf-8";
@@ -147,18 +145,18 @@ public class Bili extends Spider {
         }
         try {
             if (this.extend.has("cookie")) {
-                String cookie = this.extend.get("cookie").getAsString();
-                if (!cookie.startsWith("http")) {
-                    String parsed = g(cookie);
-                    b = parsed;
+                String c = this.extend.get("cookie").getAsString();
+                if (!c.startsWith("http")) {
+                    String parsed = parseCookie(c);
+                    cookie = parsed;
                     if (!TextUtils.isEmpty(parsed)) return;
                 }
             }
-            String parsed = g(Path.read(Path.tv("bilibili")));
-            b = parsed;
-            if (TextUtils.isEmpty(parsed)) b = COOKIE;
+            String parsed = parseCookie(Path.read(Path.tv("bilibili")));
+            cookie = parsed;
+            if (TextUtils.isEmpty(parsed)) cookie = COOKIE;
         } catch (Throwable t) {
-            b = COOKIE;
+            cookie = COOKIE;
         }
     }
 
@@ -190,7 +188,7 @@ public class Bili extends Spider {
     public String homeVideoContent() throws Exception {
         try {
             String api = "https://api.bilibili.com/x/web-interface/popular?ps=20";
-            String json = OkHttp.string(api, f());
+            String json = OkHttp.string(api, getSearchHeaders());
             Resp resp = Resp.objectFrom(json);
             List<Vod> list = new ArrayList<>();
             for (Resp.Result item : Resp.Result.arrayFrom(resp.getData().getList())) list.add(item.getVod());
@@ -208,7 +206,7 @@ public class Bili extends Spider {
                 params.put("mid", tid.split("/")[0]);
                 params.put("pn", pg);
                 List<Vod> list = new ArrayList<>();
-                String json = OkHttp.string("https://api.bilibili.com/x/space/wbi/arc/search?" + wbi.getQuery(params), d());
+                String json = OkHttp.string("https://api.bilibili.com/x/space/wbi/arc/search?" + wbi.getQuery(params), getHeaders());
                 for (Resp.Result item : Resp.Result.arrayFrom(Resp.objectFrom(json).getData().getList().getAsJsonObject().get("vlist"))) list.add(item.getVod());
                 return Result.string(list);
             } else {
@@ -216,7 +214,7 @@ public class Bili extends Spider {
                 String duration = extend.containsKey("duration") ? extend.get("duration") : "0";
                 if (extend.containsKey("tid")) tid = tid + " " + extend.get("tid");
                 String api = "https://api.bilibili.com/x/web-interface/search/type?search_type=video&keyword=" + URLEncoder.encode(tid, "UTF-8") + "&order=" + order + "&duration=" + duration + "&page=" + pg;
-                String json = OkHttp.string(api, f());
+                String json = OkHttp.string(api, getSearchHeaders());
                 if (TextUtils.isEmpty(json) || !json.trim().startsWith("{")) {
                     return Result.string(new ArrayList<>());
                 }
@@ -233,7 +231,7 @@ public class Bili extends Spider {
     @Override
     public String detailContent(List<String> ids) throws Exception {
         if (!login) {
-            String json = OkHttp.string("https://api.bilibili.com/x/web-interface/nav", d());
+            String json = OkHttp.string("https://api.bilibili.com/x/web-interface/nav", getHeaders());
             Data data = Resp.objectFrom(json).getData();
             login = data.isLogin();
             isVip = data.isVip();
@@ -245,7 +243,7 @@ public class Bili extends Spider {
         String aid = split[1];
 
         String api = "https://api.bilibili.com/x/web-interface/view?aid=" + aid;
-        String json = OkHttp.string(api, d());
+        String json = OkHttp.string(api, getHeaders());
         Data detail = Resp.objectFrom(json).getData();
         Vod vod = new Vod();
         vod.setVodId(ids.get(0));
@@ -259,7 +257,7 @@ public class Bili extends Spider {
         List<String> acceptDesc = new ArrayList<>();
         List<Integer> acceptQuality = new ArrayList<>();
         api = "https://api.bilibili.com/x/player/playurl?avid=" + aid + "&cid=" + detail.getCid() + "&qn=127&fnval=4048&fourk=1";
-        Resp resp = Resp.objectFrom(OkHttp.string(api, d()));
+        Resp resp = Resp.objectFrom(OkHttp.string(api, getHeaders()));
         Data play = resp.getData();
         for (int i = 0; i < play.getAcceptQuality().size(); i++) {
             int qn = play.getAcceptQuality().get(i);
@@ -290,7 +288,7 @@ public class Bili extends Spider {
 
         episode = new ArrayList<>();
         api = "https://api.bilibili.com/x/web-interface/archive/related?bvid=" + bvid;
-        json = OkHttp.string(api, d());
+        json = OkHttp.string(api, getHeaders());
         JsonArray array = Json.parse(json).getAsJsonObject().getAsJsonArray("data");
         for (int i = 0; i < array.size(); i++) {
             JsonObject object = array.get(i).getAsJsonObject();
@@ -349,7 +347,7 @@ public class Bili extends Spider {
         Danmaku danmaku = new Danmaku();
         danmaku.setName("B站");
         danmaku.setUrl(dan);
-        return Result.get().url(url).danmaku(Arrays.asList(danmaku)).dash().header(d()).string();
+        return Result.get().url(url).danmaku(Arrays.asList(danmaku)).dash().header(getHeaders()).string();
     }
 
     @Override
@@ -359,26 +357,26 @@ public class Bili extends Spider {
             String cid = params.get("cid");
             String qn = params.get("qn");
             if (TextUtils.isEmpty(aid) || TextUtils.isEmpty(cid) || TextUtils.isEmpty(qn)) {
-                return h(400, "missing aid/cid/qn");
+                return buildError(400, "missing aid/cid/qn");
             }
             String api = "https://api.bilibili.com/x/player/playurl?avid=" + aid + "&cid=" + cid + "&qn=" + qn + "&fnval=4048&fourk=1";
-            Resp resp = Resp.objectFrom(OkHttp.string(api, d()));
+            Resp resp = Resp.objectFrom(OkHttp.string(api, getHeaders()));
             if (resp.getCode() != 0) {
                 String msg = resp.getMessage();
                 if (TextUtils.isEmpty(msg)) msg = "playurl失败 code=" + resp.getCode();
-                return h(502, msg);
+                return buildError(502, msg);
             }
             Dash dash = resp.getData().getDash();
             StringBuilder video = new StringBuilder();
             StringBuilder audio = new StringBuilder();
-            b(dash, audio);
+            findAudio(dash, audio);
             for (Media m : dash.getVideo()) {
                 if (m.getId().equals(qn)) {
-                    video.append(e(m));
+                    video.append(getMedia(m));
                 }
             }
             if (video.length() == 0 || audio.length() == 0) {
-                return h(502, "无DASH音视频轨，请更新Gate哔哩Cookie");
+                return buildError(502, "无DASH音视频轨，请更新Gate哔哩Cookie");
             }
             String mpd = String.format(Locale.getDefault(), "<MPD xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns=\"urn:mpeg:dash:schema:mpd:2011\" xsi:schemaLocation=\"urn:mpeg:dash:schema:mpd:2011 DASH-MPD.xsd\" type=\"static\" mediaPresentationDuration=\"PT%sS\" minBufferTime=\"PT%sS\" profiles=\"urn:mpeg:dash:profile:isoff-on-demand:2011\">\n<Period duration=\"PT%sS\" start=\"PT0S\">\n%s\n%s\n</Period>\n</MPD>", dash.getDuration(), dash.getMinBufferTime(), dash.getDuration(), video.toString(), audio.toString());
             Object[] result = new Object[3];
@@ -389,7 +387,7 @@ public class Bili extends Spider {
         } catch (Throwable t) {
             String msg = t.getMessage();
             if (msg == null) msg = "proxy error";
-            return h(500, msg);
+            return buildError(500, msg);
         }
     }
 }

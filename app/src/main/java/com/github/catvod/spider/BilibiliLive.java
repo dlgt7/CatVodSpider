@@ -27,9 +27,9 @@ public class BilibiliLive extends Spider {
     private final ArrayList<Area> areas = new ArrayList<>();
     private boolean areasLoaded;
 
-    private ArrayList<Vod> a(Area area, int page) throws Exception {
+    private ArrayList<Vod> getRoomList(Area area, int page) throws Exception {
         String url = "https://api.live.bilibili.com/room/v1/Area/getRoomList?platform=web&parent_area_id=" + area.parentId + "&area_id=" + area.id + "&page=" + page;
-        String json = OkHttp.string(url, c());
+        String json = OkHttp.string(url, getHeaders());
         ArrayList<Vod> list = new ArrayList<>();
         JSONObject obj = new JSONObject(json);
         Object data = obj.opt("data");
@@ -51,26 +51,26 @@ public class BilibiliLive extends Spider {
             }
             if (roomid.isEmpty()) continue;
             String title = room.optString("title", room.optString("uname", "直播"));
-            String cover = e(room.optString("cover", room.optString("user_cover", "")));
+            String cover = fixUrl(room.optString("cover", room.optString("user_cover", "")));
             String uname = room.optString("uname", "");
             list.add(new Vod(roomid, title, cover, uname));
         }
         return list;
     }
 
-    private ArrayList<Vod> b(int page) throws Exception {
-        d();
+    private ArrayList<Vod> getRoomsByGameCategory(int page) throws Exception {
+        loadAreas();
         for (Area area : areas) {
             if (area.name.contains("娱乐") || area.name.contains("网游") || area.name.contains("游戏")) {
-                ArrayList<Vod> list = a(area, page);
+                ArrayList<Vod> list = getRoomList(area, page);
                 if (!list.isEmpty()) return list;
             }
         }
         if (areas.isEmpty()) return new ArrayList<>();
-        return a(areas.get(0), page);
+        return getRoomList(areas.get(0), page);
     }
 
-    private Map<String, String> c() {
+    private Map<String, String> getHeaders() {
         HashMap<String, String> headers = new HashMap<>();
         headers.put("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36 Edg/129.0.0.0");
         headers.put("Referer", "https://live.bilibili.com/");
@@ -81,13 +81,13 @@ public class BilibiliLive extends Spider {
 
     @Override
     public String categoryContent(String tid, String pg, boolean filter, HashMap<String, String> extend) throws Exception {
-        return i(tid, pg);
+        return searchLive(tid, pg);
     }
 
-    private void d() throws Exception {
+    private void loadAreas() throws Exception {
         if (areasLoaded) return;
         String url = "https://api.live.bilibili.com/room/v1/Area/getList";
-        String json = OkHttp.string(url, c());
+        String json = OkHttp.string(url, getHeaders());
         JSONArray data = new JSONObject(json).optJSONArray("data");
         if (data != null) {
             for (int i = 0; i < data.length(); i++) {
@@ -113,7 +113,7 @@ public class BilibiliLive extends Spider {
         try {
             String id = ids.get(0);
             String url = "https://api.live.bilibili.com/xlive/web-room/v2/index/getRoomPlayInfo?room_id=" + id + "&platform=web&protocol=0,1&format=0,1,2&codec=0,1";
-            JSONObject data = new JSONObject(OkHttp.string(url, c())).optJSONObject("data");
+            JSONObject data = new JSONObject(OkHttp.string(url, getHeaders())).optJSONObject("data");
             if (data == null) return Result.error("无 data");
             JSONObject playurlInfo = data.optJSONObject("playurl_info");
             if (playurlInfo == null) return Result.error("无 playurl_info");
@@ -160,13 +160,13 @@ public class BilibiliLive extends Spider {
         }
     }
 
-    private String e(String url) {
+    private String fixUrl(String url) {
         if (TextUtils.isEmpty(url)) return url;
         if (url.startsWith("http")) return url;
         return "https:" + url;
     }
 
-    private Vod f(Element parent, Element link) {
+    private Vod parseVod(Element parent, Element link) {
         if (link == null) return null;
         String href = link.attr("href");
         String id;
@@ -188,7 +188,7 @@ public class BilibiliLive extends Spider {
         String pic = "";
         if (parent != null) {
             Element img = parent.selectFirst("img");
-            if (img != null) pic = e(img.attr("src"));
+            if (img != null) pic = fixUrl(img.attr("src"));
         }
         String uname = "";
         if (parent != null) {
@@ -198,13 +198,13 @@ public class BilibiliLive extends Spider {
         return new Vod(id, name, pic, uname);
     }
 
-    private ArrayList<Vod> g(String html) {
+    private ArrayList<Vod> parseVodList(String html) {
         ArrayList<Vod> list = new ArrayList<>();
         Document doc = Jsoup.parse(html);
         Elements items = doc.select("div.video-list-item");
         for (Element item : items) {
             Element link = item.selectFirst("h3.bili-live-card__info--tit a");
-            Vod vod = f(item, link);
+            Vod vod = parseVod(item, link);
             if (vod != null) list.add(vod);
         }
         if (list.isEmpty()) {
@@ -212,28 +212,28 @@ public class BilibiliLive extends Spider {
             for (Element link : links) {
                 Element parent = link.closest("div.bili-live-card__info");
                 if (parent == null) parent = link.parent();
-                Vod vod = f(parent, link);
+                Vod vod = parseVod(parent, link);
                 if (vod != null) list.add(vod);
             }
         }
         return list;
     }
 
-    private ArrayList<Vod> h(int page, String keyword) throws Exception {
-        d();
+    private ArrayList<Vod> searchByArea(int page, String keyword) throws Exception {
+        loadAreas();
         if (areas.isEmpty()) return new ArrayList<>();
         keyword = keyword.trim();
         ArrayList<Vod> list = new ArrayList<>();
         if (keyword.isEmpty()) {
             int limit = Math.min(3, areas.size());
             for (int i = 0; i < limit; i++) {
-                list.addAll(a(areas.get(i), page));
+                list.addAll(getRoomList(areas.get(i), page));
             }
             return list;
         }
         for (Area area : areas) {
             if (area.name.contains(keyword) || keyword.contains(area.name)) {
-                list.addAll(a(area, page));
+                list.addAll(getRoomList(area, page));
                 if (list.size() >= 40) break;
             }
         }
@@ -251,7 +251,7 @@ public class BilibiliLive extends Spider {
         return Result.string(classes, new ArrayList<>());
     }
 
-    private String i(String key, String pg) {
+    private String searchLive(String key, String pg) {
         int page;
         try {
             page = Integer.parseInt(pg);
@@ -261,9 +261,9 @@ public class BilibiliLive extends Spider {
         try {
             if (key == null) key = "";
             String url = "https://search.bilibili.com/live?keyword=" + URLEncoder.encode(key, "UTF-8") + "&page=" + page;
-            ArrayList<Vod> list = g(OkHttp.string(url, c()));
-            if (list.isEmpty()) list = h(page, key);
-            if (list.isEmpty()) list = b(page);
+            ArrayList<Vod> list = parseVodList(OkHttp.string(url, getHeaders()));
+            if (list.isEmpty()) list = searchByArea(page, key);
+            if (list.isEmpty()) list = getRoomsByGameCategory(page);
             return Result.get().page(page, page + 1, 90, 999999).vod(list).string();
         } catch (Exception e) {
             return Result.error(e.getMessage());
@@ -276,12 +276,12 @@ public class BilibiliLive extends Spider {
 
     @Override
     public String playerContent(String flag, String id, List<String> vipFlags) throws Exception {
-        return Result.get().url(id).header(c()).string();
+        return Result.get().url(id).header(getHeaders()).string();
     }
 
     @Override
     public String searchContent(String key, boolean quick) throws Exception {
-        return i(key, "1");
+        return searchLive(key, "1");
     }
 
     private static class Area {
