@@ -133,7 +133,7 @@ public class Danmaku {
     private static final String DANDANPLAY_API = "https://api.dandanplay.net/api/v2";
     private static final String DANDANPLAY_UA = "Dalvik/2.1.0 (Linux; U; Android 13)";
     // 在 https://dev.dandanplay.com/ 注册申请，填入你的 AppId 和 AppSecret
-    private static final String DANDANPLAY_APP_ID = "";
+    private static final String DANDANPLAY_APP_ID = "9ze98s9ina";
     private static final String DANDANPLAY_APP_SECRET = "";
 
     /**
