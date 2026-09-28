@@ -1447,6 +1447,77 @@ public class LeoDanmakuService {
         return false;
     }
 
+    /**
+     * 将弹幕显示设置（外观/时间/密度/显示）实时应用到宿主播放器。
+     * 反射调用宿主 com.fongmi.android.tv.setting.DanmakuSetting.getConfig()
+     * 组装配置对象，再调用宿主 PlayerManager.setDanmakuConfig(DanmakuConfig)。
+     * 宿主不支持（旧版FongMi或非FongMi宿主）时返回 false。
+     */
+    public static boolean pushDanmakuConfigToHost(final Activity activity) {
+        if (activity == null || activity.isFinishing()) return false;
+
+        final ReflectionBinding binding = resolveReflectionBinding(activity);
+        if (binding == null) return false;
+
+        final boolean[] success = new boolean[]{false};
+        final CountDownLatch latch = new CountDownLatch(1);
+
+        Runnable task = new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    Object player = binding.playerRef.get();
+                    if (player == null) {
+                        clearReflectionBindingCache();
+                        return;
+                    }
+                    ClassLoader loader = activity.getClassLoader() != null ? activity.getClassLoader() : LeoDanmakuService.class.getClassLoader();
+                    Class<?> settingClass = findHostClass(loader, activity, "setting.DanmakuSetting");
+                    if (settingClass == null) return;
+                    Object config = settingClass.getMethod("getConfig").invoke(null);
+                    if (config == null) return;
+                    Method method = findSetDanmakuConfigMethod(player.getClass(), config.getClass());
+                    if (method == null) {
+                        DanmakuSpider.log("宿主播放器缺少setDanmakuConfig方法: " + player.getClass().getName());
+                        return;
+                    }
+                    method.setAccessible(true);
+                    method.invoke(player, config);
+                    success[0] = true;
+                } catch (Throwable e) {
+                    DanmakuSpider.log("应用弹幕设置到宿主失败: " + e.getClass().getSimpleName() + ": " + e.getMessage());
+                } finally {
+                    latch.countDown();
+                }
+            }
+        };
+
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            task.run();
+        } else {
+            activity.runOnUiThread(task);
+            try {
+                latch.await(2, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+        return success[0];
+    }
+
+    private static Method findSetDanmakuConfigMethod(Class<?> clazz, Class<?> configClass) {
+        Class<?> current = clazz;
+        while (current != null) {
+            for (Method method : current.getDeclaredMethods()) {
+                if (!method.getName().equals("setDanmakuConfig")) continue;
+                Class<?>[] params = method.getParameterTypes();
+                if (params.length == 1 && params[0].isAssignableFrom(configClass)) return method;
+            }
+            current = current.getSuperclass();
+        }
+        return null;
+    }
+
     private static Object resolveFongMiPlayer(Activity activity, Class<?> danmakuClass) throws Exception {
         Object player = tryResolveExactFongMiDanmakuTarget(activity, danmakuClass);
         if (player != null) return player;
