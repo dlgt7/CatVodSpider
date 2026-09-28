@@ -369,6 +369,11 @@ public class DanmakuSpider extends Spider {
                     "当前: " + config.getDanmakuStyleDisplayName());
             list.put(styleVod);
 
+            // 创建弹幕设置按钮（外观/时间/密度/显示）
+            JSONObject displaySettingsVod = createVod("danmaku_display", "弹幕设置", "",
+                    "外观 / 时间 / 密度 / 显示");
+            list.put(displaySettingsVod);
+
             // 代理状态按钮（始终显示）
             String proxyTypeName = ProxyManager.getProxyTypeName();
             String proxyStatus = ProxyManager.getProxyStatusText();
@@ -466,6 +471,8 @@ public class DanmakuSpider extends Spider {
                                     DanmakuUIHelper.showLpConfigDialog(ctx);
                                 } else if (id.equals("danmaku_style")) {
                                     DanmakuUIHelper.showDanmakuStyleDialog(ctx);
+                                } else if (id.equals("danmaku_display")) {
+                                    DanmakuUIHelper.showDanmakuDisplaySettingsDialog(ctx);
                                 } else if (id.equals("proxy_status")) {
                                     String pTypeName = ProxyManager.getProxyTypeName();
                                     String pStatus = ProxyManager.isProxyRunning() ? "运行中" : "已停止";
@@ -535,6 +542,7 @@ public class DanmakuSpider extends Spider {
                     id.equals("danmaku_offset") ? "弹幕时间偏移" :
                     id.equals("log") ? "查看日志" : id.equals("cache_manager") ? "缓存管理" : id.equals("lp_config") ? "布局配置" :
                             id.equals("danmaku_style") ? "弹幕交互模式" :
+                            id.equals("danmaku_display") ? "弹幕设置" :
                             id.equals("proxy_status") ? "代理状态" :
                             id.equals("proxy_port") ? "代理端口" :
                             id.equals("proxy_switch") ? "切换代理" :
@@ -559,6 +567,7 @@ public class DanmakuSpider extends Spider {
                             id.equals("cache_manager") ? ("文件 " + cacheStats.fileCount + " | 搜索 " + cacheStats.searchCacheCount + " | 运行时 " + DanmakuScanner.getRuntimeCacheCount()) :
                             id.equals("lp_config") ? "调整弹窗大小和透明度" :
                             id.equals("danmaku_style") ? "当前：" + config.getDanmakuStyleDisplayName() :
+                            id.equals("danmaku_display") ? "外观 / 时间 / 密度 / 显示" :
                             id.equals("proxy_status") ? proxyStatusText :
                             id.equals("proxy_port") ? "当前: " + config.getProxyPort() :
                             id.equals("proxy_switch") ? "当前: " + proxyTypeName + " | " + switchLabel :
