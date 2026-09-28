@@ -21,21 +21,27 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: Grant execute permissions for build.bat
+      - name: Grant execute permissions for bat scripts
         run: |
           git update-index --chmod=+x ./build.bat
+          git update-index --chmod=+x ./jar/danmu.bat
         shell: bash
 
-      - name: Build with Gradle
+      - name: Build with Gradle (custom_spider.jar)
         run: ./build.bat ec
+
+      - name: Generate danmu.jar
+        run: ./jar/danmu.bat
 
       - name: Upload jar as artifact (optional)
         uses: actions/upload-artifact@v4
         with:
-          name: custom_spider_jar
+          name: spider_jars
           path: |
             ./jar/custom_spider.jar
             ./jar/custom_spider.jar.md5
+            ./jar/danmu.jar
+            ./jar/danmu.jar.md5
 
       - name: Commit and push updated jar
         uses: EndBug/add-and-commit@v9
@@ -45,3 +51,5 @@ jobs:
           add: |
             ./jar/custom_spider.jar
             ./jar/custom_spider.jar.md5
+            ./jar/danmu.jar
+            ./jar/danmu.jar.md5
