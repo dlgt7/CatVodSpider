@@ -1602,6 +1602,20 @@ public class DanmakuUIHelper {
                     tab.setTypeface(null, android.graphics.Typeface.BOLD);
                     tab.setFocusable(true);
                     tab.setFocusableInTouchMode(true);
+                    tab.setOnFocusChangeListener((v, hasFocus) -> {
+                        if (hasFocus) {
+                            v.setBackground(createTVFocusableSolidDrawable(PRIMARY_COLOR, true));
+                            ((Button) v).setTextColor(TV_FOCUS_TEXT_COLOR);
+                        } else {
+                            if (index == danmakuSettingsCurrentTab[0]) {
+                                v.setBackground(createTVFocusableSolidDrawable(PRIMARY_COLOR, false));
+                                ((Button) v).setTextColor(Color.WHITE);
+                            } else {
+                                v.setBackground(createTVFocusableBorderDrawable(GRAY_INACTIVE, false));
+                                ((Button) v).setTextColor(TEXT_SECONDARY);
+                            }
+                        }
+                    });
                     tab.setOnClickListener(v -> showDanmakuSettingsTab(index, tabButtons, tabPages, tabNames));
                     tabLayout.addView(tab, tabParams);
                     tabButtons[i] = tab;
@@ -1864,6 +1878,7 @@ public class DanmakuUIHelper {
                                                String suffix, DanmakuFloatSetter setter) {
         LinearLayout row = new LinearLayout(activity);
         row.setOrientation(LinearLayout.VERTICAL);
+        row.setPadding(dpToPx(activity, 6), dpToPx(activity, 4), dpToPx(activity, 6), dpToPx(activity, 4));
         LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         rowParams.bottomMargin = dpToPx(activity, 14);
@@ -1897,8 +1912,17 @@ public class DanmakuUIHelper {
         seekBar.setFocusable(true);
         try {
             seekBar.getProgressDrawable().setColorFilter(PRIMARY_COLOR, PorterDuff.Mode.SRC_ATOP);
+            seekBar.getThumb().setColorFilter(PRIMARY_COLOR, PorterDuff.Mode.SRC_ATOP);
         } catch (Exception ignored) {
         }
+        seekBar.setOnFocusChangeListener((v, hasFocus) -> {
+            row.setBackground(createRowFocusDrawable(hasFocus));
+            labelView.setTextColor(hasFocus ? PRIMARY_COLOR : TEXT_PRIMARY);
+            try {
+                seekBar.getThumb().setColorFilter(hasFocus ? TV_FOCUS_BORDER_COLOR : PRIMARY_COLOR, PorterDuff.Mode.SRC_ATOP);
+            } catch (Exception ignored) {
+            }
+        });
         row.addView(seekBar, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
@@ -1948,6 +1972,7 @@ public class DanmakuUIHelper {
         LinearLayout row = new LinearLayout(activity);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(dpToPx(activity, 6), dpToPx(activity, 4), dpToPx(activity, 6), dpToPx(activity, 4));
         LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         rowParams.bottomMargin = dpToPx(activity, 10);
@@ -1971,7 +1996,7 @@ public class DanmakuUIHelper {
 
         Switch switchView = new Switch(activity);
         switchView.setChecked(checked);
-        switchView.setFocusable(true);
+        switchView.setFocusable(false);
         try {
             android.content.res.ColorStateList thumb = new android.content.res.ColorStateList(
                     new int[][]{{android.R.attr.state_checked}, {}},
@@ -1991,6 +2016,10 @@ public class DanmakuUIHelper {
         row.setOnClickListener(v -> switchView.toggle());
         row.setClickable(true);
         row.setFocusable(true);
+        row.setOnFocusChangeListener((v, hasFocus) -> {
+            row.setBackground(createRowFocusDrawable(hasFocus));
+            labelView.setTextColor(hasFocus ? PRIMARY_COLOR : TEXT_PRIMARY);
+        });
 
         parent.addView(row);
         return row;
@@ -2054,6 +2083,14 @@ public class DanmakuUIHelper {
             button.setTypeface(null, android.graphics.Typeface.BOLD);
             button.setFocusable(true);
             button.setFocusableInTouchMode(true);
+            button.setOnFocusChangeListener((v, hasFocus) -> {
+                if (hasFocus) {
+                    button.setBackground(createTVFocusableSolidDrawable(PRIMARY_COLOR, true));
+                    button.setTextColor(TV_FOCUS_TEXT_COLOR);
+                } else {
+                    refresh[0].run();
+                }
+            });
             button.setOnClickListener(v -> {
                 current[0] = index;
                 refresh[0].run();
@@ -2169,6 +2206,23 @@ public class DanmakuUIHelper {
             // 背景色稍微提亮，增强对比度
             drawable.setColor(lightenColor(color, 0.15f));
         } else {
+            drawable.setStroke(0, 0);
+        }
+        return drawable;
+    }
+
+    /**
+     * 创建设置行焦点高亮背景（浅蓝底 + 青色描边）
+     * @param focused 是否为焦点状态
+     */
+    private static android.graphics.drawable.Drawable createRowFocusDrawable(boolean focused) {
+        android.graphics.drawable.GradientDrawable drawable = new android.graphics.drawable.GradientDrawable();
+        drawable.setCornerRadius(10);
+        if (focused) {
+            drawable.setColor(0x14007AFF);
+            drawable.setStroke(3, TV_FOCUS_BORDER_COLOR);
+        } else {
+            drawable.setColor(Color.TRANSPARENT);
             drawable.setStroke(0, 0);
         }
         return drawable;
