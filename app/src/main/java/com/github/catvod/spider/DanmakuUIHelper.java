@@ -6,6 +6,7 @@ import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Color;
+import android.graphics.PorterDuff;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
@@ -18,10 +19,13 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.FrameLayout;
 import android.widget.GridLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
+import android.widget.SeekBar;
+import android.widget.Switch;
 import android.widget.TextView;
 import com.github.catvod.spider.entity.DanmakuItem;
 import com.github.catvod.spider.danmu.SharedPreferencesService;
@@ -1512,6 +1516,557 @@ public class DanmakuUIHelper {
 
         DanmakuSpider.log("弹幕时间偏移变更，刷新当前弹幕: " + item.getTitleWithEp() + " -> " + DanmakuUtils.formatOffsetLabel(offsetMs));
         LeoDanmakuService.pushDanmakuDirect(item, activity, false, true);
+    }
+
+    // ==================== 弹幕显示设置（外观/时间/密度/显示，参考FongMi TV） ====================
+
+    /** 浮点值保存回调 */
+    private interface DanmakuFloatSetter {
+        void set(float value);
+    }
+
+    /** 整型索引保存回调 */
+    private interface DanmakuIntSetter {
+        void set(int index);
+    }
+
+    /** 布尔保存回调 */
+    private interface DanmakuBooleanSetter {
+        void set(boolean value);
+    }
+
+    /**
+     * 弹幕设置对话框：外观 / 时间 / 密度 / 显示 四个分区。
+     * 设置项与 FongMi TV 宿主的 DanmakuSetting 完全一致，
+     * 修改后立即保存并尝试实时应用到宿主播放器。
+     */
+    public static void showDanmakuDisplaySettingsDialog(Context ctx) {
+        if (!(ctx instanceof Activity)) {
+            DanmakuSpider.log("错误：Context不是Activity");
+            return;
+        }
+        final Activity activity = (Activity) ctx;
+        if (activity.isFinishing() || activity.isDestroyed()) {
+            DanmakuSpider.log("Activity已销毁或正在销毁，不显示弹幕设置对话框");
+            return;
+        }
+
+        activity.runOnUiThread(() -> {
+            try {
+                if (activity.isFinishing() || activity.isDestroyed()) return;
+
+                AlertDialog.Builder builder = new AlertDialog.Builder(activity);
+
+                LinearLayout mainLayout = new LinearLayout(activity);
+                mainLayout.setOrientation(LinearLayout.VERTICAL);
+                mainLayout.setBackgroundColor(BACKGROUND_WHITE);
+                mainLayout.setPadding(dpToPx(activity, 24), dpToPx(activity, 20), dpToPx(activity, 24), dpToPx(activity, 16));
+
+                TextView title = new TextView(activity);
+                title.setText("弹幕设置");
+                title.setTextSize(24);
+                title.setTextColor(PRIMARY_COLOR);
+                title.setGravity(Gravity.CENTER);
+                title.setPadding(0, dpToPx(activity, 8), 0, dpToPx(activity, 4));
+                title.setTypeface(null, android.graphics.Typeface.BOLD);
+                mainLayout.addView(title);
+
+                final TextView subtitle = new TextView(activity);
+                subtitle.setText("外观 · 时间 · 密度 · 显示，修改后立即保存并实时生效");
+                subtitle.setTextSize(13);
+                subtitle.setTextColor(TEXT_SECONDARY);
+                subtitle.setGravity(Gravity.CENTER);
+                subtitle.setPadding(0, 0, 0, dpToPx(activity, 14));
+                mainLayout.addView(subtitle);
+
+                // 实时生效状态提示
+                final boolean[] liveApplied = {false};
+
+                // ===== 分区内容页（先声明，供分区按钮回调使用） =====
+                final ScrollView[] tabPages = new ScrollView[4];
+
+                // ===== 分区切换按钮 =====
+                final String[] tabNames = {"外观", "时间", "密度", "显示"};
+                LinearLayout tabLayout = new LinearLayout(activity);
+                tabLayout.setOrientation(LinearLayout.HORIZONTAL);
+                tabLayout.setGravity(Gravity.CENTER);
+                LinearLayout.LayoutParams tabParams = new LinearLayout.LayoutParams(0, dpToPx(activity, 42), 1);
+                tabParams.setMargins(dpToPx(activity, 4), 0, dpToPx(activity, 4), 0);
+
+                final Button[] tabButtons = new Button[4];
+                for (int i = 0; i < 4; i++) {
+                    final int index = i;
+                    Button tab = new Button(activity);
+                    tab.setText(tabNames[i]);
+                    tab.setTextSize(14);
+                    tab.setTypeface(null, android.graphics.Typeface.BOLD);
+                    tab.setFocusable(true);
+                    tab.setFocusableInTouchMode(true);
+                    tab.setOnClickListener(v -> showDanmakuSettingsTab(index, tabButtons, tabPages, tabNames));
+                    tabLayout.addView(tab, tabParams);
+                    tabButtons[i] = tab;
+                }
+                mainLayout.addView(tabLayout);
+
+                // ===== 分区内容容器 =====
+                FrameLayout contentContainer = new FrameLayout(activity);
+                LinearLayout.LayoutParams contentParams = new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                contentParams.topMargin = dpToPx(activity, 12);
+                try {
+                    DisplayMetrics metrics = new DisplayMetrics();
+                    activity.getWindowManager().getDefaultDisplay().getMetrics(metrics);
+                    contentParams.height = (int) (metrics.heightPixels * 0.55);
+                } catch (Exception e) {
+                    contentParams.height = dpToPx(activity, 380);
+                }
+                mainLayout.addView(contentContainer, contentParams);
+
+                for (int i = 0; i < 4; i++) {
+                    ScrollView page = new ScrollView(activity);
+                    page.setLayoutParams(new FrameLayout.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+                    LinearLayout content = new LinearLayout(activity);
+                    content.setOrientation(LinearLayout.VERTICAL);
+                    page.addView(content);
+                    tabPages[i] = page;
+                    contentContainer.addView(page);
+                }
+
+                // ===== 外观分区 =====
+                LinearLayout appearance = (LinearLayout) tabPages[0].getChildAt(0);
+                createDanmakuSliderRow(activity, appearance, "文字大小", 0.5f, 3.0f, 0.1f,
+                        DanmakuDisplaySettings.getTextScale(activity), 1, "倍",
+                        v -> DanmakuDisplaySettings.putTextScale(activity, v));
+                createDanmakuSliderRow(activity, appearance, "透明度", 0f, 90f, 5f,
+                        DanmakuDisplaySettings.getTransparency(activity) * 100f, 0, "%",
+                        v -> DanmakuDisplaySettings.putTransparency(activity, v / 100f));
+                createDanmakuSwitchRow(activity, appearance, "文字加粗", null,
+                        DanmakuDisplaySettings.isTextBold(activity),
+                        v -> DanmakuDisplaySettings.putTextBold(activity, v));
+
+                // 样式子选项行（按样式条件显示）
+                final View shadowRow = createDanmakuSliderRow(activity, appearance, "阴影透明度", 0f, 90f, 5f,
+                        DanmakuDisplaySettings.getShadowTransparency(activity) * 100f, 0, "%",
+                        v -> DanmakuDisplaySettings.putShadowTransparency(activity, v / 100f));
+                final View strokeRow = createDanmakuSliderRow(activity, appearance, "描边宽度", 0.05f, 0.3f, 0.01f,
+                        DanmakuDisplaySettings.getStrokeWidthMultiplier(activity), 2, "",
+                        v -> DanmakuDisplaySettings.putStrokeWidthMultiplier(activity, v));
+                final View projectionXRow = createDanmakuSliderRow(activity, appearance, "投影偏移 X", 0.02f, 0.15f, 0.01f,
+                        DanmakuDisplaySettings.getProjectionOffsetX(activity), 2, "",
+                        v -> DanmakuDisplaySettings.putProjectionOffsetX(activity, v));
+                final View projectionYRow = createDanmakuSliderRow(activity, appearance, "投影偏移 Y", 0.02f, 0.15f, 0.01f,
+                        DanmakuDisplaySettings.getProjectionOffsetY(activity), 2, "",
+                        v -> DanmakuDisplaySettings.putProjectionOffsetY(activity, v));
+                final View projectionAlphaRow = createDanmakuSliderRow(activity, appearance, "投影透明度", 0f, 90f, 5f,
+                        DanmakuDisplaySettings.getProjectionTransparency(activity) * 100f, 0, "%",
+                        v -> DanmakuDisplaySettings.putProjectionTransparency(activity, v / 100f));
+
+                final Runnable[] styleUpdater = new Runnable[1];
+                createDanmakuSegmentRow(activity, appearance, "弹幕样式", new String[]{"无", "阴影", "描边", "投影"},
+                        DanmakuDisplaySettings.getStyleIndex(activity),
+                        index -> {
+                            DanmakuDisplaySettings.putStyleIndex(activity, index);
+                            if (styleUpdater[0] != null) styleUpdater[0].run();
+                        });
+                styleUpdater[0] = () -> {
+                    int index = DanmakuDisplaySettings.getStyleIndex(activity);
+                    shadowRow.setVisibility(index == DanmakuDisplaySettings.STYLE_INDEX_SHADOW ? View.VISIBLE : View.GONE);
+                    strokeRow.setVisibility(index == DanmakuDisplaySettings.STYLE_INDEX_STROKE ? View.VISIBLE : View.GONE);
+                    boolean projection = index == DanmakuDisplaySettings.STYLE_INDEX_PROJECTION;
+                    projectionXRow.setVisibility(projection ? View.VISIBLE : View.GONE);
+                    projectionYRow.setVisibility(projection ? View.VISIBLE : View.GONE);
+                    projectionAlphaRow.setVisibility(projection ? View.VISIBLE : View.GONE);
+                };
+                styleUpdater[0].run();
+
+                final TextView colorOverrideHint = new TextView(activity);
+                colorOverrideHint.setTextSize(12);
+                colorOverrideHint.setTextColor(TEXT_TERTIARY);
+                colorOverrideHint.setPadding(dpToPx(activity, 2), 0, 0, dpToPx(activity, 10));
+                colorOverrideHint.setVisibility(View.GONE);
+
+                createDanmakuSegmentRow(activity, appearance, "颜色模式", new String[]{"默认", "彩色", "渐变"},
+                        DanmakuDisplaySettings.getColorIndex(activity),
+                        index -> {
+                            DanmakuDisplaySettings.putColorIndex(activity, index);
+                            refreshDanmakuColorHint(colorOverrideHint, index);
+                        });
+                appearance.addView(colorOverrideHint);
+                refreshDanmakuColorHint(colorOverrideHint, DanmakuDisplaySettings.getColorIndex(activity));
+
+                // ===== 时间分区 =====
+                LinearLayout timing = (LinearLayout) tabPages[1].getChildAt(0);
+                createDanmakuSliderRow(activity, timing, "时间偏移", -300f, 300f, 1f,
+                        DanmakuDisplaySettings.getTimeOffsetMs(activity) / 1000f, 0, "秒",
+                        v -> DanmakuDisplaySettings.putTimeOffsetMs(activity, (long) (v * 1000)));
+                createDanmakuSliderRow(activity, timing, "滚动弹幕时长", 3f, 15f, 0.5f,
+                        DanmakuDisplaySettings.getDurationMs(activity) / 1000f, 1, "秒",
+                        v -> DanmakuDisplaySettings.putDurationMs(activity, (long) (v * 1000)));
+                createDanmakuSliderRow(activity, timing, "固定弹幕时长", 2f, 10f, 0.5f,
+                        DanmakuDisplaySettings.getFixedDurationMs(activity) / 1000f, 1, "秒",
+                        v -> DanmakuDisplaySettings.putFixedDurationMs(activity, (long) (v * 1000)));
+
+                // ===== 密度分区 =====
+                LinearLayout density = (LinearLayout) tabPages[2].getChildAt(0);
+                createDanmakuSliderRow(activity, density, "同屏数量", 10f, 500f, 10f,
+                        DanmakuDisplaySettings.getMaxOnScreen(activity), 0, "条",
+                        v -> DanmakuDisplaySettings.putMaxOnScreen(activity, (int) v));
+                createDanmakuSliderRow(activity, density, "滚动区域占比", 10f, 100f, 5f,
+                        DanmakuDisplaySettings.getScrollAreaRatio(activity) * 100f, 0, "%",
+                        v -> DanmakuDisplaySettings.putScrollAreaRatio(activity, v / 100f));
+                createDanmakuSliderRow(activity, density, "行间隙", 0.0f, 5.0f, 0.1f,
+                        DanmakuDisplaySettings.getScrollGapRatio(activity), 1, "倍",
+                        v -> DanmakuDisplaySettings.putScrollGapRatio(activity, v));
+                createDanmakuSliderRow(activity, density, "行距", 1.0f, 2.0f, 0.1f,
+                        DanmakuDisplaySettings.getLineSpacing(activity), 1, "倍",
+                        v -> DanmakuDisplaySettings.putLineSpacing(activity, v));
+                createDanmakuSliderRow(activity, density, "最大滚动行数", 0f, 20f, 1f,
+                        DanmakuDisplaySettings.getMaxScrollLines(activity), 0, "",
+                        v -> DanmakuDisplaySettings.putMaxScrollLines(activity, (int) v));
+                createDanmakuSliderRow(activity, density, "顶部行数", 0f, 10f, 1f,
+                        DanmakuDisplaySettings.getMaxTopLines(activity), 0, "",
+                        v -> DanmakuDisplaySettings.putMaxTopLines(activity, (int) v));
+                createDanmakuSliderRow(activity, density, "底部行数", 0f, 10f, 1f,
+                        DanmakuDisplaySettings.getMaxBottomLines(activity), 0, "",
+                        v -> DanmakuDisplaySettings.putMaxBottomLines(activity, (int) v));
+
+                // ===== 显示分区 =====
+                LinearLayout display = (LinearLayout) tabPages[3].getChildAt(0);
+                createDanmakuSwitchRow(activity, display, "滚动弹幕", null,
+                        DanmakuDisplaySettings.isShowScroll(activity),
+                        v -> DanmakuDisplaySettings.putShowScroll(activity, v));
+                createDanmakuSwitchRow(activity, display, "顶部弹幕", null,
+                        DanmakuDisplaySettings.isShowTop(activity),
+                        v -> DanmakuDisplaySettings.putShowTop(activity, v));
+                createDanmakuSwitchRow(activity, display, "底部弹幕", null,
+                        DanmakuDisplaySettings.isShowBottom(activity),
+                        v -> DanmakuDisplaySettings.putShowBottom(activity, v));
+                createDanmakuSwitchRow(activity, display, "逆向弹幕", null,
+                        DanmakuDisplaySettings.isShowReverse(activity),
+                        v -> DanmakuDisplaySettings.putShowReverse(activity, v));
+                createDanmakuSwitchRow(activity, display, "定位弹幕", null,
+                        DanmakuDisplaySettings.isShowPositioned(activity),
+                        v -> DanmakuDisplaySettings.putShowPositioned(activity, v));
+                createDanmakuSwitchRow(activity, display, "字幕弹幕", null,
+                        DanmakuDisplaySettings.isShowSubtitle(activity),
+                        v -> DanmakuDisplaySettings.putShowSubtitle(activity, v));
+                createDanmakuSwitchRow(activity, display, "特殊弹幕", null,
+                        DanmakuDisplaySettings.isShowSpecial(activity),
+                        v -> DanmakuDisplaySettings.putShowSpecial(activity, v));
+
+                // ===== 底部按钮 =====
+                LinearLayout btnLayout = new LinearLayout(activity);
+                btnLayout.setOrientation(LinearLayout.HORIZONTAL);
+                btnLayout.setGravity(Gravity.CENTER);
+                LinearLayout.LayoutParams btnParams = new LinearLayout.LayoutParams(0, dpToPx(activity, 44), 1);
+                btnParams.setMargins(dpToPx(activity, 6), dpToPx(activity, 16), dpToPx(activity, 6), 0);
+
+                Button resetTabBtn = createStyledButtonWithBorder(activity, "恢复默认", SECONDARY_COLOR);
+                Button resetAllBtn = createStyledButtonWithBorder(activity, "全部重置", SECONDARY_COLOR);
+                Button closeBtn = createStyledButton(activity, "关闭", PRIMARY_COLOR);
+                resetTabBtn.setLayoutParams(btnParams);
+                resetAllBtn.setLayoutParams(btnParams);
+                closeBtn.setLayoutParams(btnParams);
+                btnLayout.addView(resetTabBtn);
+                btnLayout.addView(resetAllBtn);
+                btnLayout.addView(closeBtn);
+                mainLayout.addView(btnLayout);
+
+                builder.setView(mainLayout);
+                AlertDialog dialog = builder.create();
+
+                // 保存并尝试实时应用到宿主
+                final Runnable applyChange = () -> {
+                    try {
+                        if (DanmakuDisplaySettings.applyToHost(activity)) {
+                            if (!liveApplied[0]) {
+                                liveApplied[0] = true;
+                                subtitle.setText("外观 · 时间 · 密度 · 显示，已实时生效");
+                                subtitle.setTextColor(TERTIARY_COLOR);
+                            }
+                        } else if (!liveApplied[0]) {
+                            subtitle.setText("设置已保存（当前宿主不支持实时生效，播放时读取）");
+                            subtitle.setTextColor(TEXT_TERTIARY);
+                        }
+                    } catch (Exception e) {
+                        DanmakuSpider.log("弹幕设置实时生效异常: " + e.getMessage());
+                    }
+                };
+                danmakuSettingsApplyListener = applyChange;
+                applyChange.run();
+
+                resetTabBtn.setOnClickListener(v -> {
+                    int current = danmakuSettingsCurrentTab[0];
+                    if (current == 0) DanmakuDisplaySettings.resetAppearance(activity);
+                    else if (current == 1) DanmakuDisplaySettings.resetTiming(activity);
+                    else if (current == 2) DanmakuDisplaySettings.resetDensity(activity);
+                    else DanmakuDisplaySettings.resetDisplay(activity);
+                    Utils.safeShowToast(activity, "已恢复[" + tabNames[current] + "]默认设置");
+                    danmakuSettingsApplyListener = null;
+                    dialog.dismiss();
+                    showDanmakuDisplaySettingsDialog(activity);
+                });
+                resetAllBtn.setOnClickListener(v -> {
+                    DanmakuDisplaySettings.resetAll(activity);
+                    Utils.safeShowToast(activity, "已恢复全部默认设置");
+                    danmakuSettingsApplyListener = null;
+                    dialog.dismiss();
+                    showDanmakuDisplaySettingsDialog(activity);
+                });
+                closeBtn.setOnClickListener(v -> {
+                    danmakuSettingsApplyListener = null;
+                    dialog.dismiss();
+                });
+
+                // 默认显示分区（重开对话框时保留上次所在分区）
+                showDanmakuSettingsTab(danmakuSettingsCurrentTab[0], tabButtons, tabPages, tabNames);
+
+                dialog.setOnDismissListener(d -> danmakuSettingsApplyListener = null);
+                safeShowDialog(activity, dialog);
+            } catch (Exception e) {
+                e.printStackTrace();
+                DanmakuSpider.log("显示弹幕设置对话框失败: " + e.getMessage());
+            }
+        });
+    }
+
+    /** 当前显示的分区索引 */
+    private static final int[] danmakuSettingsCurrentTab = {0};
+    /** 设置变更后的实时应用回调（对话框生命周期内有效） */
+    private static Runnable danmakuSettingsApplyListener;
+
+    /** 切换弹幕设置分区 */
+    private static void showDanmakuSettingsTab(int index, Button[] tabButtons, ScrollView[] tabPages, String[] tabNames) {
+        danmakuSettingsCurrentTab[0] = index;
+        for (int i = 0; i < tabPages.length; i++) {
+            boolean selected = i == index;
+            tabPages[i].setVisibility(selected ? View.VISIBLE : View.GONE);
+            if (tabButtons[i] != null) {
+                if (selected) {
+                    tabButtons[i].setBackground(createTVFocusableSolidDrawable(PRIMARY_COLOR, false));
+                    tabButtons[i].setTextColor(Color.WHITE);
+                } else {
+                    tabButtons[i].setBackground(createTVFocusableBorderDrawable(GRAY_INACTIVE, false));
+                    tabButtons[i].setTextColor(TEXT_SECONDARY);
+                }
+            }
+        }
+    }
+
+    /**
+     * 创建滑条设置行：标签 + 当前值 + SeekBar，停止拖动时保存并应用。
+     *
+     * @return 设置行视图（可用于联动显示/隐藏）
+     */
+    private static View createDanmakuSliderRow(Activity activity, LinearLayout parent, String label,
+                                               float min, float max, float step, float value, int decimals,
+                                               String suffix, DanmakuFloatSetter setter) {
+        LinearLayout row = new LinearLayout(activity);
+        row.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        rowParams.bottomMargin = dpToPx(activity, 14);
+        row.setLayoutParams(rowParams);
+
+        LinearLayout head = new LinearLayout(activity);
+        head.setOrientation(LinearLayout.HORIZONTAL);
+        head.setGravity(Gravity.CENTER_VERTICAL);
+
+        TextView labelView = new TextView(activity);
+        labelView.setText(label);
+        labelView.setTextSize(14);
+        labelView.setTextColor(TEXT_PRIMARY);
+        head.addView(labelView, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+
+        TextView valueView = new TextView(activity);
+        valueView.setTextSize(14);
+        valueView.setTextColor(PRIMARY_COLOR);
+        valueView.setTypeface(null, android.graphics.Typeface.BOLD);
+        head.addView(valueView, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        row.addView(head);
+
+        SeekBar seekBar = new SeekBar(activity);
+        int steps = Math.max(1, Math.round((max - min) / step));
+        seekBar.setMax(steps);
+        int progress = Math.round((value - min) / step);
+        if (progress < 0) progress = 0;
+        if (progress > steps) progress = steps;
+        seekBar.setProgress(progress);
+        seekBar.setFocusable(true);
+        try {
+            seekBar.getProgressDrawable().setColorFilter(PRIMARY_COLOR, PorterDuff.Mode.SRC_ATOP);
+        } catch (Exception ignored) {
+        }
+        row.addView(seekBar, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        java.text.DecimalFormat format = new java.text.DecimalFormat(decimals == 0 ? "#" : "#." + new String(new char[decimals]).replace('\0', '0'));
+
+        Runnable updateValue = () -> {
+            float current = min + seekBar.getProgress() * step;
+            if (current > max) current = max;
+            String text;
+            if (current == 0f && ("最大滚动行数".equals(label) || "顶部行数".equals(label) || "底部行数".equals(label))) {
+                text = "自动";
+            } else if ("%".equals(suffix)) {
+                text = format.format(current) + "%";
+            } else {
+                text = format.format(current) + suffix;
+            }
+            valueView.setText(text);
+        };
+        updateValue.run();
+
+        seekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                updateValue.run();
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+                float current = min + seekBar.getProgress() * step;
+                if (current > max) current = max;
+                setter.set(current);
+                if (danmakuSettingsApplyListener != null) danmakuSettingsApplyListener.run();
+            }
+        });
+
+        parent.addView(row);
+        return row;
+    }
+
+    /** 创建开关设置行：标签 + Switch，切换时保存并应用 */
+    private static View createDanmakuSwitchRow(Activity activity, LinearLayout parent, String label,
+                                               String hint, boolean checked, DanmakuBooleanSetter setter) {
+        LinearLayout row = new LinearLayout(activity);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        rowParams.bottomMargin = dpToPx(activity, 10);
+        row.setLayoutParams(rowParams);
+
+        LinearLayout textLayout = new LinearLayout(activity);
+        textLayout.setOrientation(LinearLayout.VERTICAL);
+        TextView labelView = new TextView(activity);
+        labelView.setText(label);
+        labelView.setTextSize(15);
+        labelView.setTextColor(TEXT_PRIMARY);
+        textLayout.addView(labelView);
+        if (hint != null) {
+            TextView hintView = new TextView(activity);
+            hintView.setText(hint);
+            hintView.setTextSize(12);
+            hintView.setTextColor(TEXT_TERTIARY);
+            textLayout.addView(hintView);
+        }
+        row.addView(textLayout, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+
+        Switch switchView = new Switch(activity);
+        switchView.setChecked(checked);
+        switchView.setFocusable(true);
+        try {
+            android.content.res.ColorStateList thumb = new android.content.res.ColorStateList(
+                    new int[][]{{android.R.attr.state_checked}, {}},
+                    new int[]{PRIMARY_COLOR, TEXT_TERTIARY});
+            switchView.setThumbTintList(thumb);
+        } catch (Exception ignored) {
+        }
+        row.addView(switchView, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        switchView.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            setter.set(isChecked);
+            if (danmakuSettingsApplyListener != null) danmakuSettingsApplyListener.run();
+        });
+
+        // 整行可点击切换（电视端遥控器友好）
+        row.setOnClickListener(v -> switchView.toggle());
+        row.setClickable(true);
+        row.setFocusable(true);
+
+        parent.addView(row);
+        return row;
+    }
+
+    /** 颜色模式非默认时显示覆盖提示（对齐宿主 colorOverrideHint 语义） */
+    private static void refreshDanmakuColorHint(TextView hint, int colorIndex) {
+        if (hint == null) return;
+        if (colorIndex == DanmakuDisplaySettings.COLOR_INDEX_DEFAULT) {
+            hint.setVisibility(View.GONE);
+            return;
+        }
+        boolean colorful = colorIndex == DanmakuDisplaySettings.COLOR_INDEX_COLORFUL;
+        hint.setText("已启用[" + (colorful ? "彩色" : "渐变") + "]弹幕，弹幕原始颜色将被覆盖");
+        hint.setVisibility(View.VISIBLE);
+    }
+
+    /** 创建多选一分区行：标签 + 若干按钮 */
+    private static void createDanmakuSegmentRow(Activity activity, LinearLayout parent, String label,
+                                                String[] options, int selected, final DanmakuIntSetter setter) {
+        LinearLayout row = new LinearLayout(activity);
+        row.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        rowParams.bottomMargin = dpToPx(activity, 14);
+        row.setLayoutParams(rowParams);
+
+        TextView labelView = new TextView(activity);
+        labelView.setText(label);
+        labelView.setTextSize(14);
+        labelView.setTextColor(TEXT_PRIMARY);
+        labelView.setPadding(0, 0, 0, dpToPx(activity, 6));
+        row.addView(labelView);
+
+        LinearLayout optionsLayout = new LinearLayout(activity);
+        optionsLayout.setOrientation(LinearLayout.HORIZONTAL);
+
+        final int[] current = {selected};
+        final Button[] buttons = new Button[options.length];
+        final Runnable[] refresh = new Runnable[1];
+        refresh[0] = () -> {
+            for (int i = 0; i < buttons.length; i++) {
+                if (buttons[i] == null) continue;
+                if (i == current[0]) {
+                    buttons[i].setBackground(createTVFocusableSolidDrawable(PRIMARY_COLOR, false));
+                    buttons[i].setTextColor(Color.WHITE);
+                } else {
+                    buttons[i].setBackground(createTVFocusableBorderDrawable(GRAY_INACTIVE, false));
+                    buttons[i].setTextColor(TEXT_SECONDARY);
+                }
+            }
+        };
+
+        LinearLayout.LayoutParams optionParams = new LinearLayout.LayoutParams(0, dpToPx(activity, 38), 1);
+        optionParams.setMargins(dpToPx(activity, 4), 0, dpToPx(activity, 4), 0);
+        for (int i = 0; i < options.length; i++) {
+            final int index = i;
+            Button button = new Button(activity);
+            button.setText(options[i]);
+            button.setTextSize(13);
+            button.setTypeface(null, android.graphics.Typeface.BOLD);
+            button.setFocusable(true);
+            button.setFocusableInTouchMode(true);
+            button.setOnClickListener(v -> {
+                current[0] = index;
+                refresh[0].run();
+                setter.set(index);
+                if (danmakuSettingsApplyListener != null) danmakuSettingsApplyListener.run();
+            });
+            optionsLayout.addView(button, optionParams);
+            buttons[i] = button;
+        }
+
+        row.addView(optionsLayout);
+        refresh[0].run();
+        parent.addView(row);
     }
 
     // 创建带边框的按钮 - 电视端优化版本

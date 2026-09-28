@@ -31,6 +31,14 @@ public class DanmakuXmlCache {
         put(offsetCache, normalizeOffsetKey(url, offsetMs), body);
     }
 
+    public static String getColor(String url, int offsetMs, int colorIndex) {
+        return get(offsetCache, normalizeOffsetKey(url, offsetMs) + "#color=" + colorIndex);
+    }
+
+    public static void putColor(String url, int offsetMs, int colorIndex, String body) {
+        put(offsetCache, normalizeOffsetKey(url, offsetMs) + "#color=" + colorIndex, body);
+    }
+
     public static String fetchRaw(String url, int timeoutMs, int maxRetries, int retryDelayMs) {
         String cached = getRaw(url);
         if (!TextUtils.isEmpty(cached)) return cached;

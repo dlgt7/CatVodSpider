@@ -107,6 +107,18 @@ public class WebServer extends NanoHTTPD {
                 DanmakuXmlCache.putOffset(danmakuUrl, offsetMs, body);
             }
         }
+        int colorIndex = DanmakuDisplaySettings.getColorIndex(activity);
+        if (colorIndex != DanmakuDisplaySettings.COLOR_INDEX_DEFAULT) {
+            String colored = DanmakuXmlCache.getColor(danmakuUrl, offsetMs, colorIndex);
+            if (TextUtils.isEmpty(colored)) {
+                colored = DanmakuColorizer.applyColorMode(body, colorIndex);
+                DanmakuXmlCache.putColor(danmakuUrl, offsetMs, colorIndex, colored);
+            }
+            if (!TextUtils.isEmpty(colored) && !colored.equals(body)) {
+                body = colored;
+                DanmakuSpider.log("🎨 弹幕颜色模式已应用: " + (colorIndex == DanmakuDisplaySettings.COLOR_INDEX_COLORFUL ? "彩色" : "渐变"));
+            }
+        }
         Response response = newFixedLengthResponse(Response.Status.OK, "application/xml; charset=utf-8", body);
         response.addHeader("Access-Control-Allow-Origin", "*");
         return response;
